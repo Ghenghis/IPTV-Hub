@@ -76,4 +76,11 @@ impl AppPaths {
     pub const fn for_test(data_dir: PathBuf, apps_root: PathBuf) -> Self {
         Self { data_dir, apps_root }
     }
+
+    /// Alias of [`Self::for_test`] kept for the `web` source's integration tests.
+    #[doc(hidden)]
+    #[must_use]
+    pub const fn from_dirs(data_dir: PathBuf, apps_root: PathBuf) -> Self {
+        Self::for_test(data_dir, apps_root)
+    }
 }

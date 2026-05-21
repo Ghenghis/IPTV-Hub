@@ -20,6 +20,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   drops). Integration tests against a real local `hyper` server cover the happy
   path, hash mismatch, asset pattern mismatch, mid-stream network drop with
   resume, and the GitHub rate-limit response shape.
+- `web` source (Agent 08): git fast-forward-only fetch, post-merge lockfile drift
+  detection with frozen-lockfile install for npm/yarn/pnpm/bun, and a process-wide
+  port reservation set that scans `port+1..=port+10` when the manifest's preferred
+  port is busy. Real-fixture integration tests under
+  `src-tauri/tests/integration_web.rs` exercise fetch, install, port-collision
+  selection, and lockfile-drift install triggering against a bare git repo built
+  at test time from `src-tauri/tests/fixtures/apps/tiny-web-app/`.
 
 ## [0.1.0] — TBD
 

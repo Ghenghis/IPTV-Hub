@@ -21,8 +21,9 @@ use crate::paths::AppPaths;
 
 pub mod git;
 pub mod release;
+pub mod web;
 // Re-exports for the dispatch table below.
-// Other source modules (installer, web, tizen) are owned by their respective
+// Other source modules (installer, tizen) are owned by their respective
 // agents and are added to the dispatch table when they land.
 
 /// What the poller (or a manual `check`) learned about an app.
@@ -165,7 +166,7 @@ pub fn dispatch(source_type: SourceType) -> Box<dyn Source> {
         SourceType::Installer => unreachable!(
             "Agent 07 (sources::installer) lands the installer source."
         ),
-        SourceType::Web => unreachable!("Agent 08 (sources::web) lands the web source."),
+        SourceType::Web => Box::new(web::WebSource::new()),
         SourceType::TizenIpk => unreachable!("Agent 09 (sources::tizen) lands the tizen source."),
     }
 }
