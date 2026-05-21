@@ -144,7 +144,13 @@ fn build_bare_repo(bare_path: &Path, _working_dir: &Path) -> git2::Oid {
     let _ = staging_repo.set_head("refs/heads/main");
 
     // Add the bare path as `origin` and push `main`.
-    let bare_url = format!("file://{}", bare_path.to_string_lossy().replace('\\', "/"));
+    let bare_url = {
+        // libgit2 needs `file:///C:/...` on Windows (3 slashes) and `file:///abs/path`
+        // on Unix; an absolute path always starts with a separator on Unix so the join
+        // produces 3 slashes there too.
+        let p = bare_path.to_string_lossy().replace('\\', "/");
+        if p.starts_with('/') { format!("file://{p}") } else { format!("file:///{p}") }
+    };
     staging_repo
         .remote("origin", &bare_url)
         .expect("add remote");
@@ -198,7 +204,13 @@ fn build_paths(temp: &TempDir) -> AppPaths {
 }
 
 fn build_app(bare_path: &Path, port: u16) -> AppEntry {
-    let url = format!("file://{}", bare_path.to_string_lossy().replace('\\', "/"));
+    let url = {
+        // libgit2 needs `file:///C:/...` on Windows (3 slashes) and `file:///abs/path`
+        // on Unix; an absolute path always starts with a separator on Unix so the join
+        // produces 3 slashes there too.
+        let p = bare_path.to_string_lossy().replace('\\', "/");
+        if p.starts_with('/') { format!("file://{p}") } else { format!("file:///{p}") }
+    };
     AppEntry {
         id: "tiny-web-app".into(),
         name: "Tiny Web App".into(),
@@ -493,7 +505,13 @@ fn drop_apply_ctx_sender(_src: &iptv_hub_core::sources::web::WebSource) {
 /// pushing main. Used by the drift test.
 fn push_lockfile_change(bare_path: &Path) {
     let scratch = TempDir::new().expect("scratch tempdir");
-    let bare_url = format!("file://{}", bare_path.to_string_lossy().replace('\\', "/"));
+    let bare_url = {
+        // libgit2 needs `file:///C:/...` on Windows (3 slashes) and `file:///abs/path`
+        // on Unix; an absolute path always starts with a separator on Unix so the join
+        // produces 3 slashes there too.
+        let p = bare_path.to_string_lossy().replace('\\', "/");
+        if p.starts_with('/') { format!("file://{p}") } else { format!("file:///{p}") }
+    };
     let repo = Repository::clone(&bare_url, scratch.path()).expect("clone bare");
     let _ = repo.set_head("refs/heads/main");
 
