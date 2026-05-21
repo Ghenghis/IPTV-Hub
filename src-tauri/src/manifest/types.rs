@@ -36,7 +36,9 @@ pub struct AppEntry {
     pub user_data: Option<UserDataLink>,
 }
 
-const fn default_enabled() -> bool { true }
+const fn default_enabled() -> bool {
+    true
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case")]
@@ -56,7 +58,11 @@ pub struct IconSpec {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-pub enum IconKind { Initials, File, Url }
+pub enum IconKind {
+    Initials,
+    File,
+    Url,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PollingSpec {
@@ -68,9 +74,15 @@ pub struct PollingSpec {
     pub jitter_seconds: u32,
 }
 
-const fn default_polling_enabled() -> bool { true }
-const fn default_interval_minutes() -> u32 { 15 }
-const fn default_jitter_seconds() -> u32 { 30 }
+const fn default_polling_enabled() -> bool {
+    true
+}
+const fn default_interval_minutes() -> u32 {
+    15
+}
+const fn default_jitter_seconds() -> u32 {
+    30
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LaunchSpec {
@@ -115,7 +127,9 @@ pub struct UserDataLink {
     pub create_if_missing: bool,
 }
 
-const fn default_create_if_missing() -> bool { true }
+const fn default_create_if_missing() -> bool {
+    true
+}
 
 #[cfg(test)]
 mod tests {

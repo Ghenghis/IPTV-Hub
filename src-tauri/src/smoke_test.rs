@@ -27,7 +27,9 @@ async fn wait_port(port: u16, timeout_ms: u32) -> Result<(), CoreError> {
     let addr = format!("127.0.0.1:{port}");
     loop {
         if Instant::now() >= deadline {
-            return Err(CoreError::smoke_failed(format!("port {port} not open within {timeout_ms} ms")));
+            return Err(CoreError::smoke_failed(format!(
+                "port {port} not open within {timeout_ms} ms"
+            )));
         }
         match tokio::time::timeout(Duration::from_millis(500), TcpStream::connect(&addr)).await {
             Ok(Ok(_)) => return Ok(()),
@@ -44,7 +46,9 @@ async fn wait_http(url: &str, timeout_ms: u32) -> Result<(), CoreError> {
         .map_err(CoreError::from)?;
     loop {
         if Instant::now() >= deadline {
-            return Err(CoreError::smoke_failed(format!("http {url} not 2xx within {timeout_ms} ms")));
+            return Err(CoreError::smoke_failed(format!(
+                "http {url} not 2xx within {timeout_ms} ms"
+            )));
         }
         if let Ok(resp) = client.get(url).send().await {
             if resp.status().is_success() {
@@ -64,7 +68,9 @@ async fn wait_process(name: &str, timeout_ms: u32) -> Result<(), CoreError> {
         }
         tokio::time::sleep(Duration::from_millis(300)).await;
     }
-    Err(CoreError::smoke_failed(format!("process {name} not running within {timeout_ms} ms")))
+    Err(CoreError::smoke_failed(format!(
+        "process {name} not running within {timeout_ms} ms"
+    )))
 }
 
 #[cfg(windows)]

@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "apps_root": "C:\\IPTV",
+  "user_data_root": "C:\\IPTV\\user-data",
+  "cache_root": "C:\\IPTV\\cache",
+  "apps": [
+    {
+      "id": "foo",
+      "name": "Foo One",
+      "type": "git",
+      "launch": { "kind": "executable" },
+      "source": { "url": "https://example.com/foo.git", "branch": "main" }
+    },
+    {
+      "id": "foo",
+      "name": "Foo Two",
+      "type": "git",
+      "launch": { "kind": "executable" },
+      "source": { "url": "https://example.com/foo2.git", "branch": "main" }
+    }
+  ]
+}

@@ -16,7 +16,7 @@
     clippy::match_wildcard_for_single_variants,
     clippy::uninlined_format_args,
     clippy::doc_markdown,
-    clippy::missing_const_for_fn,
+    clippy::missing_const_for_fn
 )]
 
 use std::path::{Path, PathBuf};
@@ -58,10 +58,7 @@ fn build_fixtures() -> FixtureStatus {
     let dir = fixture_dir();
     let script = dir.join("build.ps1");
     if !script.exists() {
-        return FixtureStatus::Failed(format!(
-            "fixture script missing at {}",
-            script.display()
-        ));
+        return FixtureStatus::Failed(format!("fixture script missing at {}", script.display()));
     }
 
     let output = StdCommand::new("powershell.exe")
@@ -106,7 +103,12 @@ fn build_fixtures() -> FixtureStatus {
     let cache_dir = cache_root.join("cache").join("installers").join("test-app");
     let _ = std::fs::create_dir_all(&cache_dir);
 
-    FixtureStatus::Ready(FixturePaths { v1, v2, broken, cache_dir: cache_root })
+    FixtureStatus::Ready(FixturePaths {
+        v1,
+        v2,
+        broken,
+        cache_dir: cache_root,
+    })
 }
 
 fn ensure_fixtures() -> &'static FixtureStatus {
@@ -121,8 +123,7 @@ fn force_uninstall_test_app() {
     // Best-effort cleanup between tests. Searches HKCU for our display name and runs
     // the recorded UninstallString. Errors are ignored — leftover state is acceptable
     // because the next install replaces it.
-    if let Ok(Some(snap)) =
-        iptv_hub_core::sources::installer::__test_read_record(TEST_DISPLAY_NAME)
+    if let Ok(Some(snap)) = iptv_hub_core::sources::installer::__test_read_record(TEST_DISPLAY_NAME)
     {
         if let Some(unstr) = snap.uninstall_string {
             // Strip any quotes for parsing.
@@ -198,19 +199,13 @@ fn fixture_app() -> AppEntry {
     }
 }
 
-fn install_via_source(
-    msi_path: &Path,
-    cache_root: &Path,
-) -> Result<UninstallSnapshot, CoreError> {
+fn install_via_source(msi_path: &Path, cache_root: &Path) -> Result<UninstallSnapshot, CoreError> {
     // We bypass the network/download phase by writing the MSI into the cache and
     // calling the silent-install helper exported for tests. The end-to-end download
     // path is exercised by the release source's tests (Agent 06); for the installer
     // source we focus on the registry/snapshot/rollback half of the flow.
     let app = fixture_app();
-    let cache_dir = cache_root
-        .join("cache")
-        .join("installers")
-        .join(&app.id);
+    let cache_dir = cache_root.join("cache").join("installers").join(&app.id);
     std::fs::create_dir_all(&cache_dir).unwrap();
     // Copy the MSI to the cache with a deterministic name so rollback can find it.
     let staged = cache_dir.join("staged.msi");
@@ -238,8 +233,7 @@ fn install_then_detect() {
 
     install_via_source(&paths.v1, &paths.cache_dir).expect("install v1 should succeed");
 
-    let after =
-        iptv_hub_core::sources::installer::__test_read_record(TEST_DISPLAY_NAME).unwrap();
+    let after = iptv_hub_core::sources::installer::__test_read_record(TEST_DISPLAY_NAME).unwrap();
     let rec = after.expect("uninstall key should exist after install");
     assert_eq!(rec.display_name.as_deref(), Some(TEST_DISPLAY_NAME));
     assert_eq!(
@@ -268,8 +262,7 @@ fn upgrade_detects_new_version() {
     install_via_source(&paths.v1, &paths.cache_dir).expect("install v1 should succeed");
     install_via_source(&paths.v2, &paths.cache_dir).expect("upgrade to v2 should succeed");
 
-    let after =
-        iptv_hub_core::sources::installer::__test_read_record(TEST_DISPLAY_NAME).unwrap();
+    let after = iptv_hub_core::sources::installer::__test_read_record(TEST_DISPLAY_NAME).unwrap();
     let rec = after.expect("uninstall key should exist after upgrade");
     assert_eq!(
         rec.display_version.as_deref(),
@@ -296,10 +289,9 @@ fn broken_msi_rolls_back() {
 
     // Step 1: install v1 cleanly so we have a "prior version" to roll back to.
     install_via_source(&paths.v1, &paths.cache_dir).expect("install v1 should succeed");
-    let before =
-        iptv_hub_core::sources::installer::__test_read_record(TEST_DISPLAY_NAME)
-            .unwrap()
-            .expect("v1 should be installed");
+    let before = iptv_hub_core::sources::installer::__test_read_record(TEST_DISPLAY_NAME)
+        .unwrap()
+        .expect("v1 should be installed");
     assert_eq!(before.display_version.as_deref(), Some("1.0.0"));
 
     // Step 2: attempting to install the broken MSI must fail (non-zero exit).
@@ -312,10 +304,9 @@ fn broken_msi_rolls_back() {
 
     // Step 3: registry should still report 1.0.0 (the broken install didn't replace
     // the prior product because msiexec aborted before swapping).
-    let after =
-        iptv_hub_core::sources::installer::__test_read_record(TEST_DISPLAY_NAME)
-            .unwrap()
-            .expect("v1 should still be installed after failed broken install");
+    let after = iptv_hub_core::sources::installer::__test_read_record(TEST_DISPLAY_NAME)
+        .unwrap()
+        .expect("v1 should still be installed after failed broken install");
     assert_eq!(
         after.display_version.as_deref(),
         Some("1.0.0"),
@@ -341,17 +332,19 @@ fn uninstall_cleans_registry() {
 
     install_via_source(&paths.v1, &paths.cache_dir).expect("install v1 should succeed");
     // Confirm presence first so the test fails clearly if install never landed.
-    let pre =
-        iptv_hub_core::sources::installer::__test_read_record(TEST_DISPLAY_NAME).unwrap();
+    let pre = iptv_hub_core::sources::installer::__test_read_record(TEST_DISPLAY_NAME).unwrap();
     assert!(pre.is_some(), "v1 should be present before uninstall");
 
     // Run the recorded UninstallString.
     force_uninstall_test_app();
 
-    let post =
-        iptv_hub_core::sources::installer::__test_read_record(TEST_DISPLAY_NAME).unwrap();
+    let post = iptv_hub_core::sources::installer::__test_read_record(TEST_DISPLAY_NAME).unwrap();
     assert!(
-        post.is_none() || post.as_ref().and_then(|r| r.display_version.as_deref()).is_none(),
+        post.is_none()
+            || post
+                .as_ref()
+                .and_then(|r| r.display_version.as_deref())
+                .is_none(),
         "uninstall key should be absent or version cleared; got {:?}",
         post
     );

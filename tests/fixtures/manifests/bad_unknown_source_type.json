@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "apps_root": "C:\\IPTV",
+  "user_data_root": "C:\\IPTV\\user-data",
+  "cache_root": "C:\\IPTV\\cache",
+  "apps": [
+    {
+      "id": "carrier",
+      "name": "Carrier Pigeon",
+      "type": "carrier-pigeon",
+      "launch": { "kind": "executable" },
+      "source": { "note": "this source type does not exist" }
+    }
+  ]
+}

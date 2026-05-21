@@ -22,7 +22,7 @@
     clippy::await_holding_lock,
     clippy::doc_markdown,
     clippy::unused_async,
-    clippy::manual_let_else,
+    clippy::manual_let_else
 )]
 
 use std::convert::Infallible;
@@ -85,12 +85,11 @@ impl FixtureServer {
                 let include = Arc::clone(&include_digest_arc);
                 let addr2 = Arc::clone(&addr_arc);
                 tokio::spawn(async move {
-                    let svc =
-                        service_fn(move |req: Request<hyper::body::Incoming>| {
-                            let include = Arc::clone(&include);
-                            let addr2 = Arc::clone(&addr2);
-                            async move { handle_request(req, &include, &addr2).await }
-                        });
+                    let svc = service_fn(move |req: Request<hyper::body::Incoming>| {
+                        let include = Arc::clone(&include);
+                        let addr2 = Arc::clone(&addr2);
+                        async move { handle_request(req, &include, &addr2).await }
+                    });
                     let _ = http1::Builder::new().serve_connection(io, svc).await;
                 });
             }
@@ -128,10 +127,10 @@ async fn handle_request(
             "size": ASSET_BODY.len(),
         });
         if *include_digest {
-            asset
-                .as_object_mut()
-                .unwrap()
-                .insert("digest".to_string(), json!(format!("sha256:{}", asset_sha256())));
+            asset.as_object_mut().unwrap().insert(
+                "digest".to_string(),
+                json!(format!("sha256:{}", asset_sha256())),
+            );
         }
         let body = json!({
             "tag_name": "v1.2.3",
@@ -234,7 +233,12 @@ fn make_paths(tmp: &TempDir) -> iptv_hub_core::paths::AppPaths {
 }
 
 /// Create an ApplyCtx with a dummy progress channel.
-fn make_ctx(paths: iptv_hub_core::paths::AppPaths) -> (ApplyCtx, tokio::sync::mpsc::Receiver<iptv_hub_core::sources::ProgressEvent>) {
+fn make_ctx(
+    paths: iptv_hub_core::paths::AppPaths,
+) -> (
+    ApplyCtx,
+    tokio::sync::mpsc::Receiver<iptv_hub_core::sources::ProgressEvent>,
+) {
     let (tx, rx) = tokio::sync::mpsc::channel(64);
     (
         ApplyCtx {
@@ -376,7 +380,11 @@ async fn fetch_via_github_release_verifies_sha() {
         .join("installers")
         .join(&app.id);
     let ipk_path = ipk_dir.join(format!("{expected_sha}.ipk"));
-    assert!(ipk_path.exists(), "ipk should be cached at {}", ipk_path.display());
+    assert!(
+        ipk_path.exists(),
+        "ipk should be cached at {}",
+        ipk_path.display()
+    );
     let bytes = tokio::fs::read(&ipk_path).await.expect("read cached ipk");
     assert_eq!(bytes, ASSET_BODY, "cached file should match served body");
 
@@ -407,7 +415,10 @@ async fn fetch_via_direct_url_verifies_sha() {
     );
     let expected_sha = asset_sha256();
     assert!(
-        outcome.messages.iter().any(|m| m.contains("sha256 verified")),
+        outcome
+            .messages
+            .iter()
+            .any(|m| m.contains("sha256 verified")),
         "expected sha256 verified message in: {:?}",
         outcome.messages
     );
@@ -418,7 +429,11 @@ async fn fetch_via_direct_url_verifies_sha() {
         .join("installers")
         .join(&app.id)
         .join(format!("{expected_sha}.ipk"));
-    assert!(cached.exists(), "ipk should be cached at {}", cached.display());
+    assert!(
+        cached.exists(),
+        "ipk should be cached at {}",
+        cached.display()
+    );
 
     server.stop().await;
 }
@@ -452,10 +467,7 @@ async fn deploy_happy_path() {
         outcome.messages
     );
     assert!(
-        outcome
-            .messages
-            .iter()
-            .any(|m| m.contains("paired device")),
+        outcome.messages.iter().any(|m| m.contains("paired device")),
         "expected paired-device probe evidence in: {:?}",
         outcome.messages
     );

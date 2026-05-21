@@ -20,17 +20,16 @@ use crate::manifest::types::{AppEntry, SourceType};
 use crate::paths::AppPaths;
 
 pub mod git;
+#[cfg(windows)]
+pub mod installer;
 pub mod release;
 pub mod tizen;
 pub mod web;
-#[cfg(windows)]
-pub mod installer;
 
-// The non-Windows `installer` stand-in lives at the bottom of this file. It is **not** a
-// stub: per `docs/AGENT_PLAN.md` Agent 07 and CONTRACT §8, the installer source is a
-// Windows-only feature, and we surface that via a real `not_supported` error from each
-// trait method so the orchestrator and the UI behave deterministically on non-Windows
-// hosts.
+// The non-Windows `installer` stand-in lives at the bottom of this file. Per
+// `docs/AGENT_PLAN.md` Agent 07 and CONTRACT §8, the installer source is a Windows-only
+// feature; we surface that via a real `not_supported` error from each trait method so
+// the orchestrator and the UI behave deterministically on non-Windows hosts.
 
 /// What the poller (or a manual `check`) learned about an app.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,19 +80,11 @@ pub enum IncomingItem {
         author: String,
     },
     /// `release-binary` source — typically just one item containing the release notes.
-    ReleaseNote {
-        version: String,
-        markdown: String,
-    },
+    ReleaseNote { version: String, markdown: String },
     /// `installer` source — vendor changelog line, may be sparse.
-    InstallerChange {
-        summary: String,
-    },
+    InstallerChange { summary: String },
     /// `tizen-ipk` source.
-    IpkChange {
-        version: String,
-        notes: String,
-    },
+    IpkChange { version: String, notes: String },
 }
 
 /// A single row in the "what will happen" section. Tags are rendered as pills in the UI.
@@ -186,7 +177,7 @@ pub fn dispatch(source_type: SourceType) -> Box<dyn Source> {
 /// Non-Windows host stand-in for the installer source. Each method returns a real,
 /// documented `CoreError::NotSupported` value so callers can decide how to surface it
 /// (the UI displays the message inline). This is the contracted behaviour from
-/// `docs/AGENT_PLAN.md` Agent 07, not a stub.
+/// `docs/AGENT_PLAN.md` Agent 07.
 #[cfg(not(windows))]
 struct InstallerUnsupportedOnHost;
 
@@ -197,18 +188,10 @@ const INSTALLER_HOST_MSG: &str =
 #[cfg(not(windows))]
 #[async_trait]
 impl Source for InstallerUnsupportedOnHost {
-    async fn check(
-        &self,
-        _app: &AppEntry,
-        _paths: &AppPaths,
-    ) -> Result<UpdateState, CoreError> {
+    async fn check(&self, _app: &AppEntry, _paths: &AppPaths) -> Result<UpdateState, CoreError> {
         Err(CoreError::not_supported(INSTALLER_HOST_MSG))
     }
-    async fn plan(
-        &self,
-        _app: &AppEntry,
-        _paths: &AppPaths,
-    ) -> Result<UpdatePlan, CoreError> {
+    async fn plan(&self, _app: &AppEntry, _paths: &AppPaths) -> Result<UpdatePlan, CoreError> {
         Err(CoreError::not_supported(INSTALLER_HOST_MSG))
     }
     async fn apply(
@@ -222,7 +205,7 @@ impl Source for InstallerUnsupportedOnHost {
     async fn rollback(
         &self,
         _app: &AppEntry,
-        _snapshot_archive: &PathBuf,
+        _snapshot_archive: &Path,
         _paths: &AppPaths,
     ) -> Result<(), CoreError> {
         Err(CoreError::not_supported(INSTALLER_HOST_MSG))

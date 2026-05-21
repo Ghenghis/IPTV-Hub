@@ -48,7 +48,11 @@ impl AppConfig {
                 .try_parsing(true),
         );
 
-        let cfg: Self = builder.build().map_err(other)?.try_deserialize().map_err(other)?;
+        let cfg: Self = builder
+            .build()
+            .map_err(other)?
+            .try_deserialize()
+            .map_err(other)?;
         Ok(cfg)
     }
 }

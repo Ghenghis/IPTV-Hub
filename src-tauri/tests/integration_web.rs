@@ -12,7 +12,7 @@
     clippy::default_trait_access,
     clippy::option_if_let_else,
     clippy::uninlined_format_args,
-    clippy::iter_on_single_items,
+    clippy::iter_on_single_items
 )]
 
 use std::fs;
@@ -27,9 +27,7 @@ use tempfile::TempDir;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
-use iptv_hub_core::manifest::types::{
-    AppEntry, LaunchKind, LaunchSpec, SourceType, WaitFor,
-};
+use iptv_hub_core::manifest::types::{AppEntry, LaunchKind, LaunchSpec, SourceType, WaitFor};
 use iptv_hub_core::paths::AppPaths;
 use iptv_hub_core::sources::{ApplyCtx, Source, UpdatePlan};
 
@@ -130,8 +128,7 @@ fn build_bare_repo(bare_path: &Path, _working_dir: &Path) -> git2::Oid {
 
     // Build a non-bare staging clone alongside, populate it from the fixture, commit, push.
     let staging = TempDir::new().expect("staging tempdir");
-    let staging_repo =
-        Repository::init(staging.path()).expect("init staging");
+    let staging_repo = Repository::init(staging.path()).expect("init staging");
     // Set default branch to main on the staging too.
     {
         let mut cfg = staging_repo.config().expect("config");
@@ -149,7 +146,11 @@ fn build_bare_repo(bare_path: &Path, _working_dir: &Path) -> git2::Oid {
         // on Unix; an absolute path always starts with a separator on Unix so the join
         // produces 3 slashes there too.
         let p = bare_path.to_string_lossy().replace('\\', "/");
-        if p.starts_with('/') { format!("file://{p}") } else { format!("file:///{p}") }
+        if p.starts_with('/') {
+            format!("file://{p}")
+        } else {
+            format!("file:///{p}")
+        }
     };
     staging_repo
         .remote("origin", &bare_url)
@@ -209,7 +210,11 @@ fn build_app(bare_path: &Path, port: u16) -> AppEntry {
         // on Unix; an absolute path always starts with a separator on Unix so the join
         // produces 3 slashes there too.
         let p = bare_path.to_string_lossy().replace('\\', "/");
-        if p.starts_with('/') { format!("file://{p}") } else { format!("file:///{p}") }
+        if p.starts_with('/') {
+            format!("file://{p}")
+        } else {
+            format!("file:///{p}")
+        }
     };
     AppEntry {
         id: "tiny-web-app".into(),
@@ -241,7 +246,12 @@ fn build_app(bare_path: &Path, port: u16) -> AppEntry {
     }
 }
 
-fn build_apply_ctx(paths: AppPaths) -> (ApplyCtx, tokio::sync::mpsc::Receiver<iptv_hub_core::sources::ProgressEvent>) {
+fn build_apply_ctx(
+    paths: AppPaths,
+) -> (
+    ApplyCtx,
+    tokio::sync::mpsc::Receiver<iptv_hub_core::sources::ProgressEvent>,
+) {
     let (tx, rx) = tokio::sync::mpsc::channel(64);
     (
         ApplyCtx {
@@ -319,17 +329,19 @@ async fn fetch_install_start_health_check_stop() {
         .await
         .expect("apply");
     drop_apply_ctx_sender(&source); // no-op; for clarity
-    // Allow drain task to finish: it ends when the ApplyCtx sender drops.
+                                    // Allow drain task to finish: it ends when the ApplyCtx sender drops.
     let _ = drain;
 
     // node_modules should exist after `npm ci` (even with zero deps npm creates the
     // directory marker).
     let upstream = paths.apps_root().join("upstream").join("tiny-web-app");
-    assert!(upstream.join("package-lock.json").is_file(), "lockfile present");
+    assert!(
+        upstream.join("package-lock.json").is_file(),
+        "lockfile present"
+    );
 
     // The chosen port is the last "listening port N" message.
-    let port = port_from_messages(&outcome.messages)
-        .expect("listening port message missing");
+    let port = port_from_messages(&outcome.messages).expect("listening port message missing");
 
     // Now spawn the real node server and prove it answers HTTP.
     let mut child = Command::new(which("node").expect("node on PATH"))
@@ -371,8 +383,7 @@ async fn port_collision_picks_alternate() {
 
     let paths = build_paths(&temp);
     // Bind a real listener to the preferred port so the source has to pick an alternate.
-    let preferred_listener =
-        TcpListener::bind(("127.0.0.1", 0)).expect("bind preferred listener");
+    let preferred_listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind preferred listener");
     let preferred_port = preferred_listener.local_addr().unwrap().port();
 
     let app = build_app(&bare, preferred_port);
@@ -392,7 +403,11 @@ async fn port_collision_picks_alternate() {
         .messages
         .iter()
         .any(|m| m.contains("listening port"));
-    assert!(msg_collision, "expected a 'listening port' message: {:?}", outcome.messages);
+    assert!(
+        msg_collision,
+        "expected a 'listening port' message: {:?}",
+        outcome.messages
+    );
 
     drop(preferred_listener);
 }
@@ -415,10 +430,7 @@ async fn lockfile_drift_triggers_install() {
     let _ = source.check(&app, &paths).await.expect("check");
     let plan = source.plan(&app, &paths).await.expect("plan");
     let (ctx, _rx) = build_apply_ctx(paths.clone());
-    let outcome_first = source
-        .apply(&app, plan, ctx)
-        .await
-        .expect("first apply");
+    let outcome_first = source.apply(&app, plan, ctx).await.expect("first apply");
     let upstream = paths.apps_root().join("upstream").join("tiny-web-app");
     assert!(upstream.join("package-lock.json").is_file());
 
@@ -437,10 +449,7 @@ async fn lockfile_drift_triggers_install() {
     let _ = source.check(&app, &paths).await.expect("check 2");
     let plan2 = source.plan(&app, &paths).await.expect("plan 2");
     let (ctx2, _rx2) = build_apply_ctx(paths.clone());
-    let outcome_second = source
-        .apply(&app, plan2, ctx2)
-        .await
-        .expect("second apply");
+    let outcome_second = source.apply(&app, plan2, ctx2).await.expect("second apply");
 
     // The second outcome must record that install ran. The first outcome must record
     // that it didn't.
@@ -510,7 +519,11 @@ fn push_lockfile_change(bare_path: &Path) {
         // on Unix; an absolute path always starts with a separator on Unix so the join
         // produces 3 slashes there too.
         let p = bare_path.to_string_lossy().replace('\\', "/");
-        if p.starts_with('/') { format!("file://{p}") } else { format!("file:///{p}") }
+        if p.starts_with('/') {
+            format!("file://{p}")
+        } else {
+            format!("file:///{p}")
+        }
     };
     let repo = Repository::clone(&bare_url, scratch.path()).expect("clone bare");
     let _ = repo.set_head("refs/heads/main");

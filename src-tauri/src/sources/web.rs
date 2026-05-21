@@ -1,4 +1,4 @@
-//! `web` source implementation — real working code, no stubs.
+//! `web` source implementation — real git fetch, real package-manager install, real port reservation.
 //!
 //! Behaviour:
 //!   * Git fetch + fast-forward-only merge (same invariants as [`super::git`]). A history
@@ -270,7 +270,10 @@ impl Source for WebSource {
                 let commit = repo.find_commit(oid).map_err(CoreError::from)?;
                 incoming.push(IncomingItem::Commit {
                     sha: short(&oid),
-                    message: commit.summary().unwrap_or("(no commit message)").to_string(),
+                    message: commit
+                        .summary()
+                        .unwrap_or("(no commit message)")
+                        .to_string(),
                     author: commit.author().name().unwrap_or("unknown").to_string(),
                 });
                 if let Ok(tree) = commit.tree() {
@@ -736,9 +739,12 @@ fn fetch_and_get_oid(repo_dir: &Path, branch: &str) -> Result<git2::Oid, CoreErr
 
 fn merge_ff_only(repo_dir: &Path, target: git2::Oid) -> Result<git2::Oid, CoreError> {
     let repo = Repository::open(repo_dir).map_err(CoreError::from)?;
-    let annotated: AnnotatedCommit<'_> =
-        repo.find_annotated_commit(target).map_err(CoreError::from)?;
-    let (analysis, _pref) = repo.merge_analysis(&[&annotated]).map_err(CoreError::from)?;
+    let annotated: AnnotatedCommit<'_> = repo
+        .find_annotated_commit(target)
+        .map_err(CoreError::from)?;
+    let (analysis, _pref) = repo
+        .merge_analysis(&[&annotated])
+        .map_err(CoreError::from)?;
 
     if analysis.contains(MergeAnalysis::ANALYSIS_UP_TO_DATE) {
         return Ok(target);

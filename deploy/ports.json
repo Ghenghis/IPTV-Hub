@@ -1,0 +1,61 @@
+{
+  "$comment": "Machine-readable mirror of deploy/PORTS.md. Generated and validated; do not edit by hand.",
+  "policy_version": 1,
+  "band": { "lower": 9600, "upper": 9899 },
+  "stride": 10,
+  "reverse_proxy": {
+    "http": 80,
+    "https": 443,
+    "admin_api": 9884
+  },
+  "infra": {
+    "prometheus": 9880,
+    "grafana": 9881,
+    "loki": 9882,
+    "promtail": 9883,
+    "healthcheck_aggregator": 9885
+  },
+  "reserved_debug_range": { "lower": 9500, "upper": 9599 },
+  "avoided_ports": [
+    3000, 3306, 4200, 5173, 5174, 5175, 5432, 6379, 8080, 8200, 8443, 8888,
+    9000, 9001, 9090, 9091, 9100, 9101, 9102, 9103, 9104, 9105, 9106, 9107,
+    9200, 9300, 9400, 9418, 9999, 27017
+  ],
+  "avoided_ranges": [
+    { "lower": 0, "upper": 1023, "reason": "privileged" },
+    { "lower": 8300, "upper": 8600, "reason": "hashicorp consul" },
+    { "lower": 9500, "upper": 9599, "reason": "ad-hoc debug" },
+    { "lower": 32768, "upper": 60999, "reason": "linux ephemeral" },
+    { "lower": 49152, "upper": 65535, "reason": "windows ephemeral" }
+  ],
+  "apps": [
+    { "index": 1,  "id": "authoiptv",         "base": 9600, "http": 9600, "ws": 9601, "metrics": 9602 },
+    { "index": 2,  "id": "cinexa",            "base": 9610, "http": 9610, "ws": 9611, "metrics": 9612 },
+    { "index": 3,  "id": "clubtivi-windows",  "base": 9620, "http": 9620, "ws": 9621, "metrics": 9622 },
+    { "index": 4,  "id": "extreme-infinitv",  "base": 9630, "http": 9630, "ws": 9631, "metrics": 9632 },
+    { "index": 5,  "id": "free-tv-iptv",      "base": 9640, "http": 9640, "ws": 9641, "metrics": 9642 },
+    { "index": 6,  "id": "harmonyiptv",       "base": 9650, "http": 9650, "ws": 9651, "metrics": 9652 },
+    { "index": 7,  "id": "iptauriv",          "base": 9660, "http": 9660, "ws": 9661, "metrics": 9662 },
+    { "index": 8,  "id": "iptv",              "base": 9670, "http": 9670, "ws": 9671, "metrics": 9672 },
+    { "index": 9,  "id": "iptvnator",         "base": 9680, "http": 9680, "ws": 9681, "metrics": 9682 },
+    { "index": 10, "id": "iptv-restream",     "base": 9690, "http": 9690, "ws": 9691, "metrics": 9692 },
+    { "index": 11, "id": "iptv-stream",       "base": 9700, "http": 9700, "ws": 9701, "metrics": 9702 },
+    { "index": 12, "id": "maxvideoplayer",    "base": 9710, "http": 9710, "ws": 9711, "metrics": 9712 },
+    { "index": 13, "id": "neptune-tv",        "base": 9720, "http": 9720, "ws": 9721, "metrics": 9722 },
+    { "index": 14, "id": "nuvioweb",          "base": 9730, "http": 9730, "ws": 9731, "metrics": 9732 },
+    { "index": 15, "id": "open-tv",           "base": 9740, "http": 9740, "ws": 9741, "metrics": 9742 },
+    { "index": 16, "id": "orbiscast",         "base": 9750, "http": 9750, "ws": 9751, "metrics": 9752 },
+    { "index": 17, "id": "pitv",              "base": 9760, "http": 9760, "ws": 9761, "metrics": 9762 },
+    { "index": 18, "id": "react-iptv",        "base": 9770, "http": 9770, "ws": 9771, "metrics": 9772 },
+    { "index": 19, "id": "smart-iptv-web",    "base": 9780, "http": 9780, "ws": 9781, "metrics": 9782 },
+    { "index": 20, "id": "stalker-ui",        "base": 9790, "http": 9790, "ws": 9791, "metrics": 9792 },
+    { "index": 21, "id": "stremio",           "base": 9800, "http": 9800, "ws": 9801, "metrics": 9802 },
+    { "index": 22, "id": "tvapp",             "base": 9810, "http": 9810, "ws": 9811, "metrics": 9812 },
+    { "index": 23, "id": "wizju-iptv-player", "base": 9820, "http": 9820, "ws": 9821, "metrics": 9822 },
+    { "index": 24, "id": "xstream-player",    "base": 9830, "http": 9830, "ws": 9831, "metrics": 9832 },
+    { "index": 25, "id": "ynotv",             "base": 9840, "http": 9840, "ws": 9841, "metrics": 9842 },
+    { "index": 26, "id": "crunchyroll-tizen", "base": 9850, "http": 9850, "ws": 9851, "metrics": 9852, "web_deployable": false },
+    { "index": 27, "id": "fred-tv",           "base": 9860, "http": 9860, "ws": 9861, "metrics": 9862, "web_deployable": false },
+    { "index": 28, "id": "iptv-desktop",      "base": 9870, "http": 9870, "ws": 9871, "metrics": 9872, "web_deployable": false }
+  ]
+}

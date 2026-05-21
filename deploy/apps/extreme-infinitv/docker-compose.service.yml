@@ -1,0 +1,38 @@
+# Extreme InfiniTV — per-app service fragment.
+#
+# Merged into deploy/docker-compose.apps.yml by deploy/scripts/generate-stack.sh.
+# Catalogue index 04 → policy slot 9630 (see deploy/PORTS.md §3).
+#
+# Mode: web-preview-only Docker image — the upstream Tauri desktop app is built
+# in its "Build with `pnpm build` and serve `dist/`" mode (no auto-update, no
+# native shell features). See deploy/apps/extreme-infinitv/README.md.
+
+services:
+  extreme-infinitv:
+    build:
+      # Path is relative to the merged docker-compose.apps.yml which the
+      # generator writes alongside deploy/docker-compose.yml. The build
+      # context therefore lives one level down at deploy/apps/<id>/.
+      context: ./apps/extreme-infinitv
+      dockerfile: Dockerfile
+    image: iptv-hub/extreme-infinitv:1.6.0
+    container_name: iptv-hub_extreme-infinitv
+    restart: unless-stopped
+    networks:
+      - iptv_hub_net
+    ports:
+      # Host policy port 9630 → container nginx on 80. Bound to loopback only;
+      # the host's edge nginx terminates TLS and proxies to this port.
+      - "127.0.0.1:9630:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      iptv-hub.app-id: "extreme-infinitv"
+      iptv-hub.slot: "9630"
+      iptv-hub.upstream: "https://github.com/infinitel8p/Extreme-InfiniTV"
+      iptv-hub.mode: "web-preview"
+      iptv-hub.caveat: "no-auto-update,no-native-features"

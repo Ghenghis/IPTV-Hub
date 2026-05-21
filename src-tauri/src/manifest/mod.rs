@@ -2,8 +2,9 @@
 //!
 //! Agent 03 owns `types`. Agent 15 owns `loader`, `writer`, and the migration runner.
 
-pub mod types;
 pub mod loader;
+pub mod migrations;
+pub mod types;
 pub mod writer;
 
 use std::path::{Path, PathBuf};
@@ -25,7 +26,10 @@ impl ManifestStore {
     pub async fn load(path: impl Into<PathBuf>) -> Result<Self, CoreError> {
         let path = path.into();
         let manifest = loader::load_and_validate(&path).await?;
-        Ok(Self { path, inner: RwLock::new(manifest) })
+        Ok(Self {
+            path,
+            inner: RwLock::new(manifest),
+        })
     }
 
     pub fn read(&self) -> parking_lot::RwLockReadGuard<'_, Manifest> {

@@ -42,7 +42,9 @@ pub enum CoreError {
 
 impl CoreError {
     pub fn config(message: impl Into<String>) -> Self {
-        Self::Config { message: message.into() }
+        Self::Config {
+            message: message.into(),
+        }
     }
 
     // `source` is taken by value because callers always have an owned `io::Error` they
@@ -56,58 +58,84 @@ impl CoreError {
     }
 
     pub fn git(message: impl Into<String>) -> Self {
-        Self::Git { message: message.into() }
+        Self::Git {
+            message: message.into(),
+        }
     }
 
     pub fn not_fast_forward(message: impl Into<String>) -> Self {
-        Self::NotFastForward { message: message.into() }
+        Self::NotFastForward {
+            message: message.into(),
+        }
     }
 
     pub fn network(message: impl Into<String>) -> Self {
-        Self::Network { message: message.into() }
+        Self::Network {
+            message: message.into(),
+        }
     }
 
     pub fn sha_mismatch(expected: impl Into<String>, got: impl Into<String>) -> Self {
-        Self::ShaMismatch { expected: expected.into(), got: got.into() }
+        Self::ShaMismatch {
+            expected: expected.into(),
+            got: got.into(),
+        }
     }
 
     pub fn not_supported(message: impl Into<String>) -> Self {
-        Self::NotSupported { message: message.into() }
+        Self::NotSupported {
+            message: message.into(),
+        }
     }
 
     pub fn post_update_failed(message: impl Into<String>) -> Self {
-        Self::PostUpdateFailed { message: message.into() }
+        Self::PostUpdateFailed {
+            message: message.into(),
+        }
     }
 
     pub fn smoke_failed(message: impl Into<String>) -> Self {
-        Self::SmokeFailed { message: message.into() }
+        Self::SmokeFailed {
+            message: message.into(),
+        }
     }
 
     pub fn internal(message: impl Into<String>) -> Self {
-        Self::Internal { message: message.into() }
+        Self::Internal {
+            message: message.into(),
+        }
     }
 }
 
 impl From<git2::Error> for CoreError {
     fn from(e: git2::Error) -> Self {
-        Self::Git { message: e.message().to_string() }
+        Self::Git {
+            message: e.message().to_string(),
+        }
     }
 }
 
 impl From<sqlx::Error> for CoreError {
     fn from(e: sqlx::Error) -> Self {
-        Self::Internal { message: format!("sqlx: {e}") }
+        Self::Internal {
+            message: format!("sqlx: {e}"),
+        }
     }
 }
 
 impl From<reqwest::Error> for CoreError {
     fn from(e: reqwest::Error) -> Self {
-        Self::Network { message: e.to_string() }
+        Self::Network {
+            message: e.to_string(),
+        }
     }
 }
 
 impl From<std::io::Error> for CoreError {
     fn from(e: std::io::Error) -> Self {
-        Self::Io { path: "<unknown>".into(), message: e.to_string() }
+        Self::Io {
+            path: "<unknown>".into(),
+            message: e.to_string(),
+        }
     }
 }

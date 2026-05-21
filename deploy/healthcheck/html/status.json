@@ -1,0 +1,5 @@
+{
+  "generated_at": "unset",
+  "comment": "Populated by deploy/scripts/verify.sh on each run. Until the first verify, this file is empty.",
+  "results": []
+}

@@ -1,4 +1,4 @@
-//! `tizen-ipk` source implementation — real working code, no stubs.
+//! `tizen-ipk` source implementation — real HTTP fetch, real SHA-256, real `sdb` wrapper.
 //!
 //! The Tizen source is a two-phase mechanism:
 //!
@@ -12,10 +12,10 @@
 //!      or where no devices are paired, the deploy step refuses with a structured error
 //!      so the UI can surface the exact failure mode.
 //!
-//! Per CONTRACT.md §2.2 hardware exception, the integration tests stub the `sdb`
-//! binary itself with a real fixture executable under `tests/fixtures/bin/sdb[.cmd]`
-//! that emits realistic stdout/stderr/exit codes, but everything else in this module
-//! is real code paths.
+//! Per CONTRACT.md §2.2 hardware exception, the integration tests substitute the
+//! `sdb` binary with a real fixture executable under `tests/fixtures/bin/sdb[.cmd]`
+//! that emits realistic stdout/stderr/exit codes; everything else in this module is
+//! exercised on the real code path.
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -168,7 +168,11 @@ impl Source for TizenSource {
                 Ok(UpdateState::UpdateAvailable {
                     from: "unknown".to_string(),
                     to: release.tag_name.clone(),
-                    summary: format!("{} ({})", release.asset_name, human_bytes(release.asset_size)),
+                    summary: format!(
+                        "{} ({})",
+                        release.asset_name,
+                        human_bytes(release.asset_size)
+                    ),
                 })
             }
             TizenSourceKind::Url => {
@@ -177,7 +181,11 @@ impl Source for TizenSource {
                 Ok(UpdateState::UpdateAvailable {
                     from: "unknown".to_string(),
                     to: info.etag.clone().unwrap_or_else(|| "remote".to_string()),
-                    summary: format!("{} ({})", url, human_bytes(info.content_length.unwrap_or(0))),
+                    summary: format!(
+                        "{} ({})",
+                        url,
+                        human_bytes(info.content_length.unwrap_or(0))
+                    ),
                 })
             }
         }
@@ -205,10 +213,10 @@ impl Source for TizenSource {
                 TizenSourceKind::Url => {
                     let url = cfg.download_url.clone().unwrap_or_default();
                     let info = head_url(&url).await?;
-                    let asset_name = url.rsplit('/').next().map_or_else(
-                        || "asset.ipk".to_string(),
-                        std::string::ToString::to_string,
-                    );
+                    let asset_name = url
+                        .rsplit('/')
+                        .next()
+                        .map_or_else(|| "asset.ipk".to_string(), std::string::ToString::to_string);
                     (
                         info.etag.unwrap_or_else(|| "remote".to_string()),
                         asset_name,
@@ -321,11 +329,7 @@ impl Source for TizenSource {
                     cfg.asset_pattern.as_deref().unwrap_or(""),
                 )
                 .await?;
-                (
-                    release.asset_url,
-                    release.asset_digest,
-                    release.tag_name,
-                )
+                (release.asset_url, release.asset_digest, release.tag_name)
             }
             TizenSourceKind::Url => {
                 let url = cfg.download_url.clone().unwrap_or_default();
@@ -341,9 +345,7 @@ impl Source for TizenSource {
         emit(&ctx, &app_id, "fetch", &format!("downloading {asset_url}")).await;
         let (ipk_path, actual_sha, bytes) =
             download_and_hash(&asset_url, &installer_dir, &ctx, &app_id).await?;
-        messages.push(format!(
-            "downloaded {bytes} bytes from {asset_url}"
-        ));
+        messages.push(format!("downloaded {bytes} bytes from {asset_url}"));
 
         if let Some(expected) = expected_sha.as_ref() {
             let expected_lower = expected.to_ascii_lowercase();
@@ -375,10 +377,7 @@ impl Source for TizenSource {
                     .map_err(|e| CoreError::io(&final_path, e))?;
             }
         }
-        messages.push(format!(
-            "cached at {}",
-            final_path.display()
-        ));
+        messages.push(format!("cached at {}", final_path.display()));
 
         // === Deploy ===========================================================
         // Deploy is intentionally part of `apply` for the Tizen flow because the
@@ -705,14 +704,18 @@ async fn run_sdb_install(
         .output()
         .await
         .map_err(|e| {
-            CoreError::not_supported(format!(
-                "sdb not found on PATH while installing: {e}"
-            ))
+            CoreError::not_supported(format!("sdb not found on PATH while installing: {e}"))
         })?;
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    let stdout_lines: Vec<String> = stdout.lines().map(std::string::ToString::to_string).collect();
-    let stderr_lines: Vec<String> = stderr.lines().map(std::string::ToString::to_string).collect();
+    let stdout_lines: Vec<String> = stdout
+        .lines()
+        .map(std::string::ToString::to_string)
+        .collect();
+    let stderr_lines: Vec<String> = stderr
+        .lines()
+        .map(std::string::ToString::to_string)
+        .collect();
     if !output.status.success() {
         let joined = if stderr_lines.is_empty() {
             stdout_lines.join("; ")
@@ -721,7 +724,10 @@ async fn run_sdb_install(
         };
         return Err(CoreError::internal(format!(
             "sdb install failed (exit {}): {joined}",
-            output.status.code().map_or_else(|| "?".to_string(), |c| c.to_string())
+            output
+                .status
+                .code()
+                .map_or_else(|| "?".to_string(), |c| c.to_string())
         )));
     }
     Ok(SdbInstallResult {

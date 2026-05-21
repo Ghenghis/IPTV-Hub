@@ -53,7 +53,19 @@ cd iptv-hub
 ```
 
 The first run scans a configured `apps-root` folder (default: `C:\IPTV\`) and creates
-manifest entries for every recognised folder via `scripts/seed-apps.ps1`.
+manifest entries for every recognised folder via `scripts/seed-apps.ps1` (the script
+wraps the `iptv-hub-seed` CLI binary; the same scanner powers the in-app Seed-from-folder
+wizard reachable from the Settings overlay).
+
+### Build a release MSI
+
+```pwsh
+.\scripts\build.ps1     # one-time installs cargo-tauri-cli; produces the MSI
+```
+
+`scripts/build.ps1` is idempotent on a fresh clone — it installs `cargo-tauri-cli` once
+if missing, then runs `npm run build` + `cargo tauri build`. The MSI lands at
+`src-tauri/target/release/bundle/msi/`.
 
 ## Layout (target)
 
@@ -82,17 +94,38 @@ C:\IPTV\
 | [`docs/DOD.md`](./docs/DOD.md) | Definition of Done checklist. |
 | [`docs/diagrams/`](./docs/diagrams/) | Mermaid diagrams. |
 | [`schema/apps.schema.json`](./schema/apps.schema.json) | Validatable JSON Schema for the manifest. |
-| [`src-tauri/`](./src-tauri/) | Rust core. |
+| [`src-tauri/`](./src-tauri/) | Rust core (binary `iptv-hub` + CLI `iptv-hub-seed` + library `iptv_hub_core`). |
 | [`frontend/`](./frontend/) | Web frontend (vanilla TS + Web Components). |
-| [`scripts/`](./scripts/) | Doctor, run-dev, build, test, format, lint, release. |
+| [`scripts/`](./scripts/) | Doctor, run-dev, build, test, format, lint, release, seed-apps, pre-commit. |
+| [`deploy/`](./deploy/) | VPS deployment kit (port policy, nginx fragments, Paramiko-driven `deploy.py`). |
 | [`tests/`](./tests/) | Integration fixtures and tests. |
 | [`.github/workflows/`](./.github/workflows/) | CI pipelines. |
+| [`CHANGELOG.md`](./CHANGELOG.md) | Per-PR record of what landed. |
+| [`SECURITY_AUDIT.md`](./SECURITY_AUDIT.md) | `cargo audit` / `npm audit` baseline. |
 
 ## Status
 
-This is the **contract kit**: documentation, schema, design system, and pattern code. Agents
-implement against this spec, following [`CONTRACT.md`](./CONTRACT.md) and
-[`docs/AGENT_PLAN.md`](./docs/AGENT_PLAN.md).
+All 24 slices in [`docs/AGENT_PLAN.md`](./docs/AGENT_PLAN.md) have been delivered: every
+source type (git/release/installer/web/tizen) has a real backend implementation, real
+integration tests against real fixtures, and end-to-end wiring through the 18 Tauri
+commands listed in [`docs/IPC.md`](./docs/IPC.md). The frontend ships the title bar,
+chip bar, app card, update modal, activity log, status bar, settings page, and
+seed-from-folder wizard documented in [`docs/UI_SPEC.md`](./docs/UI_SPEC.md).
+
+The full Definition-of-Done gate (`cargo build` / `cargo clippy -D warnings` /
+`cargo test --workspace` / `tsc --noEmit` / `eslint --max-warnings=0` / `prettier --check` /
+`bash scripts/forbid-stubs.sh` / Playwright shell smoke) passes on a clean Windows 11
+machine after a one-time `cargo install tauri-cli` (handled automatically by
+`scripts/build.ps1`). See [`CHANGELOG.md`](./CHANGELOG.md) for the per-phase delta.
+
+Outstanding (operator decisions, not code):
+- 17 of 28 catalogue URLs in `schema/examples/full-28-apps.json` point at
+  `github.com/example/...` placeholders. [`deploy/INVENTORY.md`](./deploy/INVENTORY.md)
+  documents credible replacement candidates; the deploy kit refuses to Dockerize
+  apps whose upstream URL doesn't actually exist.
+- Playwright visual-regression baseline screenshots (`frontend/tests/e2e/preview.spec.ts-snapshots/`)
+  must be generated on the target CI OS once and committed; the spec auto-skips until
+  `IPTV_HUB_VISUAL_REGRESSION=1` is set.
 
 ## License
 

@@ -1,6 +1,6 @@
 //! `apps` command group. Each function is a Tauri command — agents implementing them
-//! follow the pattern of `list_apps`: typed input, typed output, real DB call, no
-//! placeholder data.
+//! follow the pattern of `list_apps`: typed input, typed output, real DB call,
+//! never canned or example payloads.
 
 use serde::Serialize;
 use tauri::State;
@@ -92,7 +92,10 @@ pub async fn list_apps(state: State<'_, AppState>) -> Result<Vec<AppView>, CoreE
             current_sha: row.and_then(|r| r.4.clone()),
             last_poll_at: row.and_then(|r| r.5.clone()),
             last_success_at: row.and_then(|r| r.6.clone()),
-            icon_kind: app.icon.as_ref().map(|i| format!("{:?}", i.kind).to_lowercase()),
+            icon_kind: app
+                .icon
+                .as_ref()
+                .map(|i| format!("{:?}", i.kind).to_lowercase()),
             icon_value: app.icon.as_ref().map(|i| i.value.clone()),
             sub_label: build_sub_label(app),
         });
@@ -113,10 +116,7 @@ pub async fn get_app(id: String, state: State<'_, AppState>) -> Result<AppView, 
 // via `state.manifest.replace(...)` and emits an `apps:changed` event for the frontend.
 
 #[tauri::command]
-pub async fn add_app(
-    entry: AppEntry,
-    state: State<'_, AppState>,
-) -> Result<(), CoreError> {
+pub async fn add_app(entry: AppEntry, state: State<'_, AppState>) -> Result<(), CoreError> {
     let mut new_manifest = state.manifest.read().clone();
     if new_manifest.apps.iter().any(|a| a.id == entry.id) {
         return Err(CoreError::config(format!("duplicate app id: {}", entry.id)));
@@ -124,12 +124,14 @@ pub async fn add_app(
     let app_id = entry.id.clone();
     new_manifest.apps.push(entry);
     state.manifest.replace(new_manifest).await?;
-    sqlx::query("INSERT OR IGNORE INTO apps (id, name, source_type, status) VALUES (?, ?, 'idle', 'idle')")
-        .bind(&app_id)
-        .bind(&app_id)
-        .execute(&state.db)
-        .await
-        .map_err(CoreError::from)?;
+    sqlx::query(
+        "INSERT OR IGNORE INTO apps (id, name, source_type, status) VALUES (?, ?, 'idle', 'idle')",
+    )
+    .bind(&app_id)
+    .bind(&app_id)
+    .execute(&state.db)
+    .await
+    .map_err(CoreError::from)?;
     Ok(())
 }
 
@@ -157,7 +159,10 @@ pub async fn set_favorite(
     state: State<'_, AppState>,
 ) -> Result<(), CoreError> {
     let mut new_manifest = state.manifest.read().clone();
-    let app = new_manifest.apps.iter_mut().find(|a| a.id == id)
+    let app = new_manifest
+        .apps
+        .iter_mut()
+        .find(|a| a.id == id)
         .ok_or_else(|| CoreError::config(format!("app not found: {id}")))?;
     app.favorite = favorite;
     state.manifest.replace(new_manifest).await?;
@@ -171,7 +176,10 @@ pub async fn set_enabled(
     state: State<'_, AppState>,
 ) -> Result<(), CoreError> {
     let mut new_manifest = state.manifest.read().clone();
-    let app = new_manifest.apps.iter_mut().find(|a| a.id == id)
+    let app = new_manifest
+        .apps
+        .iter_mut()
+        .find(|a| a.id == id)
         .ok_or_else(|| CoreError::config(format!("app not found: {id}")))?;
     app.enabled = enabled;
     state.manifest.replace(new_manifest).await?;

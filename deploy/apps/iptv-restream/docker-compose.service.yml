@@ -1,0 +1,54 @@
+# IPTV Hub — service fragment for iptv-restream.
+# Merged into deploy/docker-compose.apps.yml by deploy/scripts/generate-stack.sh.
+#
+# Upstream: https://github.com/antebrl/IPTV-Restream (pinned in Dockerfile at
+# commit d9705451cece0141201d97c76c545b112e675587 / release v2.2).
+#
+# Port policy (deploy/ports.json slot 10): host 127.0.0.1:9690 -> container 80.
+
+services:
+  iptv-restream:
+    container_name: ${COMPOSE_PROJECT_NAME:-iptv-hub}_iptv-restream
+    build:
+      context: ./apps/iptv-restream
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - iptv_hub_net
+    ports:
+      - "127.0.0.1:9690:80"
+    environment:
+      # Backend defaults — see deploy/apps/iptv-restream/README.md for the
+      # full surface. All variables are optional; defaults from the upstream
+      # backend apply when unset.
+      STORAGE_PATH: /streams/
+      # Optional admin gate (set ADMIN_ENABLED=true to require login for
+      # channel management). Documented in upstream deployment/README.md.
+      ADMIN_ENABLED: ${IPTV_RESTREAM_ADMIN_ENABLED:-}
+      ADMIN_PASSWORD: ${IPTV_RESTREAM_ADMIN_PASSWORD:-}
+      CHANNEL_SELECTION_REQUIRES_ADMIN: ${IPTV_RESTREAM_CHANNEL_SELECTION_REQUIRES_ADMIN:-}
+      # Override only if the public BACKEND_URL the SPA emits in its
+      # generated .m3u playlist needs to be something other than the
+      # request host (e.g. when fronted by nginx on a non-default port).
+      BACKEND_URL: ${IPTV_RESTREAM_BACKEND_URL:-}
+    volumes:
+      # In-memory tmpfs for ffmpeg restream segments (matches upstream's
+      # streams_data volume opts: tmpfs, no on-disk persistence).
+      - type: tmpfs
+        target: /streams
+        tmpfs:
+          size: 536870912
+      # Persistent channel/playlist state across container restarts.
+      # Bind mount lives under the deploy install root so it is visible
+      # to the operator and backed up alongside other app state.
+      - ./data/iptv-restream/channels:/channels
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    labels:
+      iptv-hub.role: app
+      iptv-hub.id: iptv-restream
+      iptv-hub.upstream: "github.com/antebrl/IPTV-Restream"

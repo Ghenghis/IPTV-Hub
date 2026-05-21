@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Preview page for visual-regression. Renders every Web Component in every
+      documented state side-by-side. The Playwright `toHaveScreenshot()` test
+      under `frontend/tests/snapshots/` pins this page byte-for-byte; do not
+      add transient timestamps, random IDs, or other non-deterministic content.
+
+      The CSS imports below mirror `frontend/index.html` exactly so the visual
+      tokens match the production app.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+    />
+    <title>IPTV Hub — Preview</title>
+    <link rel="stylesheet" href="/src/styles/tokens.css" />
+    <link rel="stylesheet" href="/src/styles/reset.css" />
+    <link rel="stylesheet" href="/src/styles/base.css" />
+    <link rel="stylesheet" href="/src/styles/components.css" />
+    <style>
+      /* Preview-page layout only — kept inline because it has no equivalent
+         production surface. Mirrors the dense control-panel feel from
+         UI_SPEC.md but adds spacing between sections so each variant fits
+         in its own screenshot region. */
+      .preview-root {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: var(--s-6, 24px) var(--s-4, 16px);
+        display: flex;
+        flex-direction: column;
+        gap: var(--s-6, 24px);
+        color: var(--fg-primary, #e8eaed);
+        background: var(--bg-app, #0f1115);
+      }
+      .preview-header {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s-2, 8px);
+        padding-bottom: var(--s-4, 16px);
+        border-bottom: 1px solid var(--border-subtle, #2a2d33);
+      }
+      .preview-header__title {
+        font-size: var(--text-xl, 20px);
+        font-weight: var(--fw-semibold, 600);
+        margin: 0;
+      }
+      .preview-header__sub {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: var(--text-sm, 13px);
+        color: var(--fg-muted, #9aa0a6);
+        margin: 0;
+      }
+      .preview-section {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s-3, 12px);
+        padding: var(--s-4, 16px);
+        background: var(--bg-panel, #161a20);
+        border: 1px solid var(--border-subtle, #2a2d33);
+        border-radius: var(--r-lg, 8px);
+      }
+      .preview-section__title {
+        margin: 0 0 var(--s-2, 8px) 0;
+        font-size: var(--text-md, 15px);
+        font-weight: var(--fw-semibold, 600);
+        color: var(--fg-primary, #e8eaed);
+      }
+      .preview-card {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s-2, 8px);
+        padding: var(--s-3, 12px);
+        background: var(--bg-app, #0f1115);
+        border: 1px solid var(--border-subtle, #2a2d33);
+        border-radius: var(--r-md, 6px);
+      }
+      .preview-card__caption {
+        margin: 0;
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: var(--text-sm, 13px);
+        font-weight: var(--fw-medium, 500);
+        color: var(--fg-tertiary, #b8bcc4);
+      }
+      .preview-card__body {
+        display: block;
+      }
+      /* Modal preview: the production `.modal-backdrop` is `position: fixed`
+         which would render the modal full-viewport, blocking the page. Scope
+         it to its host so the screenshot diff stays inside the section card. */
+      .preview-modal-host {
+        position: relative;
+        min-height: 480px;
+      }
+      .preview-modal-host > iptv-update-modal.modal-backdrop {
+        position: absolute;
+        inset: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="preview-root" class="preview-root">
+      <header class="preview-header">
+        <h1 class="preview-header__title">IPTV Hub — Component preview</h1>
+        <p class="preview-header__sub">
+          Every component state side-by-side. Pinned by Playwright
+          <code>toHaveScreenshot()</code> against <code>frontend/tests/snapshots/preview.png</code>.
+        </p>
+      </header>
+    </div>
+    <script type="module" src="/src/preview/preview-entry.ts"></script>
+  </body>
+</html>

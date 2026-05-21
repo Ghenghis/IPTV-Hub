@@ -1,0 +1,59 @@
+# IPTV Hub — per-app nginx site fragment template.
+#
+# One copy of this file is rendered per deployable app by
+# `deploy/scripts/generate-stack.sh`. The rendered files land in
+# `/etc/nginx/conf.d/iptv-hub-<id>.conf` on the VPS via SCP.
+#
+# Placeholder tokens (substituted by the generator):
+#   ${APP_ID}          — short id from schema (e.g. iptvnator)
+#   ${APP_PORT}        — host port from deploy/ports.json (e.g. 9680)
+#   ${SERVER_NAME}     — either "<APP_ID>.<DEPLOY_DOMAIN>" or shared host (path mode)
+#   ${ROUTING_PREFIX}  — empty in subdomain mode; "/<APP_ID>" in path mode
+#   ${CLIENT_MAX_MB}   — upload size limit (default 64)
+#   ${ACCESS_LOG_PATH} — per-app access log path on host
+
+# Subdomain mode: this fragment defines a complete server block.
+# Path mode: the generator instead splices the `location` block below into the
+# operator's existing daveai.tech server config (see deploy/scripts/generate-stack.sh).
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${SERVER_NAME};
+
+    client_max_body_size ${CLIENT_MAX_MB}m;
+
+    # Per-app access log, JSON format; falls under /opt/iptv-hub/logs/nginx/.
+    access_log ${ACCESS_LOG_PATH} combined;
+
+    # Standard reverse-proxy headers. `Host` is preserved so the app sees its
+    # own subdomain; useful for cookie scoping and absolute-URL generation.
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host  $host;
+
+    # Long timeouts for streaming responses (IPTV apps often stream long polls /
+    # SSE / video). 24h matches the daveai /ws block.
+    proxy_read_timeout  86400s;
+    proxy_send_timeout  86400s;
+    proxy_buffering     off;
+    proxy_http_version  1.1;
+
+    # WebSocket upgrade support.
+    proxy_set_header Upgrade    $http_upgrade;
+    proxy_set_header Connection "upgrade";
+
+    location ${ROUTING_PREFIX}/ {
+        proxy_pass http://127.0.0.1:${APP_PORT}/;
+    }
+
+    # Per-app health probe — used by `deploy/scripts/verify.py` to confirm the
+    # service answers HTTP. Apps that ship their own /health may override this
+    # block via a sibling `iptv-hub-<id>.override.conf`.
+    location = ${ROUTING_PREFIX}/__iptv_hub_probe {
+        access_log off;
+        proxy_pass http://127.0.0.1:${APP_PORT}/;
+    }
+}

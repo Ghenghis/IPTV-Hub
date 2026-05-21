@@ -82,7 +82,9 @@ async fn spawn_fixture(cfg: FixtureConfig) -> (String, Arc<AssetHitCounter>) {
 
     tokio::spawn(async move {
         loop {
-            let Ok((stream, _)) = listener.accept().await else { break };
+            let Ok((stream, _)) = listener.accept().await else {
+                break;
+            };
             let state = state.clone();
             tokio::spawn(async move {
                 let io = TokioIo::new(stream);
@@ -255,7 +257,8 @@ fn build_zip_asset() -> Vec<u8> {
     let opts: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated);
     zip.start_file("readme.txt", opts).unwrap();
-    zip.write_all(b"hello from iptv-hub release source").unwrap();
+    zip.write_all(b"hello from iptv-hub release source")
+        .unwrap();
     let cursor = zip.finish().unwrap();
     cursor.into_inner()
 }
@@ -310,10 +313,18 @@ fn make_app(
 }
 
 fn make_paths(temp: &TempDir) -> iptv_hub_core::paths::AppPaths {
-    iptv_hub_core::paths::AppPaths::for_test(temp.path().to_path_buf(), temp.path().join("apps-root"))
+    iptv_hub_core::paths::AppPaths::for_test(
+        temp.path().to_path_buf(),
+        temp.path().join("apps-root"),
+    )
 }
 
-fn make_ctx(paths: iptv_hub_core::paths::AppPaths) -> (ApplyCtx, mpsc::Receiver<iptv_hub_core::sources::ProgressEvent>) {
+fn make_ctx(
+    paths: iptv_hub_core::paths::AppPaths,
+) -> (
+    ApplyCtx,
+    mpsc::Receiver<iptv_hub_core::sources::ProgressEvent>,
+) {
     let (tx, rx) = mpsc::channel(64);
     let ctx = ApplyCtx {
         paths,
@@ -340,7 +351,13 @@ async fn happy_path_check_plan_apply() {
     let temp = TempDir::new().expect("tempdir");
     std::fs::create_dir_all(temp.path().join("apps-root")).unwrap();
     let install_dir = temp.path().join("apps-root").join("install");
-    let app = make_app(&base, r".*\.zip$", InstallStrategy::Extract, &install_dir, true);
+    let app = make_app(
+        &base,
+        r".*\.zip$",
+        InstallStrategy::Extract,
+        &install_dir,
+        true,
+    );
     let paths = make_paths(&temp);
     let src = ReleaseSource::new();
 
@@ -352,7 +369,10 @@ async fn happy_path_check_plan_apply() {
 
     let plan: UpdatePlan = src.plan(&app, &paths).await.expect("plan ok");
     assert_eq!(plan.to_label, "v1.0.0");
-    assert!(plan.steps.iter().any(|s| s.title.contains("Verify SHA-256")));
+    assert!(plan
+        .steps
+        .iter()
+        .any(|s| s.title.contains("Verify SHA-256")));
 
     let (ctx, mut rx) = make_ctx(paths);
     tokio::spawn(async move {
@@ -388,22 +408,30 @@ async fn sha256_mismatch_refuses() {
     let temp = TempDir::new().expect("tempdir");
     std::fs::create_dir_all(temp.path().join("apps-root")).unwrap();
     let install_dir = temp.path().join("apps-root").join("install");
-    let app = make_app(&base, r".*\.zip$", InstallStrategy::Extract, &install_dir, true);
+    let app = make_app(
+        &base,
+        r".*\.zip$",
+        InstallStrategy::Extract,
+        &install_dir,
+        true,
+    );
     let paths = make_paths(&temp);
     let src = ReleaseSource::new();
     let plan = src.plan(&app, &paths).await.expect("plan ok");
 
     let (ctx, mut rx) = make_ctx(paths);
-    tokio::spawn(async move {
-        while rx.recv().await.is_some() {}
-    });
+    tokio::spawn(async move { while rx.recv().await.is_some() {} });
     let err = src.apply(&app, plan, ctx).await.expect_err("must reject");
     match err {
         CoreError::ShaMismatch { expected, .. } => assert_eq!(expected, lying_sha),
         other => panic!("expected ShaMismatch, got {other:?}"),
     }
     assert!(
-        !install_dir.exists() || std::fs::read_dir(&install_dir).map(std::iter::Iterator::count).unwrap_or(0) == 0,
+        !install_dir.exists()
+            || std::fs::read_dir(&install_dir)
+                .map(std::iter::Iterator::count)
+                .unwrap_or(0)
+                == 0,
         "install_dir must not be touched on hash mismatch"
     );
 }
@@ -434,7 +462,10 @@ async fn asset_pattern_mismatch_returns_error() {
     let paths = make_paths(&temp);
     let src = ReleaseSource::new();
 
-    let state = src.check(&app, &paths).await.expect("check ok (Error variant)");
+    let state = src
+        .check(&app, &paths)
+        .await
+        .expect("check ok (Error variant)");
     match state {
         UpdateState::Error { message } => {
             assert!(message.contains("no asset matching"), "got: {message}");
@@ -462,7 +493,9 @@ async fn network_drop_resumes_with_range() {
         asset_name: "iptv-hub-tiny-v1.0.0.zip".into(),
         tag_name: "v1.0.0".into(),
         published_sha: Some(digest.clone()),
-        asset_behaviour: AssetBehaviour::TruncateThenResume { first_bytes: total / 3 },
+        asset_behaviour: AssetBehaviour::TruncateThenResume {
+            first_bytes: total / 3,
+        },
         meta_behaviour: MetaBehaviour::Normal,
     })
     .await;
@@ -470,21 +503,31 @@ async fn network_drop_resumes_with_range() {
     let temp = TempDir::new().expect("tempdir");
     std::fs::create_dir_all(temp.path().join("apps-root")).unwrap();
     let install_dir = temp.path().join("apps-root").join("install");
-    let app = make_app(&base, r".*\.zip$", InstallStrategy::Extract, &install_dir, true);
+    let app = make_app(
+        &base,
+        r".*\.zip$",
+        InstallStrategy::Extract,
+        &install_dir,
+        true,
+    );
     let paths = make_paths(&temp);
     let src = ReleaseSource::new();
     let plan = src.plan(&app, &paths).await.expect("plan ok");
     let (ctx, mut rx) = make_ctx(paths);
-    tokio::spawn(async move {
-        while rx.recv().await.is_some() {}
-    });
-    let outcome = src.apply(&app, plan, ctx).await.expect("apply ok after resume");
+    tokio::spawn(async move { while rx.recv().await.is_some() {} });
+    let outcome = src
+        .apply(&app, plan, ctx)
+        .await
+        .expect("apply ok after resume");
 
     assert!(usize::try_from(outcome.bytes_downloaded).unwrap_or(0) == total);
     assert!(hits.hits() >= 2, "should have retried at least once");
     let ranges = hits.range_headers();
     let saw_range = ranges.iter().any(|h| h.starts_with("bytes="));
-    assert!(saw_range, "expected a Range: header on retry, saw: {ranges:?}");
+    assert!(
+        saw_range,
+        "expected a Range: header on retry, saw: {ranges:?}"
+    );
     assert!(install_dir.join("readme.txt").exists());
 }
 
@@ -502,7 +545,13 @@ async fn rate_limit_response_mapped_clearly() {
 
     let temp = TempDir::new().expect("tempdir");
     let install_dir = temp.path().join("install");
-    let app = make_app(&base, r".*\.zip$", InstallStrategy::Extract, &install_dir, true);
+    let app = make_app(
+        &base,
+        r".*\.zip$",
+        InstallStrategy::Extract,
+        &install_dir,
+        true,
+    );
     let paths = make_paths(&temp);
     let src = ReleaseSource::new();
 

@@ -14,5 +14,6 @@ pub mod manifest;
 pub mod paths;
 pub mod poller;
 pub mod rollback;
+pub mod seed;
 pub mod smoke_test;
 pub mod sources;

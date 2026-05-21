@@ -1,0 +1,43 @@
+# Lefthook config — IPTV Hub.
+#
+# Lefthook is the project's git-hook driver (CONTRACT §9, AGENT_PLAN Agent 21).
+# Install once per clone:
+#
+#   npm install -g @evilmartians/lefthook   (or `npx lefthook install`)
+#   lefthook install
+#
+# The hooks below are intentionally fast (< 10 s) on pre-commit and heavier on pre-push.
+
+pre-commit:
+  parallel: true
+  commands:
+    forbid-stubs:
+      run: bash scripts/forbid-stubs.sh
+    rust-fmt:
+      glob: "**/*.rs"
+      run: cargo fmt --all -- --check
+    frontend-prettier:
+      root: "frontend/"
+      glob: "**/*.{ts,css,html,json}"
+      run: npx --no-install prettier --check {staged_files}
+    frontend-eslint:
+      root: "frontend/"
+      glob: "**/*.ts"
+      # Run eslint on the entire frontend src tree (not {staged_files}) so the
+      # `.eslintrc.cjs` `ignorePatterns` entries naturally exclude
+      # `vite.config.ts` / `playwright.config.ts` without emitting the "File
+      # ignored" warning that --max-warnings=0 would catch. The `glob` field
+      # still gates whether this hook runs at all — only when a .ts file is
+      # staged.
+      run: npx --no-install eslint . --max-warnings=0
+
+pre-push:
+  parallel: false
+  commands:
+    rust-clippy:
+      run: cargo clippy --workspace --all-targets --locked -- -D warnings
+    rust-test:
+      run: cargo test --workspace --locked
+    frontend-typecheck:
+      root: "frontend/"
+      run: npx --no-install tsc --noEmit

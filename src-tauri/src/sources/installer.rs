@@ -14,9 +14,8 @@
 //!
 //! The module body is `#[cfg(windows)]` because the registry and silent-installer
 //! semantics are Windows-specific. The non-Windows stand-in (in `sources::mod`) returns
-//! `CoreError::not_supported(...)` from all four trait methods — this is the documented
-//! behaviour for non-Windows hosts (see `docs/AGENT_PLAN.md` Agent 07 and CONTRACT §8),
-//! not a stub.
+//! `CoreError::not_supported(...)` from all four trait methods — the documented
+//! behaviour for non-Windows hosts (see `docs/AGENT_PLAN.md` Agent 07 and CONTRACT §8).
 
 #![allow(
     // Windows registry API takes `&mut T` that gets cast to raw pointer by the binding
@@ -167,13 +166,18 @@ impl Source for InstallerSource {
         let installed = registry::read_display_version(&cfg.registry_uninstall_key)?;
         let upstream = fetch_string_at_path(&cfg.version_endpoint, &cfg.version_json_path).await?;
 
-        let from_label = installed.clone().unwrap_or_else(|| "(not installed)".to_string());
+        let from_label = installed
+            .clone()
+            .unwrap_or_else(|| "(not installed)".to_string());
         let to_label = upstream.clone();
 
         let mut steps = vec![
             PlanStep {
                 title: "Snapshot uninstall registry key".into(),
-                detail: Some(format!("HKCU/HKLM…\\Uninstall\\{}", cfg.registry_uninstall_key)),
+                detail: Some(format!(
+                    "HKCU/HKLM…\\Uninstall\\{}",
+                    cfg.registry_uninstall_key
+                )),
                 tag: PlanTag::Safe,
             },
             PlanStep {
@@ -213,11 +217,20 @@ impl Source for InstallerSource {
             from_label: from_label.clone(),
             to_label: to_label.clone(),
             from_meta: vec![
-                KeyValue { key: "vendor".into(), value: cfg.vendor.clone() },
-                KeyValue { key: "product".into(), value: cfg.product_name.clone() },
+                KeyValue {
+                    key: "vendor".into(),
+                    value: cfg.vendor.clone(),
+                },
+                KeyValue {
+                    key: "product".into(),
+                    value: cfg.product_name.clone(),
+                },
             ],
             to_meta: vec![
-                KeyValue { key: "version".into(), value: upstream.clone() },
+                KeyValue {
+                    key: "version".into(),
+                    value: upstream.clone(),
+                },
                 KeyValue {
                     key: "url".into(),
                     value: substitute_version(&cfg.download_url, &upstream),
@@ -347,7 +360,11 @@ impl Source for InstallerSource {
 
         // Step 1: uninstall the current version via the OLD UninstallString if available.
         if let Some(uninstall_string) = snap.uninstall_string.as_ref() {
-            tracing::info!(app = app.id, uninstall_string, "running prior UninstallString");
+            tracing::info!(
+                app = app.id,
+                uninstall_string,
+                "running prior UninstallString"
+            );
             run_uninstall_string(uninstall_string, &cfg.uninstall_args).await?;
         } else {
             tracing::warn!(
@@ -384,7 +401,10 @@ impl Source for InstallerSource {
             return Err(CoreError::internal(format!(
                 "rollback installer {} exited with {}: {}",
                 prior_installer.display(),
-                output.status.code().map_or_else(|| "<signal>".into(), |c| c.to_string()),
+                output
+                    .status
+                    .code()
+                    .map_or_else(|| "<signal>".into(), |c| c.to_string()),
                 String::from_utf8_lossy(&output.stderr)
             )));
         }
@@ -423,8 +443,7 @@ async fn read_snapshot(path: &Path) -> Result<UninstallSnapshot, CoreError> {
     let bytes = tokio::fs::read(path)
         .await
         .map_err(|e| CoreError::io(path, e))?;
-    serde_json::from_slice(&bytes)
-        .map_err(|e| CoreError::internal(format!("snapshot decode: {e}")))
+    serde_json::from_slice(&bytes).map_err(|e| CoreError::internal(format!("snapshot decode: {e}")))
 }
 
 fn find_cached_installer(cache_dir: &Path, version: &str) -> Option<PathBuf> {
@@ -483,9 +502,9 @@ mod json_path {
 
     fn parse(expr: &str) -> Result<Vec<Segment<'_>>, CoreError> {
         // Must start with $.
-        let rest = expr.strip_prefix('$').ok_or_else(|| {
-            CoreError::config(format!("json path '{expr}' must start with '$'"))
-        })?;
+        let rest = expr
+            .strip_prefix('$')
+            .ok_or_else(|| CoreError::config(format!("json path '{expr}' must start with '$'")))?;
         let mut out = Vec::new();
         let mut s = rest;
         while !s.is_empty() {
@@ -593,11 +612,7 @@ async fn fetch_string_at_path(url: &str, json_path: &str) -> Result<String, Core
     }
 }
 
-async fn download_bytes(
-    url: &str,
-    ctx: &ApplyCtx,
-    app_id: &str,
-) -> Result<Vec<u8>, CoreError> {
+async fn download_bytes(url: &str, ctx: &ApplyCtx, app_id: &str) -> Result<Vec<u8>, CoreError> {
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(30))
         .build()?;
@@ -694,7 +709,9 @@ async fn run_installer(
         return Err(CoreError::internal(format!(
             "installer {} exited with {}",
             program.display(),
-            status.code().map_or_else(|| "<signal>".into(), |c| c.to_string())
+            status
+                .code()
+                .map_or_else(|| "<signal>".into(), |c| c.to_string())
         )));
     }
     Ok(())
@@ -747,7 +764,10 @@ async fn run_uninstall_string(
         return Err(CoreError::internal(format!(
             "uninstaller {} exited with {}: {}",
             program,
-            output.status.code().map_or_else(|| "<signal>".into(), |c| c.to_string()),
+            output
+                .status
+                .code()
+                .map_or_else(|| "<signal>".into(), |c| c.to_string()),
             String::from_utf8_lossy(&output.stderr)
         )));
     }
@@ -837,20 +857,15 @@ mod registry {
         // DisplayName until we hit one that matches.
         let root_wide = to_wide(UNINSTALL_ROOT);
         let mut root_key: HKEY = HKEY::default();
-        let status = unsafe {
-            RegOpenKeyExW(
-                hive,
-                PCWSTR(root_wide.as_ptr()),
-                0,
-                KEY_READ,
-                &mut root_key,
-            )
-        };
+        let status =
+            unsafe { RegOpenKeyExW(hive, PCWSTR(root_wide.as_ptr()), 0, KEY_READ, &mut root_key) };
         if status != ERROR_SUCCESS {
             return Ok(None);
         }
         let result = enumerate_for_display_name(root_key, uninstall_key, hive);
-        unsafe { let _ = RegCloseKey(root_key); }
+        unsafe {
+            let _ = RegCloseKey(root_key);
+        }
         result
     }
 
@@ -900,9 +915,7 @@ mod registry {
     fn open_record(hive: HKEY, full_path: &str) -> Result<Option<UninstallSnapshot>, CoreError> {
         let wide = to_wide(full_path);
         let mut sub: HKEY = HKEY::default();
-        let status = unsafe {
-            RegOpenKeyExW(hive, PCWSTR(wide.as_ptr()), 0, KEY_READ, &mut sub)
-        };
+        let status = unsafe { RegOpenKeyExW(hive, PCWSTR(wide.as_ptr()), 0, KEY_READ, &mut sub) };
         if status != ERROR_SUCCESS {
             return Ok(None);
         }
@@ -913,7 +926,9 @@ mod registry {
             uninstall_string: read_string_value(sub, "UninstallString")?,
             cached_installer: None,
         };
-        unsafe { let _ = RegCloseKey(sub); }
+        unsafe {
+            let _ = RegCloseKey(sub);
+        }
         Ok(Some(record))
     }
 
@@ -973,9 +988,7 @@ mod registry {
 /// the key is absent from both HKCU and HKLM.
 pub fn __test_read_record(key: &str) -> Result<Option<UninstallSnapshot>, CoreError> {
     let rec = registry::read_uninstall_record(key)?;
-    if rec.display_name.is_some()
-        || rec.display_version.is_some()
-        || rec.uninstall_string.is_some()
+    if rec.display_name.is_some() || rec.display_version.is_some() || rec.uninstall_string.is_some()
     {
         Ok(Some(rec))
     } else {
@@ -1018,7 +1031,10 @@ pub fn __test_install_and_snapshot(
         return Err(CoreError::internal(format!(
             "msiexec /i {} exited {}: {}",
             msi.display(),
-            output.status.code().map_or_else(|| "<signal>".into(), |c| c.to_string()),
+            output
+                .status
+                .code()
+                .map_or_else(|| "<signal>".into(), |c| c.to_string()),
             String::from_utf8_lossy(&output.stderr)
         )));
     }

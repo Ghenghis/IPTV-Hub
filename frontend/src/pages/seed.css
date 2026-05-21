@@ -1,0 +1,321 @@
+/*
+ * IPTV Hub — seed-from-folder wizard page styles.
+ *
+ * The wizard is a full-shell takeover: while it is mounted, it owns the entire
+ * window. Layout follows the same dense control-panel feel as the main grid:
+ * no hero whitespace, no decorative shadows, 1 px hairlines everywhere.
+ *
+ * All colors, radii, spacing, and fonts come from `styles/tokens.css`. Nothing
+ * is hardcoded — the page picks up theme switches for free.
+ */
+
+.seed-page {
+  display: grid;
+  grid-template-rows: var(--title-bar-h) 1fr var(--status-bar-h);
+  height: 100vh;
+  background: var(--bg-app);
+  color: var(--fg-primary);
+  font-family: var(--font-sans);
+}
+
+/* ── Header ────────────────────────────────────────────────────────────── */
+.seed-page__header {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 0 var(--s-4);
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.seed-page__title {
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-15);
+  color: var(--fg-primary);
+}
+
+.seed-page__subtitle {
+  color: var(--fg-secondary);
+  font-size: var(--fs-13);
+}
+
+.seed-page__header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+/* ── Body ──────────────────────────────────────────────────────────────── */
+.seed-page__body {
+  overflow-y: auto;
+  padding: var(--s-4);
+  display: grid;
+  gap: var(--s-4);
+  align-content: start;
+}
+
+/* Scan panel — folder input + scan trigger. */
+.seed-scan-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  padding: var(--s-4);
+  display: grid;
+  gap: var(--s-3);
+}
+
+.seed-scan-panel__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--s-3);
+  align-items: center;
+}
+
+.seed-scan-panel__hint {
+  color: var(--fg-muted);
+  font-size: var(--fs-12);
+  font-family: var(--font-mono);
+}
+
+.seed-scan-panel input[type="text"] {
+  width: 100%;
+  height: 32px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  color: var(--fg-primary);
+  padding: 0 var(--s-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-13);
+}
+
+.seed-scan-panel input[type="text"]:focus {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+  border-color: var(--accent);
+}
+
+.seed-scan-panel__error {
+  color: var(--status-err);
+  font-size: var(--fs-13);
+  font-family: var(--font-mono);
+}
+
+/* ── Apps table ─────────────────────────────────────────────────────────── */
+.seed-section {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.seed-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.seed-section__title {
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-14);
+  color: var(--fg-primary);
+}
+
+.seed-section__count {
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-12);
+  margin-left: var(--s-2);
+}
+
+.seed-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-13);
+}
+
+.seed-table thead th {
+  text-align: left;
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-12);
+  color: var(--fg-secondary);
+  padding: var(--s-2) var(--s-3);
+  background: var(--bg-panel-2);
+  border-bottom: 1px solid var(--border-muted);
+  position: sticky;
+  top: 0;
+}
+
+.seed-table tbody td {
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--border-hairline);
+  vertical-align: middle;
+}
+
+.seed-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.seed-table tbody tr.seed-row--disabled {
+  opacity: 0.55;
+}
+
+.seed-table tbody tr.seed-row--success {
+  background: rgba(99, 153, 34, 0.08);
+}
+
+.seed-table tbody tr.seed-row--error {
+  background: rgba(226, 75, 74, 0.08);
+}
+
+.seed-table input[type="text"],
+.seed-table select {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--r-sm);
+  color: var(--fg-primary);
+  padding: var(--s-1) var(--s-2);
+  font-size: var(--fs-12);
+  font-family: var(--font-mono);
+  height: 26px;
+  box-sizing: border-box;
+}
+
+.seed-table input[type="text"]:focus,
+.seed-table select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+
+.seed-table .seed-cell--toggle {
+  text-align: center;
+  width: 60px;
+}
+
+.seed-table .seed-cell--status {
+  font-family: var(--font-mono);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+}
+
+.seed-status--idle {
+  color: var(--fg-muted);
+}
+.seed-status--ok {
+  color: var(--status-ok);
+}
+.seed-status--err {
+  color: var(--status-err);
+}
+.seed-status--inflight {
+  color: var(--status-info);
+}
+
+/* Native checkbox accent — uses status-ok green from the token set. */
+.seed-table input[type="checkbox"] {
+  accent-color: var(--status-ok);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* ── Skipped (unclassified) panel ───────────────────────────────────────── */
+.seed-skipped {
+  display: flex;
+  flex-direction: column;
+}
+
+.seed-skipped__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.seed-skipped__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-4);
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.seed-skipped__path {
+  font-family: var(--font-mono);
+  font-size: var(--fs-12);
+  color: var(--fg-secondary);
+  word-break: break-all;
+}
+
+.seed-skipped__row--claimed {
+  opacity: 0.55;
+}
+
+/* ── Buttons reused from base.css when possible; small additions here. ──── */
+.seed-btn-danger {
+  background: transparent;
+  color: var(--status-err);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--r-md);
+  padding: var(--s-1) var(--s-3);
+  font-size: var(--fs-12);
+  cursor: pointer;
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
+}
+
+.seed-btn-danger:hover {
+  background: rgba(226, 75, 74, 0.1);
+  color: var(--status-err);
+}
+
+.seed-btn-small {
+  background: var(--bg-panel-2);
+  color: var(--fg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  padding: var(--s-1) var(--s-2);
+  font-size: var(--fs-12);
+  cursor: pointer;
+  transition: background var(--t-fast);
+}
+
+.seed-btn-small:hover {
+  background: var(--bg-hover);
+}
+
+/* ── Footer / status line ──────────────────────────────────────────────── */
+.seed-page__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: 0 var(--s-4);
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--fs-12);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+}
+
+.seed-page__footer-sep {
+  color: var(--border-strong);
+}
+
+/* Empty / loading splash inside the body. */
+.seed-empty {
+  padding: var(--s-7) var(--s-4);
+  color: var(--fg-muted);
+  text-align: center;
+  font-size: var(--fs-13);
+}
+
+.seed-empty--error {
+  color: var(--status-err);
+  font-family: var(--font-mono);
+}

@@ -41,7 +41,10 @@ impl AppPaths {
         } else {
             data_dir.join("apps-root")
         };
-        Ok(Self { data_dir, apps_root })
+        Ok(Self {
+            data_dir,
+            apps_root,
+        })
     }
 
     pub async fn ensure_exist(&self) -> Result<(), CoreError> {
@@ -56,16 +59,28 @@ impl AppPaths {
             &self.apps_root.join("cache").join("icons"),
             &self.logs_dir(),
         ] {
-            tokio::fs::create_dir_all(p).await.map_err(|e| CoreError::io(p, e))?;
+            tokio::fs::create_dir_all(p)
+                .await
+                .map_err(|e| CoreError::io(p, e))?;
         }
         Ok(())
     }
 
-    pub fn data_dir(&self) -> &Path { &self.data_dir }
-    pub fn apps_root(&self) -> &Path { &self.apps_root }
-    pub fn manifest_path(&self) -> PathBuf { self.data_dir.join("apps.json") }
-    pub fn database_path(&self) -> PathBuf { self.data_dir.join("iptv-hub.db") }
-    pub fn logs_dir(&self) -> PathBuf { self.data_dir.join("logs") }
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
+    }
+    pub fn apps_root(&self) -> &Path {
+        &self.apps_root
+    }
+    pub fn manifest_path(&self) -> PathBuf {
+        self.data_dir.join("apps.json")
+    }
+    pub fn database_path(&self) -> PathBuf {
+        self.data_dir.join("iptv-hub.db")
+    }
+    pub fn logs_dir(&self) -> PathBuf {
+        self.data_dir.join("logs")
+    }
 
     /// Test-only constructor that takes raw paths.
     ///
@@ -74,7 +89,10 @@ impl AppPaths {
     /// uses [`AppPaths::resolve`].
     #[doc(hidden)]
     pub const fn for_test(data_dir: PathBuf, apps_root: PathBuf) -> Self {
-        Self { data_dir, apps_root }
+        Self {
+            data_dir,
+            apps_root,
+        }
     }
 
     /// Alias of [`Self::for_test`] kept for the `web` source's integration tests.

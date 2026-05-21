@@ -25,6 +25,11 @@ impl AppState {
         db: SqlitePool,
         manifest: Arc<ManifestStore>,
     ) -> Self {
-        Self { paths, config, db, manifest }
+        Self {
+            paths,
+            config,
+            db,
+            manifest,
+        }
     }
 }

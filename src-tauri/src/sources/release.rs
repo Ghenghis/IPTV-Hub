@@ -1,4 +1,4 @@
-//! `release-binary` source implementation — real working code, no stubs.
+//! `release-binary` source implementation — real GitHub API, real downloads, real SHA-256.
 //!
 //! Mirrors the structure of [`crate::sources::git`]: a config-deserialisation helper,
 //! the four [`Source`] trait methods, and small private helpers. Network work uses
@@ -174,7 +174,11 @@ impl Source for ReleaseSource {
         let release = fetch_latest_release(&client, &cfg).await?;
         let asset = match select_asset(&release, &cfg.asset_pattern) {
             Ok(a) => a,
-            Err(e) => return Ok(UpdateState::Error { message: e.to_string() }),
+            Err(e) => {
+                return Ok(UpdateState::Error {
+                    message: e.to_string(),
+                })
+            }
         };
 
         let target = release.tag_name.clone();
@@ -255,11 +259,20 @@ impl Source for ReleaseSource {
                 value: install_dir.display().to_string(),
             }],
             to_meta: vec![
-                KeyValue { key: "asset".into(), value: asset.name.clone() },
-                KeyValue { key: "size".into(), value: size_label },
+                KeyValue {
+                    key: "asset".into(),
+                    value: asset.name.clone(),
+                },
+                KeyValue {
+                    key: "size".into(),
+                    value: size_label,
+                },
                 KeyValue {
                     key: "sha256".into(),
-                    value: asset.sha256.clone().unwrap_or_else(|| "(unpublished)".into()),
+                    value: asset
+                        .sha256
+                        .clone()
+                        .unwrap_or_else(|| "(unpublished)".into()),
                 },
             ],
             incoming: vec![IncomingItem::ReleaseNote {
@@ -303,7 +316,11 @@ impl Source for ReleaseSource {
             &ctx,
             &app_id,
             "fetch",
-            &format!("downloading {} ({} bytes)", asset.name, asset.size.unwrap_or(0)),
+            &format!(
+                "downloading {} ({} bytes)",
+                asset.name,
+                asset.size.unwrap_or(0)
+            ),
         )
         .await;
 
@@ -437,7 +454,11 @@ async fn fetch_latest_release(
         .api_base
         .clone()
         .unwrap_or_else(|| String::from("https://api.github.com"));
-    let url = format!("{}/repos/{}/releases/latest", base.trim_end_matches('/'), cfg.repo);
+    let url = format!(
+        "{}/repos/{}/releases/latest",
+        base.trim_end_matches('/'),
+        cfg.repo
+    );
     let mut attempt: u32 = 0;
     loop {
         attempt += 1;
@@ -523,7 +544,11 @@ fn rewrite_url(url: &str, base_override: Option<&str>) -> String {
     // fixture during tests. In production `download_base` is unset, this is a no-op.
     if let Some(after_scheme) = url.split_once("://") {
         if let Some(path_idx) = after_scheme.1.find('/') {
-            return format!("{}{}", base.trim_end_matches('/'), &after_scheme.1[path_idx..]);
+            return format!(
+                "{}{}",
+                base.trim_end_matches('/'),
+                &after_scheme.1[path_idx..]
+            );
         }
     }
     base.to_string()
@@ -543,8 +568,7 @@ async fn download_with_resume(
 
     loop {
         attempt += 1;
-        let so_far = (tokio::fs::metadata(&partial).await)
-            .map_or(0, |m| m.len());
+        let so_far = (tokio::fs::metadata(&partial).await).map_or(0, |m| m.len());
 
         if let Some(size) = expected_size {
             if so_far > size {
@@ -704,9 +728,7 @@ async fn stream_to_file(
             })
             .await;
     }
-    file.flush()
-        .await
-        .map_err(|e| CoreError::io(partial, e))?;
+    file.flush().await.map_err(|e| CoreError::io(partial, e))?;
     Ok(total)
 }
 
@@ -735,7 +757,10 @@ async fn sha256_file(path: &Path) -> Result<String, CoreError> {
 
 async fn extract_archive(asset: &Path, install_dir: &Path) -> Result<(), CoreError> {
     let parent = install_dir.parent().ok_or_else(|| {
-        CoreError::config(format!("install_dir {} has no parent", install_dir.display()))
+        CoreError::config(format!(
+            "install_dir {} has no parent",
+            install_dir.display()
+        ))
     })?;
     tokio::fs::create_dir_all(parent)
         .await
@@ -940,11 +965,7 @@ async fn run_installer(
     Ok(())
 }
 
-async fn copy_asset(
-    asset: &Path,
-    install_dir: &Path,
-    file_name: &str,
-) -> Result<(), CoreError> {
+async fn copy_asset(asset: &Path, install_dir: &Path, file_name: &str) -> Result<(), CoreError> {
     tokio::fs::create_dir_all(install_dir)
         .await
         .map_err(|e| CoreError::io(install_dir, e))?;
@@ -979,4 +1000,3 @@ async fn emit(ctx: &ApplyCtx, app_id: &str, step: &str, message: &str) {
         })
         .await;
 }
-

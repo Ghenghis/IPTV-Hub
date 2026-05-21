@@ -1,0 +1,7 @@
+# Per-app .gitignore — the upstream tree is fetched fresh at build time and
+# must never be committed (see ../README.md). Any artefact produced by an
+# ad-hoc `docker build` from this directory also stays local.
+
+upstream/
+*.tar
+*.log

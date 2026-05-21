@@ -1,7 +1,10 @@
 //! Database module — opens the `SQLite` pool, runs migrations, and exposes typed repos.
 //!
-//! Agent 04 owns this module's full surface. The skeleton here is real and compiles;
-//! agents fill in the remaining repo methods as their slices land.
+//! `queries` houses the repository traits (`AppRepository`, `ActivityLogRepository`,
+//! `SnapshotRepository`, `UpdateHistoryRepository`) and the `SqliteRepositories`
+//! struct that implements all four against a shared pool.
+
+pub mod queries;
 
 use std::path::Path;
 
@@ -12,7 +15,9 @@ use crate::errors::CoreError;
 
 pub async fn open_pool(path: &Path) -> Result<SqlitePool, CoreError> {
     if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent).await.map_err(|e| CoreError::io(parent, e))?;
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| CoreError::io(parent, e))?;
     }
 
     // Back up the existing db before opening; if migrations corrupt it we can swap back.

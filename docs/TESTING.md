@@ -98,19 +98,37 @@ cargo test --workspace --test integration_tizen
 
 ```bash
 cd frontend
-npm test                                # vitest, runs against Web Components in jsdom
-npm run test:e2e                        # Playwright vs the dev server
+npm run test:e2e                        # Playwright — drives the Vite dev server
 ```
 
-### End-to-end against the Tauri binary
+`tests/e2e/shell.spec.ts` boots Vite (`npm run dev`) and drives the rendered shell
+with real Chromium: every chip filter toggles to `aria-pressed=true`, the Settings
+overlay opens. The frontend's `load()` invokes Tauri's `invoke()` for `list_apps`;
+without a Tauri runtime that call rejects and the shell renders its error path —
+which is itself a real code path being exercised. No IPC responses are mocked.
 
-```bash
-# Builds a debug Tauri binary first, then drives it with WebdriverIO
-npm run test:tauri
-```
+`tests/e2e/preview.spec.ts` runs Playwright `toHaveScreenshot('preview.png')` against
+`preview.html` for visual regression of every component state. **Disabled by default**
+until baselines are committed — see the spec's header for the 3-step opt-in.
 
-The WebdriverIO config in `frontend/tests/e2e/` targets `tauri-driver` (the official
-Tauri WebDriver) so we drive the **real** binary, not a separated webview.
+### Known gap: real-Tauri-binary E2E
+
+The Playwright spec above drives the Vite-served frontend, **not the real Tauri
+binary**. `cargo tauri dev` opens a native window whose webview is owned by the
+OS, not Chromium; Playwright cannot reach it without `tauri-driver`, the Tauri
+WebDriver bridge. `tauri-driver`'s Tauri 2 support is currently nightly-only and
+not yet wired here.
+
+The integration-test layer (`cargo test --workspace`) DOES exercise the full
+backend (sources, poller, rollback, launcher, manifest, db::queries) against
+real fixtures — that's where the IPC contract is validated end-to-end on the
+Rust side. The remaining gap is the Tauri WebView ↔ frontend wire, which
+currently has no automated coverage past the visual shell.
+
+When `tauri-driver` Tauri-2 support stabilises, the second spec at
+`frontend/tests/e2e/binary.spec.ts` should be added with the WebdriverIO →
+`tauri-driver` → release MSI → real-`invoke` flow that exercises a true full-stack
+update workflow.
 
 ## 4. CI gates
 
@@ -120,8 +138,8 @@ Tauri WebDriver) so we drive the **real** binary, not a separated webview.
 2. `cargo clippy --workspace --all-targets -- -D warnings`.
 3. `tsc --noEmit --strict` for the frontend.
 4. `cargo test --workspace` (unit + integration, MSI tests on Windows runner only).
-5. `vitest run` for the frontend.
-6. `npm run test:tauri` (E2E) — runs only on Windows runner with display.
+5. `npm run test:e2e` — Playwright frontend smoke + (when baselines land)
+   `toHaveScreenshot` visual regression vs `preview.html`.
 
 Total CI runtime target: under 6 minutes for a clean run. If it grows past that, split
 the integration matrix into parallel jobs.

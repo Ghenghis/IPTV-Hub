@@ -1,0 +1,55 @@
+# IPTV Hub — xstream-player service fragment.
+#
+# Merged into deploy/docker-compose.apps.yml by deploy/scripts/generate-stack.sh.
+# Host port 9830 is fixed by deploy/PORTS.md (catalogue index 24 -> slot base 9830).
+# Container port 3000 is fixed by the upstream Next.js standalone server.
+#
+# We bind to 127.0.0.1 only; the VPS host nginx proxies
+# xstream-player.<DEPLOY_DOMAIN> -> 127.0.0.1:9830 (see deploy/docker-compose.yml
+# preamble for the routing model).
+
+services:
+  xstream-player:
+    # Upstream-published image, pinned to tag 1.5.1 plus sha256 digest.
+    # See deploy/apps/xstream-player/Dockerfile and README.md for digest lookup.
+    image: jandersonss/xstream-player:1.5.1@sha256:a3ef8567318d69130b71b440ffc49c568f114d338f5fb13782b4c68935dcc88f
+    container_name: ${COMPOSE_PROJECT_NAME:-iptv-hub}_xstream-player
+    restart: unless-stopped
+    networks:
+      - iptv_hub_net
+    ports:
+      # Host 9830 (policy slot for app #24, see deploy/PORTS.md §3)
+      #  -> Container 3000 (Next.js standalone server, see upstream Dockerfile)
+      - "127.0.0.1:9830:3000"
+    environment:
+      # The upstream image bakes NODE_ENV=production, NEXT_TELEMETRY_DISABLED=1,
+      # PORT=3000, HOSTNAME=0.0.0.0. We re-state PORT/HOSTNAME here so an operator
+      # editing this file sees what the container listens on without having to
+      # read the upstream Dockerfile.
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    volumes:
+      # Persistent config (Xstream Codes credentials, user prefs).
+      # Upstream stores config.json under /app/data; without this volume the
+      # config is lost on every container restart. Named volume avoids the
+      # uid-1001 chown pitfall the upstream README warns about for bind mounts.
+      - xstream_player_data:/app/data
+    healthcheck:
+      # Next.js standalone server answers HTTP on / once boot completes.
+      # wget is present in the upstream node:20-alpine base image.
+      test: ["CMD-SHELL", "wget -qO- --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      iptv-hub.app-id: xstream-player
+      iptv-hub.slot: "9830"
+      iptv-hub.upstream: "https://github.com/jandersonss/xstream-player"
+      iptv-hub.image-digest: "sha256:a3ef8567318d69130b71b440ffc49c568f114d338f5fb13782b4c68935dcc88f"
+
+volumes:
+  xstream_player_data:
+    name: ${COMPOSE_PROJECT_NAME:-iptv-hub}_xstream_player_data

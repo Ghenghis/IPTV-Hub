@@ -8,11 +8,21 @@
   border-radius: 50%;
   flex-shrink: 0;
 }
-.dot--ok    { background: var(--status-ok); }
-.dot--warn  { background: var(--status-warn); }
-.dot--err   { background: var(--status-err); }
-.dot--info  { background: var(--status-info); }
-.dot--idle  { background: var(--status-idle); }
+.dot--ok {
+  background: var(--status-ok);
+}
+.dot--warn {
+  background: var(--status-warn);
+}
+.dot--err {
+  background: var(--status-err);
+}
+.dot--info {
+  background: var(--status-info);
+}
+.dot--idle {
+  background: var(--status-idle);
+}
 
 /* ── Pills ───────────────────────────────────────────────────────────────── */
 .pill {
@@ -26,15 +36,39 @@
   letter-spacing: 0.4px;
   text-transform: uppercase;
 }
-.pill--git       { color: var(--pill-git-fg);       background: var(--pill-git-bg); }
-.pill--release   { color: var(--pill-release-fg);   background: var(--pill-release-bg); }
-.pill--installer { color: var(--pill-installer-fg); background: var(--pill-installer-bg); }
-.pill--web       { color: var(--pill-web-fg);       background: var(--pill-web-bg); }
-.pill--tizen     { color: var(--pill-tizen-fg);     background: var(--pill-tizen-bg); }
+.pill--git {
+  color: var(--pill-git-fg);
+  background: var(--pill-git-bg);
+}
+.pill--release {
+  color: var(--pill-release-fg);
+  background: var(--pill-release-bg);
+}
+.pill--installer {
+  color: var(--pill-installer-fg);
+  background: var(--pill-installer-bg);
+}
+.pill--web {
+  color: var(--pill-web-fg);
+  background: var(--pill-web-bg);
+}
+.pill--tizen {
+  color: var(--pill-tizen-fg);
+  background: var(--pill-tizen-bg);
+}
 
-.pill--safe  { color: var(--pill-safe-fg);  background: var(--pill-safe-bg); }
-.pill--time  { color: var(--pill-time-fg);  background: var(--pill-time-bg); }
-.pill--risky { color: var(--pill-risky-fg); background: var(--pill-risky-bg); }
+.pill--safe {
+  color: var(--pill-safe-fg);
+  background: var(--pill-safe-bg);
+}
+.pill--time {
+  color: var(--pill-time-fg);
+  background: var(--pill-time-bg);
+}
+.pill--risky {
+  color: var(--pill-risky-fg);
+  background: var(--pill-risky-bg);
+}
 
 /* ── App card ────────────────────────────────────────────────────────────── */
 .app-card {
@@ -47,9 +81,13 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-card);
-  transition: border-color var(--t-fast), background var(--t-fast);
+  transition:
+    border-color var(--t-fast),
+    background var(--t-fast);
 }
-.app-card:hover { border-color: var(--border-strong); }
+.app-card:hover {
+  border-color: var(--border-strong);
+}
 
 .app-card__row1 {
   display: grid;
@@ -99,7 +137,9 @@
   font-family: var(--font-mono);
   color: var(--fg-secondary);
 }
-.app-card__diff strong { color: var(--accent); }
+.app-card__diff strong {
+  color: var(--accent);
+}
 .app-card__age {
   margin-left: auto;
   font-size: var(--fs-12);
@@ -116,7 +156,9 @@
   padding: var(--s-1) var(--s-3);
   font-size: var(--fs-13);
 }
-.app-card__row3 .btn-ghost { margin-left: auto; }
+.app-card__row3 .btn-ghost {
+  margin-left: auto;
+}
 
 /* ── Update modal (Screenshot_15) ────────────────────────────────────────── */
 .modal-backdrop {
@@ -191,7 +233,10 @@
   gap: var(--s-3);
   flex-wrap: wrap;
 }
-.diff-card__meta strong { color: var(--accent); font-weight: var(--fw-semibold); }
+.diff-card__meta strong {
+  color: var(--accent);
+  font-weight: var(--fw-semibold);
+}
 
 .section-label {
   font-size: var(--fs-12);
@@ -216,8 +261,13 @@
   font-family: var(--font-mono);
   font-size: var(--fs-13);
 }
-.incoming-list .sha { color: var(--status-info); }
-.incoming-list .author { color: var(--fg-muted); font-size: var(--fs-12); }
+.incoming-list .sha {
+  color: var(--status-info);
+}
+.incoming-list .author {
+  color: var(--fg-muted);
+  font-size: var(--fs-12);
+}
 
 .plan-list {
   list-style: none;
@@ -245,8 +295,13 @@
   color: var(--fg-secondary);
   flex-shrink: 0;
 }
-.plan-list li .title { font-weight: var(--fw-medium); }
-.plan-list li .detail { font-size: var(--fs-12); color: var(--fg-muted); }
+.plan-list li .title {
+  font-weight: var(--fw-medium);
+}
+.plan-list li .detail {
+  font-size: var(--fs-12);
+  color: var(--fg-muted);
+}
 
 .modal__footer {
   display: flex;

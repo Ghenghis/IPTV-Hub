@@ -1,4 +1,4 @@
-//! `git` source implementation — real working code, no stubs.
+//! `git` source implementation — real `git2-rs` against real repositories.
 //!
 //! This is the canonical pattern for source implementations. Agents working on
 //! `release`, `installer`, `web`, and `tizen` sources should mirror the structure
@@ -69,8 +69,12 @@ impl GitSource {
             .source
             .clone()
             .ok_or_else(|| CoreError::config(format!("app '{}' has no source", app.id)))?;
-        let cfg: GitSourceConfig = serde_json::from_value(raw)
-            .map_err(|e| CoreError::config(format!("app '{}' source is not a valid git source: {e}", app.id)))?;
+        let cfg: GitSourceConfig = serde_json::from_value(raw).map_err(|e| {
+            CoreError::config(format!(
+                "app '{}' source is not a valid git source: {e}",
+                app.id
+            ))
+        })?;
         Ok(cfg)
     }
 
@@ -148,7 +152,10 @@ impl Source for GitSource {
             for oid in revwalk {
                 let oid = oid.map_err(CoreError::from)?;
                 let commit = repo.find_commit(oid).map_err(CoreError::from)?;
-                let summary = commit.summary().unwrap_or("(no commit message)").to_string();
+                let summary = commit
+                    .summary()
+                    .unwrap_or("(no commit message)")
+                    .to_string();
                 let author = commit.author().name().unwrap_or("unknown").to_string();
                 incoming.push(IncomingItem::Commit {
                     sha: short(&oid),
@@ -240,7 +247,10 @@ impl Source for GitSource {
             if lockfile_changed && !cfg.post_update.is_empty() {
                 steps.push(PlanStep {
                     title: "Reinstall dependencies".into(),
-                    detail: Some(format!("lockfile changed · {}", cfg.post_update.join(" && "))),
+                    detail: Some(format!(
+                        "lockfile changed · {}",
+                        cfg.post_update.join(" && ")
+                    )),
                     tag: PlanTag::TimeEstimate,
                 });
             }
@@ -262,8 +272,14 @@ impl Source for GitSource {
                 from_label: short(&local),
                 to_label: short(&remote),
                 from_meta: vec![
-                    KeyValue { key: "branch".into(), value: cfg.branch },
-                    KeyValue { key: "tag".into(), value: tag_at(&repo, local).unwrap_or_default() },
+                    KeyValue {
+                        key: "branch".into(),
+                        value: cfg.branch,
+                    },
+                    KeyValue {
+                        key: "tag".into(),
+                        value: tag_at(&repo, local).unwrap_or_default(),
+                    },
                 ],
                 to_meta: vec![
                     KeyValue {
@@ -324,7 +340,10 @@ impl Source for GitSource {
             // Best-effort: try to pop. If it conflicts, keep the stash and surface a warning.
             let popped = pop_stash(&repo_dir).unwrap_or(false);
             if !popped {
-                tracing::warn!(app = app.id, "stash kept due to conflict — see `git stash list`");
+                tracing::warn!(
+                    app = app.id,
+                    "stash kept due to conflict — see `git stash list`"
+                );
             }
         }
 
@@ -375,7 +394,11 @@ impl Source for GitSource {
 
 // ── helpers ──────────────────────────────────────────────────────────────────────
 
-fn open_or_init_bare_clone(repo_dir: &Path, url: &str, branch: &str) -> Result<Repository, CoreError> {
+fn open_or_init_bare_clone(
+    repo_dir: &Path,
+    url: &str,
+    branch: &str,
+) -> Result<Repository, CoreError> {
     if repo_dir.exists() {
         Repository::open(repo_dir).map_err(CoreError::from)
     } else {
@@ -392,14 +415,18 @@ fn open_or_init_bare_clone(repo_dir: &Path, url: &str, branch: &str) -> Result<R
 
 fn head_oid(repo: &Repository) -> Result<git2::Oid, CoreError> {
     let head = repo.head().map_err(CoreError::from)?;
-    let oid = head.target().ok_or_else(|| CoreError::git("HEAD has no target"))?;
+    let oid = head
+        .target()
+        .ok_or_else(|| CoreError::git("HEAD has no target"))?;
     Ok(oid)
 }
 
 fn remote_head_oid(repo: &Repository, branch: &str) -> Result<git2::Oid, CoreError> {
     let refname = format!("refs/remotes/origin/{branch}");
     let r = repo.find_reference(&refname).map_err(CoreError::from)?;
-    let oid = r.target().ok_or_else(|| CoreError::git(format!("{refname} has no target")))?;
+    let oid = r
+        .target()
+        .ok_or_else(|| CoreError::git(format!("{refname} has no target")))?;
     Ok(oid)
 }
 
@@ -472,8 +499,12 @@ fn fetch_and_get_oid(repo_dir: &Path, branch: &str) -> Result<git2::Oid, CoreErr
 
 fn merge_ff_only(repo_dir: &Path, target: git2::Oid) -> Result<git2::Oid, CoreError> {
     let repo = Repository::open(repo_dir).map_err(CoreError::from)?;
-    let annotated: AnnotatedCommit<'_> = repo.find_annotated_commit(target).map_err(CoreError::from)?;
-    let (analysis, _pref) = repo.merge_analysis(&[&annotated]).map_err(CoreError::from)?;
+    let annotated: AnnotatedCommit<'_> = repo
+        .find_annotated_commit(target)
+        .map_err(CoreError::from)?;
+    let (analysis, _pref) = repo
+        .merge_analysis(&[&annotated])
+        .map_err(CoreError::from)?;
 
     if analysis.contains(MergeAnalysis::ANALYSIS_UP_TO_DATE) {
         return Ok(target);
@@ -500,9 +531,7 @@ fn merge_ff_only(repo_dir: &Path, target: git2::Oid) -> Result<git2::Oid, CoreEr
 
 fn reset_hard(repo_dir: &Path, target: git2::Oid) -> Result<git2::Oid, CoreError> {
     let repo = Repository::open(repo_dir).map_err(CoreError::from)?;
-    let obj = repo
-        .find_object(target, None)
-        .map_err(CoreError::from)?;
+    let obj = repo.find_object(target, None).map_err(CoreError::from)?;
     repo.reset(&obj, git2::ResetType::Hard, None)
         .map_err(CoreError::from)?;
     Ok(target)
@@ -521,7 +550,9 @@ async fn run_shell_command(
     let mut parts = shell_words::split(cmd)
         .map_err(|e| CoreError::config(format!("post_update command parse error: {e}")))?
         .into_iter();
-    let program = parts.next().ok_or_else(|| CoreError::config("empty post_update command"))?;
+    let program = parts
+        .next()
+        .ok_or_else(|| CoreError::config("empty post_update command"))?;
     let args: Vec<String> = parts.collect();
 
     let mut child = Command::new(&program)
@@ -557,7 +588,9 @@ async fn run_shell_command(
     if !status.success() {
         return Err(CoreError::post_update_failed(format!(
             "{program} exited with {}",
-            status.code().map_or_else(|| "<signal>".to_string(), |c| c.to_string())
+            status
+                .code()
+                .map_or_else(|| "<signal>".to_string(), |c| c.to_string())
         )));
     }
     Ok(())
