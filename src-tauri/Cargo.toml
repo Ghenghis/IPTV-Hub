@@ -54,7 +54,7 @@ chrono       = { version = "0.4", features = ["serde"] }
 ulid         = "1"
 
 # HTTP
-reqwest      = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "gzip"] }
+reqwest      = { version = "0.13", default-features = false, features = ["rustls-tls", "json", "stream", "gzip"] }
 
 # Git
 git2         = { version = "0.19", default-features = false, features = ["vendored-libgit2", "vendored-openssl"] }
