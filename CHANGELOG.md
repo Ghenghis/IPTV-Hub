@@ -12,6 +12,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Contract kit scaffolding: README, CONTRACT, ARCHITECTURE, SECURITY, docs/, schema/,
   src-tauri/ skeleton, frontend/ skeleton, scripts/, CI workflow, and the 24-agent
   build plan.
+- Agent 08: `web` source implementation (`src-tauri/src/sources/web.rs`). Git
+  fast-forward-only fetch, post-merge lockfile drift detection with frozen-lockfile
+  install for npm/yarn/pnpm/bun, and a process-wide port reservation set that scans
+  `port+1..=port+10` when the manifest's preferred port is busy. Real-fixture
+  integration tests under `src-tauri/tests/integration_web.rs` exercise fetch,
+  install, port-collision selection, and lockfile-drift install triggering against
+  a bare git repo built at test time from `src-tauri/tests/fixtures/apps/tiny-web-app/`.
 
 ## [0.1.0] — TBD
 

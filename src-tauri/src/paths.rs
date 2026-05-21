@@ -64,4 +64,12 @@ impl AppPaths {
     pub fn manifest_path(&self) -> PathBuf { self.data_dir.join("apps.json") }
     pub fn database_path(&self) -> PathBuf { self.data_dir.join("iptv-hub.db") }
     pub fn logs_dir(&self) -> PathBuf { self.data_dir.join("logs") }
+
+    /// Construct an `AppPaths` directly from two directories, bypassing the Tauri
+    /// handle. Exposed so integration tests can drive sources against a temp dir
+    /// without booting a Tauri app. Not used by runtime code.
+    #[doc(hidden)]
+    pub fn from_dirs(data_dir: PathBuf, apps_root: PathBuf) -> Self {
+        Self { data_dir, apps_root }
+    }
 }
