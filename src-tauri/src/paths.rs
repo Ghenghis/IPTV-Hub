@@ -5,6 +5,8 @@
 
 use std::path::{Path, PathBuf};
 
+use tauri::Manager as _;
+
 use crate::errors::CoreError;
 
 #[derive(Debug, Clone)]
@@ -64,4 +66,14 @@ impl AppPaths {
     pub fn manifest_path(&self) -> PathBuf { self.data_dir.join("apps.json") }
     pub fn database_path(&self) -> PathBuf { self.data_dir.join("iptv-hub.db") }
     pub fn logs_dir(&self) -> PathBuf { self.data_dir.join("logs") }
+
+    /// Test-only constructor that takes raw paths.
+    ///
+    /// Integration tests rely on this to drive the [`crate::sources`] implementations
+    /// against fixtures without bootstrapping a full Tauri runtime. Production code
+    /// uses [`AppPaths::resolve`].
+    #[doc(hidden)]
+    pub const fn for_test(data_dir: PathBuf, apps_root: PathBuf) -> Self {
+        Self { data_dir, apps_root }
+    }
 }

@@ -4,10 +4,21 @@
 //!   1. Resolve app-data directory (per-user or portable).
 //!   2. Initialise tracing (rolling file + stderr).
 //!   3. Load layered configuration.
-//!   4. Open the SQLite pool and run migrations.
+//!   4. Open the `SQLite` pool and run migrations.
 //!   5. Load and validate `apps.json`.
 //!   6. Start the poller as a long-lived task.
 //!   7. Hand off to the Tauri runtime with the command surface registered.
+
+// `async_setup` takes `&mut tauri::App` because it's the shape `tauri::Builder::setup`
+// gives us; the body legitimately needs access to `App::manage`. The `Send` bounds
+// failing on internal Tauri/tao `Rc<_>` types are a Tauri-runtime constraint, not a
+// real concurrency bug — the future is `block_on`-ed on the main thread.
+#![allow(
+    clippy::future_not_send,
+    clippy::needless_pass_by_ref_mut,
+    // The `tauri::generate_context!` macro expands to a large struct literal.
+    clippy::large_stack_frames,
+)]
 
 use std::sync::Arc;
 
@@ -67,7 +78,7 @@ async fn async_setup(app: &mut tauri::App) -> anyhow::Result<()> {
     let manifest = ManifestStore::load(paths.manifest_path()).await?;
     let manifest = Arc::new(manifest);
 
-    let state = AppState::new(paths.clone(), config.clone(), pool.clone(), manifest.clone());
+    let state = AppState::new(paths.clone(), config.clone(), pool.clone(), manifest);
 
     let poller = Poller::new(state.clone());
     let poller_handle = poller.spawn();

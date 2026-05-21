@@ -36,7 +36,7 @@ pub struct AppEntry {
     pub user_data: Option<UserDataLink>,
 }
 
-fn default_enabled() -> bool { true }
+const fn default_enabled() -> bool { true }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case")]
@@ -68,9 +68,9 @@ pub struct PollingSpec {
     pub jitter_seconds: u32,
 }
 
-fn default_polling_enabled() -> bool { true }
-fn default_interval_minutes() -> u32 { 15 }
-fn default_jitter_seconds() -> u32 { 30 }
+const fn default_polling_enabled() -> bool { true }
+const fn default_interval_minutes() -> u32 { 15 }
+const fn default_jitter_seconds() -> u32 { 30 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LaunchSpec {
@@ -115,7 +115,7 @@ pub struct UserDataLink {
     pub create_if_missing: bool,
 }
 
-fn default_create_if_missing() -> bool { true }
+const fn default_create_if_missing() -> bool { true }
 
 #[cfg(test)]
 mod tests {

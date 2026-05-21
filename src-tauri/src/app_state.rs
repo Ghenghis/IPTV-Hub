@@ -19,7 +19,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(
+    pub const fn new(
         paths: AppPaths,
         config: AppConfig,
         db: SqlitePool,

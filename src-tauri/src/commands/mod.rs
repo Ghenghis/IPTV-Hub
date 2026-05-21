@@ -1,7 +1,9 @@
-//! Tauri IPC command surface. Every command listed in `docs/IPC.md` lives in one of
-//! the submodules below. Agent 14 owns this module; as each command slice lands, the
-//! corresponding `pub mod ...;` line is added here and the matching handler is added
-//! to `tauri::generate_handler![ ... ]` in `src/main.rs`.
+//! Tauri IPC command surface.
+//!
+//! Every command listed in `docs/IPC.md` lives in one of the submodules below.
+//! Agent 14 owns this module; as each command slice lands, the corresponding
+//! `pub mod ...;` line is added here and the matching handler is added to
+//! `tauri::generate_handler![ ... ]` in `src/main.rs`.
 
 pub mod apps;
 // pub mod activity;   // Agent 14 — list_activity, list_update_history, list_snapshots

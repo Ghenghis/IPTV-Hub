@@ -14,7 +14,7 @@ use crate::errors::CoreError;
 use crate::manifest::types::Manifest;
 
 /// Thread-safe wrapper that the app state hands out to commands.
-/// Reads are cheap (RwLock read guard); writes go through `replace` which re-validates
+/// Reads are cheap (`RwLock` read guard); writes go through `replace` which re-validates
 /// and persists atomically.
 pub struct ManifestStore {
     path: PathBuf,

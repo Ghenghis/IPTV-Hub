@@ -45,6 +45,9 @@ impl CoreError {
         Self::Config { message: message.into() }
     }
 
+    // `source` is taken by value because callers always have an owned `io::Error` they
+    // are not going to reuse. Passing by reference would force them all to write `&e`.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn io(path: impl AsRef<Path>, source: std::io::Error) -> Self {
         Self::Io {
             path: path.as_ref().to_string_lossy().into_owned(),

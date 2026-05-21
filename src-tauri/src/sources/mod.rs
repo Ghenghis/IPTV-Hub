@@ -10,7 +10,7 @@
 //! source-specific knowledge: how to detect updates, how to apply them, and how to
 //! restore from a snapshot.
 
-use std::path::PathBuf;
+use std::path::Path;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -20,8 +20,9 @@ use crate::manifest::types::{AppEntry, SourceType};
 use crate::paths::AppPaths;
 
 pub mod git;
+pub mod release;
 // Re-exports for the dispatch table below.
-// Other source modules (release, installer, web, tizen) are owned by their respective
+// Other source modules (installer, web, tizen) are owned by their respective
 // agents and are added to the dispatch table when they land.
 
 /// What the poller (or a manual `check`) learned about an app.
@@ -144,7 +145,7 @@ pub trait Source: Send + Sync {
     async fn rollback(
         &self,
         app: &AppEntry,
-        snapshot_archive: &PathBuf,
+        snapshot_archive: &Path,
         paths: &AppPaths,
     ) -> Result<(), CoreError>;
 }
@@ -159,12 +160,8 @@ pub trait Source: Send + Sync {
 pub fn dispatch(source_type: SourceType) -> Box<dyn Source> {
     match source_type {
         SourceType::Git => Box::new(git::GitSource::new()),
-        // The following land via their respective agent slices (06, 07, 08, 09):
-        SourceType::ReleaseBinary => unreachable!(
-            "Agent 06 (sources::release) lands the release-binary source. \
-             Until then this match arm is unreachable because the manifest loader \
-             rejects release-binary entries with a clear error."
-        ),
+        SourceType::ReleaseBinary => Box::new(release::ReleaseSource::new()),
+        // The following land via their respective agent slices (07, 08, 09):
         SourceType::Installer => unreachable!(
             "Agent 07 (sources::installer) lands the installer source."
         ),

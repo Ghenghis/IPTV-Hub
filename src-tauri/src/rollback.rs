@@ -88,10 +88,11 @@ pub async fn create_archive(
 
 /// Extract a tar.zst archive into `target_dir`, replacing its contents.
 ///
-/// The strategy is: (1) move the existing target_dir aside to a temp sibling, (2)
-/// extract into a fresh target_dir, (3) on success, delete the temp sibling; on
+/// The strategy is: (1) move the existing `target_dir` aside to a temp sibling, (2)
+/// extract into a fresh `target_dir`, (3) on success, delete the temp sibling; on
 /// failure, restore the temp sibling. This keeps rollback itself crash-safe.
 pub async fn restore_archive(archive: &Path, target_dir: &Path) -> Result<(), CoreError> {
+    let archive_for_log = archive.to_path_buf();
     let archive = archive.to_path_buf();
     let target = target_dir.to_path_buf();
 
@@ -142,6 +143,6 @@ pub async fn restore_archive(archive: &Path, target_dir: &Path) -> Result<(), Co
     .await
     .map_err(|e| CoreError::internal(format!("restore join error: {e}")))??;
 
-    info!(archive = %archive.display(), target = %target_dir.display(), "snapshot restored");
+    info!(archive = %archive_for_log.display(), target = %target_dir.display(), "snapshot restored");
     Ok(())
 }

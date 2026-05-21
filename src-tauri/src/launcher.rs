@@ -26,13 +26,14 @@ impl LaunchRegistry {
     }
 
     pub async fn launch(&self, app: &AppEntry, paths: &AppPaths) -> Result<(), CoreError> {
-        if let Some(existing) = self.children.lock().get(&app.id).cloned() {
+        let existing = self.children.lock().get(&app.id).cloned();
+        if let Some(existing) = existing {
             // If the child is already running, refuse to start a second instance.
-            let mut guard = existing.lock();
-            match guard.try_wait() {
-                Ok(None) => return Err(CoreError::config(format!("{} is already running", app.id))),
-                Ok(Some(_)) | Err(_) => { /* exited, fall through and relaunch */ }
+            let still_running = matches!(existing.lock().try_wait(), Ok(None));
+            if still_running {
+                return Err(CoreError::config(format!("{} is already running", app.id)));
             }
+            // Otherwise: process exited (or errored). Drop the guard and relaunch.
         }
 
         let child = build_command(&app.launch, paths)?.spawn().map_err(|e| {
@@ -54,11 +55,16 @@ impl LaunchRegistry {
     }
 
     pub fn stop(&self, app_id: &str) -> Result<(), CoreError> {
-        let Some(handle) = self.children.lock().remove(app_id) else {
-            return Err(CoreError::config(format!("{app_id} is not running")));
+        let handle = self
+            .children
+            .lock()
+            .remove(app_id)
+            .ok_or_else(|| CoreError::config(format!("{app_id} is not running")))?;
+        let kill_result = {
+            let mut child = handle.lock();
+            child.start_kill()
         };
-        let mut child = handle.lock();
-        if let Err(e) = child.start_kill() {
+        if let Err(e) = kill_result {
             warn!(app_id, ?e, "kill failed");
             return Err(CoreError::io(app_id, e));
         }
@@ -70,8 +76,7 @@ fn build_command(spec: &LaunchSpec, paths: &AppPaths) -> Result<Command, CoreErr
     let cwd = spec
         .cwd
         .as_deref()
-        .map(|c| paths.apps_root().join(c))
-        .unwrap_or_else(|| paths.apps_root().to_path_buf());
+        .map_or_else(|| paths.apps_root().to_path_buf(), |c| paths.apps_root().join(c));
 
     let mut cmd: Command = match spec.kind {
         LaunchKind::Executable => {

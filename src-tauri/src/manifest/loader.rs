@@ -1,6 +1,8 @@
-//! Manifest loader. Reads `apps.json`, validates against the JSON Schema, and runs
-//! migrations if the `schema_version` is behind. The schema itself is embedded at
-//! compile time from `schema/apps.schema.json` so the binary is self-contained.
+//! Manifest loader.
+//!
+//! Reads `apps.json`, validates against the JSON Schema, and runs migrations if the
+//! `schema_version` is behind. The schema itself is embedded at compile time from
+//! `schema/apps.schema.json` so the binary is self-contained.
 
 use std::path::Path;
 
@@ -67,7 +69,7 @@ pub async fn load_and_validate(path: &Path) -> Result<Manifest, CoreError> {
 }
 
 #[cfg(target_os = "windows")]
-fn default_root(value: &str) -> &str { value }
+const fn default_root(value: &str) -> &str { value }
 
 #[cfg(not(target_os = "windows"))]
-fn default_root(_: &str) -> &str { "/tmp/iptv-hub" }
+const fn default_root(_: &str) -> &str { "/tmp/iptv-hub" }

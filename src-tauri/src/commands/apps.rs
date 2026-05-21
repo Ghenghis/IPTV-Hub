@@ -9,6 +9,19 @@ use crate::app_state::AppState;
 use crate::errors::CoreError;
 use crate::manifest::types::{AppEntry, SourceType};
 
+/// One row from the `apps` table — kept as a tuple alias for cheap `query_as` decoding
+/// and to satisfy clippy's `type_complexity` lint without spelling out the seven-tuple
+/// at every call site.
+type AppDbRow = (
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
 /// View shape returned to the frontend. Joins the manifest's static config with
 /// the DB's runtime state so the frontend gets everything in one round trip.
 #[derive(Debug, Clone, Serialize)]
@@ -33,37 +46,39 @@ fn build_sub_label(app: &AppEntry) -> String {
     match app.source_type {
         SourceType::Git | SourceType::Web => format!("upstream/{}", app.id),
         SourceType::Installer => "installed · Program Files".to_string(),
-        SourceType::ReleaseBinary => {
-            app.source.as_ref()
-                .and_then(|v| v.get("repo").and_then(|r| r.as_str()))
-                .map(|repo| format!("release · {repo}"))
-                .unwrap_or_else(|| "release".to_string())
-        }
-        SourceType::TizenIpk => {
-            app.source.as_ref()
-                .and_then(|v| v.get("asset_pattern").and_then(|r| r.as_str()))
-                .map(|p| format!("ipk · {p}"))
-                .unwrap_or_else(|| "ipk".to_string())
-        }
+        SourceType::ReleaseBinary => app
+            .source
+            .as_ref()
+            .and_then(|v| v.get("repo").and_then(|r| r.as_str()))
+            .map_or_else(|| "release".to_string(), |repo| format!("release · {repo}")),
+        SourceType::TizenIpk => app
+            .source
+            .as_ref()
+            .and_then(|v| v.get("asset_pattern").and_then(|r| r.as_str()))
+            .map_or_else(|| "ipk".to_string(), |p| format!("ipk · {p}")),
     }
 }
 
 #[tauri::command]
 pub async fn list_apps(state: State<'_, AppState>) -> Result<Vec<AppView>, CoreError> {
-    let manifest = state.manifest.read();
-    let mut out = Vec::with_capacity(manifest.apps.len());
+    // Clone the manifest into owned data before any `.await` so the parking_lot read
+    // guard (which is `!Send`) does not get held across an await boundary.
+    let apps: Vec<AppEntry> = state.manifest.read().apps.clone();
+    let mut out = Vec::with_capacity(apps.len());
 
     // Pull DB rows once and zip with manifest order.
-    let rows: Vec<(String, String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT id, status, status_message, current_version, current_sha, last_poll_at, last_success_at FROM apps")
-            .fetch_all(&state.db)
-            .await
-            .map_err(CoreError::from)?;
+    let rows: Vec<AppDbRow> = sqlx::query_as(
+        "SELECT id, status, status_message, current_version, current_sha, last_poll_at, \
+         last_success_at FROM apps",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(CoreError::from)?;
 
     let by_id: std::collections::HashMap<String, _> =
         rows.into_iter().map(|r| (r.0.clone(), r)).collect();
 
-    for app in &manifest.apps {
+    for app in &apps {
         let row = by_id.get(&app.id);
         out.push(AppView {
             id: app.id.clone(),
@@ -71,7 +86,7 @@ pub async fn list_apps(state: State<'_, AppState>) -> Result<Vec<AppView>, CoreE
             source_type: app.source_type,
             favorite: app.favorite,
             enabled: app.enabled,
-            status: row.map(|r| r.1.clone()).unwrap_or_else(|| "idle".into()),
+            status: row.map_or_else(|| "idle".into(), |r| r.1.clone()),
             status_message: row.and_then(|r| r.2.clone()),
             current_version: row.and_then(|r| r.3.clone()),
             current_sha: row.and_then(|r| r.4.clone()),

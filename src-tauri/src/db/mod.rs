@@ -1,4 +1,4 @@
-//! Database module — opens the SQLite pool, runs migrations, and exposes typed repos.
+//! Database module — opens the `SQLite` pool, runs migrations, and exposes typed repos.
 //!
 //! Agent 04 owns this module's full surface. The skeleton here is real and compiles;
 //! agents fill in the remaining repo methods as their slices land.

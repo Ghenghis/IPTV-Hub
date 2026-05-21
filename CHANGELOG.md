@@ -12,6 +12,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Contract kit scaffolding: README, CONTRACT, ARCHITECTURE, SECURITY, docs/, schema/,
   src-tauri/ skeleton, frontend/ skeleton, scripts/, CI workflow, and the 24-agent
   build plan.
+- `release-binary` source (Agent 06): GitHub releases API probe with rate-limit
+  detection, regex asset pattern matching, resumable streaming download with
+  exponential backoff and `Range:` resume, SHA-256 verification (with
+  `sha256_required` policy), and three install strategies (`extract` for
+  zip/tar/tar.gz, `run-installer` for vendor executables, `copy` for single-file
+  drops). Integration tests against a real local `hyper` server cover the happy
+  path, hash mismatch, asset pattern mismatch, mid-stream network drop with
+  resume, and the GitHub rate-limit response shape.
 
 ## [0.1.0] — TBD
 

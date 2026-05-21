@@ -51,14 +51,15 @@ pub enum FetchStrategy {
     Reset,
 }
 
-fn default_fetch_strategy() -> FetchStrategy {
+const fn default_fetch_strategy() -> FetchStrategy {
     FetchStrategy::FastForwardOnly
 }
 
 pub struct GitSource;
 
 impl GitSource {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 
@@ -86,6 +87,7 @@ impl Default for GitSource {
 }
 
 #[async_trait]
+#[allow(clippy::too_many_lines)]
 impl Source for GitSource {
     async fn check(&self, app: &AppEntry, paths: &AppPaths) -> Result<UpdateState, CoreError> {
         let cfg = Self::config(app)?;
@@ -255,12 +257,12 @@ impl Source for GitSource {
             });
 
             Ok(UpdatePlan {
-                app_id: app_id.clone(),
+                app_id,
                 source_type: SourceType::Git,
                 from_label: short(&local),
                 to_label: short(&remote),
                 from_meta: vec![
-                    KeyValue { key: "branch".into(), value: cfg.branch.clone() },
+                    KeyValue { key: "branch".into(), value: cfg.branch },
                     KeyValue { key: "tag".into(), value: tag_at(&repo, local).unwrap_or_default() },
                 ],
                 to_meta: vec![
@@ -339,7 +341,7 @@ impl Source for GitSource {
             new_version: None,
             new_sha: Some(short(&new_oid)),
             bytes_downloaded: 0, // git doesn't expose this cheaply; reported as 0 for git sources
-            elapsed_ms: started.elapsed().as_millis() as u64,
+            elapsed_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
             messages: vec![format!("merged {}", short(&new_oid))],
         };
         Ok(outcome)
@@ -348,12 +350,12 @@ impl Source for GitSource {
     async fn rollback(
         &self,
         app: &AppEntry,
-        snapshot_archive: &PathBuf,
+        snapshot_archive: &Path,
         paths: &AppPaths,
     ) -> Result<(), CoreError> {
         // The universal rollback engine (rollback::restore) handles tar.zst extraction.
         // The git source's job in rollback is just to confirm the resulting repo is healthy.
-        let archive = snapshot_archive.clone();
+        let archive = snapshot_archive.to_path_buf();
         let repo_dir = Self::repo_dir(app, paths);
         crate::rollback::restore_archive(&archive, &repo_dir).await?;
 
@@ -435,8 +437,11 @@ fn fetch(repo: &Repository, branch: &str) -> Result<(), CoreError> {
 fn stash_local_changes(repo_dir: &Path) -> Result<bool, CoreError> {
     let repo_dir = repo_dir.to_path_buf();
     let mut repo = Repository::open(&repo_dir).map_err(CoreError::from)?;
-    let statuses = repo.statuses(None).map_err(CoreError::from)?;
-    if statuses.is_empty() {
+    let is_clean = {
+        let statuses = repo.statuses(None).map_err(CoreError::from)?;
+        statuses.is_empty()
+    };
+    if is_clean {
         return Ok(false);
     }
     let sig = git2::Signature::now("IPTV Hub", "iptv-hub@local").map_err(CoreError::from)?;
@@ -509,6 +514,8 @@ async fn run_shell_command(
     ctx: &ApplyCtx,
     app_id: &str,
 ) -> Result<(), CoreError> {
+    use tokio::io::{AsyncBufReadExt as _, BufReader};
+
     // We don't shell out to cmd/powershell — we tokenise here for safety.
     // For complex commands the manifest can use an array form in a future schema version.
     let mut parts = shell_words::split(cmd)
@@ -527,7 +534,6 @@ async fn run_shell_command(
         .map_err(|e| CoreError::io(cwd, e))?;
 
     // Stream stdout into the activity bus.
-    use tokio::io::{AsyncBufReadExt as _, BufReader};
     if let Some(stdout) = child.stdout.take() {
         let mut lines = BufReader::new(stdout).lines();
         let tx = ctx.progress.clone();
