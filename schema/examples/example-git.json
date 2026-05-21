@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "apps_root": "C:\\IPTV",
+  "user_data_root": "C:\\IPTV\\user-data",
+  "cache_root": "C:\\IPTV\\cache",
+  "apps": [
+    {
+      "id": "iptvnator",
+      "name": "iptvnator",
+      "type": "git",
+      "favorite": true,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "IN" },
+      "polling": { "enabled": true, "interval_minutes": 15, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "npm",
+        "cwd": "upstream/iptvnator",
+        "command": "start",
+        "args": [],
+        "env": { "NODE_ENV": "development" },
+        "wait_for": { "kind": "port", "value": 4200, "timeout_ms": 30000 }
+      },
+      "health": { "kind": "port", "value": 4200, "timeout_ms": 30000 },
+      "source": {
+        "url": "https://github.com/4gray/iptvnator.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "post_update": ["npm ci"],
+        "post_update_cwd": "upstream/iptvnator"
+      },
+      "user_data": {
+        "path": "user-data/iptvnator",
+        "mount_at": "upstream/iptvnator/userData",
+        "create_if_missing": true
+      }
+    }
+  ]
+}

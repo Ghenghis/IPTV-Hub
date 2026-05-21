@@ -1,0 +1,108 @@
+[package]
+name        = "iptv-hub"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+repository.workspace   = true
+description            = "Unified launcher and update manager for IPTV / streaming apps on Windows 11."
+
+[lints]
+workspace = true
+
+[lib]
+name       = "iptv_hub_core"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "iptv-hub"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+# Tauri runtime
+tauri        = { version = "2.0", features = ["devtools"] }
+tauri-plugin-fs       = "2.0"
+tauri-plugin-shell    = "2.0"
+tauri-plugin-dialog   = "2.0"
+
+# Async runtime
+tokio        = { version = "1", features = ["full"] }
+async-trait  = "0.1"
+futures      = "0.3"
+
+# Errors + tracing
+anyhow       = "1"
+thiserror    = "1"
+tracing      = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+tracing-appender   = "0.2"
+
+# Serde
+serde        = { version = "1", features = ["derive"] }
+serde_json   = "1"
+toml         = "0.8"
+
+# Validation
+jsonschema   = "0.18"
+
+# Database
+sqlx         = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate", "chrono"] }
+chrono       = { version = "0.4", features = ["serde"] }
+ulid         = "1"
+
+# HTTP
+reqwest      = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "gzip"] }
+
+# Git
+git2         = { version = "0.19", default-features = false, features = ["vendored-libgit2", "vendored-openssl"] }
+
+# Crypto / hashing
+sha2         = "0.10"
+hex          = "0.4"
+
+# Compression / archive (rollback snapshots)
+zstd         = "0.13"
+tar          = "0.4"
+
+# Path / fs
+fs2          = "0.4"
+walkdir      = "2"
+tempfile     = "3"
+
+# Time / scheduling
+humantime    = "2"
+
+# Concurrency primitives
+parking_lot  = "0.12"
+once_cell    = "1"
+tokio-util   = { version = "0.7", features = ["rt"] }
+shell-words  = "1"
+
+# Configuration
+config       = { version = "0.14", default-features = false, features = ["toml"] }
+
+# Logging
+log          = "0.4"
+
+[target.'cfg(windows)'.dependencies]
+windows      = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }
+keyring      = "3"
+
+[target.'cfg(unix)'.dependencies]
+keyring      = "3"
+
+[dev-dependencies]
+tokio        = { version = "1", features = ["full", "test-util"] }
+hyper        = { version = "1", features = ["full"] }
+hyper-util   = { version = "0.1", features = ["full"] }
+tempfile     = "3"
+pretty_assertions = "1"
+insta        = { version = "1", features = ["yaml"] }

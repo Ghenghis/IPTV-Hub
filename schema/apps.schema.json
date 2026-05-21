@@ -1,0 +1,244 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iptv-hub.local/schema/apps.schema.json",
+  "title": "IPTV Hub manifest",
+  "description": "Top-level inventory of apps managed by IPTV Hub. See docs/MANIFEST_SCHEMA.md.",
+  "type": "object",
+  "required": ["schema_version", "apps_root", "user_data_root", "cache_root", "apps"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "apps_root":      { "type": "string", "minLength": 1 },
+    "user_data_root": { "type": "string", "minLength": 1 },
+    "cache_root":     { "type": "string", "minLength": 1 },
+    "apps": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/AppEntry" }
+    }
+  },
+
+  "$defs": {
+    "AppEntry": {
+      "type": "object",
+      "required": ["id", "name", "type", "launch", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]*[a-z0-9]$",
+          "minLength": 2,
+          "maxLength": 64
+        },
+        "name":     { "type": "string", "minLength": 1, "maxLength": 128 },
+        "type": {
+          "type": "string",
+          "enum": ["git", "release-binary", "installer", "web", "tizen-ipk"]
+        },
+        "favorite": { "type": "boolean", "default": false },
+        "enabled":  { "type": "boolean", "default": true },
+        "icon":     { "$ref": "#/$defs/IconSpec" },
+        "polling":  { "$ref": "#/$defs/PollingSpec" },
+        "launch":   { "$ref": "#/$defs/LaunchSpec" },
+        "health":   { "$ref": "#/$defs/HealthSpec" },
+        "source":   { "$ref": "#/$defs/SourceSpec" },
+        "user_data": { "$ref": "#/$defs/UserDataLink" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "git" } } },
+          "then": { "properties": { "source": { "$ref": "#/$defs/GitSource" } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "release-binary" } } },
+          "then": { "properties": { "source": { "$ref": "#/$defs/ReleaseSource" } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "installer" } } },
+          "then": { "properties": { "source": { "$ref": "#/$defs/InstallerSource" } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "web" } } },
+          "then": { "properties": { "source": { "$ref": "#/$defs/WebSource" } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "tizen-ipk" } } },
+          "then": { "properties": { "source": { "$ref": "#/$defs/TizenSource" } } }
+        }
+      ]
+    },
+
+    "IconSpec": {
+      "type": "object",
+      "required": ["kind", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "kind":  { "type": "string", "enum": ["initials", "file", "url"] },
+        "value": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "PollingSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled":          { "type": "boolean", "default": true },
+        "interval_minutes": { "type": "integer", "minimum": 1, "default": 15 },
+        "jitter_seconds":   { "type": "integer", "minimum": 0, "default": 30 }
+      }
+    },
+
+    "WaitFor": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "value", "timeout_ms"],
+          "additionalProperties": false,
+          "properties": {
+            "kind":       { "const": "port" },
+            "value":      { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "timeout_ms": { "type": "integer", "minimum": 100 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "value", "timeout_ms"],
+          "additionalProperties": false,
+          "properties": {
+            "kind":       { "const": "process" },
+            "value":      { "type": "string", "minLength": 1 },
+            "timeout_ms": { "type": "integer", "minimum": 100 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "value", "timeout_ms"],
+          "additionalProperties": false,
+          "properties": {
+            "kind":       { "const": "http" },
+            "value":      { "type": "string", "format": "uri" },
+            "timeout_ms": { "type": "integer", "minimum": 100 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind"],
+          "additionalProperties": false,
+          "properties": { "kind": { "const": "none" } }
+        }
+      ]
+    },
+
+    "HealthSpec": { "$ref": "#/$defs/WaitFor" },
+
+    "LaunchSpec": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["executable", "npm", "tauri-dev", "exe-shortcut", "web-url", "tizen-deploy"]
+        },
+        "cwd":      { "type": "string" },
+        "command":  { "type": "string" },
+        "args":     { "type": "array", "items": { "type": "string" } },
+        "env":      { "type": "object", "additionalProperties": { "type": "string" } },
+        "wait_for": { "$ref": "#/$defs/WaitFor" }
+      }
+    },
+
+    "UserDataLink": {
+      "type": "object",
+      "required": ["path", "mount_at"],
+      "additionalProperties": false,
+      "properties": {
+        "path":              { "type": "string", "minLength": 1 },
+        "mount_at":          { "type": "string", "minLength": 1 },
+        "create_if_missing": { "type": "boolean", "default": true }
+      }
+    },
+
+    "SourceSpec": {
+      "type": "object"
+    },
+
+    "GitSource": {
+      "type": "object",
+      "required": ["url", "branch"],
+      "additionalProperties": false,
+      "properties": {
+        "url":             { "type": "string", "format": "uri", "pattern": "^https://" },
+        "branch":          { "type": "string", "minLength": 1 },
+        "fetch_strategy":  { "type": "string", "enum": ["fast-forward-only", "rebase", "reset"], "default": "fast-forward-only" },
+        "post_update":     { "type": "array", "items": { "type": "string" } },
+        "post_update_cwd": { "type": "string" }
+      }
+    },
+
+    "ReleaseSource": {
+      "type": "object",
+      "required": ["repo", "asset_pattern", "install_dir", "install_strategy"],
+      "additionalProperties": false,
+      "properties": {
+        "repo":             { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+        "asset_pattern":    { "type": "string", "minLength": 1 },
+        "version_strategy": { "type": "string", "enum": ["semver", "timestamp", "sha256"], "default": "semver" },
+        "sha256_required":  { "type": "boolean", "default": false },
+        "install_dir":      { "type": "string", "minLength": 1 },
+        "install_strategy": { "type": "string", "enum": ["extract", "run-installer", "copy"] },
+        "running_check":    { "$ref": "#/$defs/WaitFor" }
+      }
+    },
+
+    "InstallerSource": {
+      "type": "object",
+      "required": ["product_name", "registry_uninstall_key", "download_url"],
+      "additionalProperties": false,
+      "properties": {
+        "vendor":                 { "type": "string" },
+        "product_name":           { "type": "string", "minLength": 1 },
+        "registry_uninstall_key": { "type": "string", "minLength": 1 },
+        "download_url":           { "type": "string", "minLength": 1 },
+        "version_endpoint":       { "type": "string", "format": "uri" },
+        "version_json_path":      { "type": "string" },
+        "sha256_endpoint":        { "type": "string", "format": "uri" },
+        "sha256_json_path":       { "type": "string" },
+        "install_args":           { "type": "array", "items": { "type": "string" } },
+        "uninstall_args":         { "type": "array", "items": { "type": "string" } },
+        "estimated_install_minutes": { "type": "integer", "minimum": 1, "default": 4 }
+      }
+    },
+
+    "WebSource": {
+      "type": "object",
+      "required": ["url", "branch", "package_manager", "install_command", "start_command", "port"],
+      "additionalProperties": false,
+      "properties": {
+        "url":             { "type": "string", "format": "uri", "pattern": "^https://" },
+        "branch":          { "type": "string", "minLength": 1 },
+        "fetch_strategy":  { "type": "string", "enum": ["fast-forward-only", "rebase", "reset"], "default": "fast-forward-only" },
+        "package_manager": { "type": "string", "enum": ["npm", "yarn", "pnpm", "bun"] },
+        "install_command": { "type": "string", "minLength": 1 },
+        "start_command":   { "type": "string", "minLength": 1 },
+        "port":            { "type": "integer", "minimum": 1024, "maximum": 65535 }
+      }
+    },
+
+    "TizenSource": {
+      "type": "object",
+      "required": ["source_kind"],
+      "additionalProperties": false,
+      "properties": {
+        "source_kind":      { "type": "string", "enum": ["github-release", "url"] },
+        "repo":             { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+        "asset_pattern":    { "type": "string" },
+        "download_url":     { "type": ["string", "null"], "format": "uri" },
+        "device_serial":    { "type": ["string", "null"] },
+        "version_strategy": { "type": "string", "enum": ["semver", "timestamp", "sha256"], "default": "semver" }
+      }
+    }
+  }
+}

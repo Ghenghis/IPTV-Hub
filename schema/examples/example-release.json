@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "apps_root": "C:\\IPTV",
+  "user_data_root": "C:\\IPTV\\user-data",
+  "cache_root": "C:\\IPTV\\cache",
+  "apps": [
+    {
+      "id": "stremio",
+      "name": "Stremio",
+      "type": "release-binary",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "ST" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 60 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "upstream/Stremio",
+        "command": "stremio.exe",
+        "args": [],
+        "wait_for": { "kind": "process", "value": "stremio.exe", "timeout_ms": 15000 }
+      },
+      "health": { "kind": "process", "value": "stremio.exe", "timeout_ms": 15000 },
+      "source": {
+        "repo": "Stremio/stremio-shell",
+        "asset_pattern": ".*[Ww]in.*x64.*\\.(zip|exe)$",
+        "version_strategy": "semver",
+        "sha256_required": false,
+        "install_dir": "upstream/Stremio",
+        "install_strategy": "extract"
+      }
+    }
+  ]
+}

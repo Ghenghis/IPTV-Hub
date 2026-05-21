@@ -1,0 +1,43 @@
+%% IPTV Hub — Per-app update state machine
+
+stateDiagram-v2
+    [*] --> idle : seed_from_folder / add_app
+
+    idle --> checking : poll_tick / sync_now
+    checking --> up_to_date : remote SHA == local SHA
+    checking --> update_available : remote SHA != local SHA
+    checking --> error : network / git / api failure
+
+    up_to_date --> checking : poll_tick
+    update_available --> planning : user clicks Update
+    planning --> awaiting_confirm : plan produced
+    awaiting_confirm --> updating : user clicks Apply
+    awaiting_confirm --> update_available : user clicks Cancel
+
+    updating --> snapshotting : step 1
+    snapshotting --> fetching : snapshot complete
+    fetching --> verifying : artifact downloaded
+    verifying --> swapping : sha256 ok
+    swapping --> relinking : swap done
+    relinking --> smoking : symlinks restored
+    smoking --> healthy : smoke pass
+    smoking --> rolling_back : smoke fail
+
+    snapshotting --> rolling_back : io error
+    fetching --> rolling_back : net error after retry
+    verifying --> rolling_back : sha mismatch
+    swapping --> rolling_back : io error
+    relinking --> rolling_back : symlink error
+
+    rolling_back --> up_to_date : rollback ok
+    rolling_back --> error : rollback failed (manual recovery)
+
+    healthy --> up_to_date : commit step
+    error --> checking : poll_tick (after backoff)
+    error --> updating : user clicks Retry
+
+    up_to_date --> running : user clicks Launch
+    update_available --> running : user clicks Launch
+    healthy --> running : user clicks Launch
+    running --> up_to_date : app exits (last_known: ok)
+    running --> error : app crash / non-zero exit

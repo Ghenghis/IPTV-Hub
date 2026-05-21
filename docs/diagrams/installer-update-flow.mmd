@@ -1,0 +1,64 @@
+%% IPTV Hub — Installer (MSI/EXE) update flow
+
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as Frontend
+    participant Core as Rust core
+    participant Inst as sources::installer
+    participant Reg as Windows registry
+    participant FS as Filesystem
+    participant DB as SQLite
+    participant Vendor as Vendor endpoint
+
+    User->>UI: click "Update" on AuthoIPTV card
+    UI->>Core: plan_update("authoiptv")
+    Core->>Inst: plan(app)
+
+    Inst->>Reg: read HKCU/HKLM\...\Uninstall\<key>\DisplayVersion
+    Reg-->>Inst: current = "0.6.4-beta"
+
+    Inst->>Vendor: GET version_endpoint
+    Vendor-->>Inst: { tag_name: "0.7.0", assets: [{ url, sha256 }] }
+    Inst-->>Core: UpdatePlan { from, to, asset_url, sha256, install_args }
+    Core-->>UI: plan
+    UI-->>User: render Update modal (with "3-5 min" tag on install step)
+
+    User->>UI: click "Apply update"
+    UI->>Core: apply_update("authoiptv", plan)
+    Core->>DB: insert update_history(running)
+    Core->>Inst: apply(app, plan, ctx)
+
+    Inst->>Reg: export uninstall key → cache/rollback/authoiptv/<ver>.reg
+    Inst->>DB: insert snapshot row (small — just the .reg)
+
+    Inst->>Vendor: GET installer (Range supported)
+    Vendor-->>Inst: stream → cache/installers/authoiptv/AuthoIPTV-Setup-0.7.0.exe
+    Inst->>Inst: sha256 verify
+    alt mismatch
+        Inst-->>Core: Err("sha256 mismatch")
+        Core->>DB: update history(failed)
+        Core-->>UI: error event
+    else match
+        Inst->>FS: exec installer with install_args (e.g. "/S")
+        FS-->>Inst: exit code
+        alt exit != 0
+            Inst-->>Core: Err("installer exited <code>")
+            Note over Inst,Reg: rollback strategy:<br/>re-run prior installer if cached,<br/>else surface manual recovery
+            Core->>DB: update history(failed)
+            Core-->>UI: error event
+        else exit = 0
+            Inst->>Reg: read DisplayVersion again
+            Reg-->>Inst: "0.7.0"
+            Inst->>Core: smoke_test::run(app.health)
+            alt smoke ok
+                Core->>DB: update apps.current_version, history(applied)
+                Core-->>UI: success event
+            else smoke fail
+                Core->>Inst: rollback(snapshot_id)
+                Note over Inst,Reg: rollback = run prior installer<br/>(from cache/installers/authoiptv/<prev>.exe)<br/>if available, else manual recovery
+                Core->>DB: update history(failed)
+                Core-->>UI: error event
+            end
+        end
+    end

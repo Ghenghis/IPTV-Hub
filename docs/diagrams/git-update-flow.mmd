@@ -1,0 +1,59 @@
+%% IPTV Hub — Git source update flow
+
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as Frontend
+    participant Core as Rust core
+    participant Git as sources::git
+    participant FS as Filesystem
+    participant DB as SQLite
+    participant Remote as GitHub
+
+    User->>UI: click "Update" on iptvnator card
+    UI->>Core: plan_update("iptvnator")
+    Core->>Git: plan(app)
+    Git->>Remote: git ls-remote / git fetch
+    Remote-->>Git: refs + log range
+    Git-->>Core: UpdatePlan { from, to, commits, +/-, files }
+    Core-->>UI: plan
+    UI-->>User: render Update modal
+
+    User->>UI: click "Apply update"
+    UI->>Core: apply_update("iptvnator", plan)
+    Core->>DB: insert update_history(running)
+    Core->>Git: apply(app, plan, ctx)
+
+    Git->>FS: snapshot upstream/iptvnator → cache/rollback/iptvnator/<sha>-<ts>.tar.zst
+    FS-->>Git: snapshot_id
+    Git->>DB: insert snapshot row
+
+    Git->>FS: git stash push -u (if dirty)
+    Git->>Remote: git fetch origin <branch>
+    Remote-->>Git: pack
+    Git->>FS: git merge --ff-only <target_sha>
+    alt history rewritten
+        FS-->>Git: non-FF error
+        Git-->>Core: Err("history rewritten")
+        Core->>Git: rollback(snapshot_id)
+        Git->>FS: restore tar.zst
+        Core->>DB: update history(outcome=rolled_back)
+        Core-->>UI: error event
+    else FF success
+        FS-->>Git: ok
+        opt post_update configured
+            Git->>FS: run post_update commands (npm ci, etc.)
+            FS-->>Git: stdout/stderr
+            Git->>Core: stream activity
+        end
+        Git->>FS: re-link user_data mount
+        Git->>Core: smoke_test::run(app.health)
+        alt smoke ok
+            Core->>DB: update apps.current_sha, history(applied)
+            Core-->>UI: success event
+        else smoke fail
+            Core->>Git: rollback(snapshot_id)
+            Core->>DB: update history(failed)
+            Core-->>UI: error event
+        end
+    end

@@ -1,0 +1,145 @@
+/*
+ * IPTV Hub — design tokens.
+ *
+ * The values below are the visual contract for the launcher. They match docs/UI_SPEC.md
+ * §2 and the rendered mockups (Screenshot_14 main view, Screenshot_15 update modal).
+ * Frontend code never hardcodes colors, spacings, or radii — it references these vars.
+ *
+ * If a token changes, UI_SPEC.md changes with it. The CI check `forbid-stubs.sh` greps
+ * for raw `#xxxxxx` hex values in src/ and fails the build if any are found outside
+ * this file.
+ */
+
+:root {
+  /* ── Surfaces (dark — default) ─────────────────────────────────────────── */
+  --bg-app:        #0d1117;  /* window background */
+  --bg-panel:      #161b22;  /* cards, modals, side panels */
+  --bg-panel-2:    #1c232c;  /* nested panels, modal headers */
+  --bg-input:      #0a0e14;  /* inputs, code blocks, log lines */
+  --bg-hover:      #21262d;  /* hover state for cards, list rows */
+  --bg-selected:   #2d333b;  /* selected chip / active row */
+
+  /* ── Borders ───────────────────────────────────────────────────────────── */
+  --border-subtle: #30363d;
+  --border-muted:  #21262d;
+  --border-strong: #484f58;
+
+  /* ── Text ──────────────────────────────────────────────────────────────── */
+  --fg-primary:    #e6edf3;
+  --fg-secondary:  #9ba3af;
+  --fg-muted:      #6e7681;
+  --fg-on-accent:  #0d1117;
+
+  /* ── Accents (action colors) ───────────────────────────────────────────── */
+  --accent:        #3fb950;  /* primary action, "Sync now", "Apply update" */
+  --accent-hover:  #46c45a;
+  --accent-press:  #2ea043;
+
+  /* ── Status dots and pills ─────────────────────────────────────────────── */
+  --status-ok:     #3fb950;
+  --status-warn:   #d29922;
+  --status-err:    #f85149;
+  --status-info:   #58a6ff;
+  --status-idle:   #6e7681;
+
+  /* Source-type pill colors. Background uses a low-alpha tint of the foreground. */
+  --pill-git-fg:        #58a6ff;
+  --pill-git-bg:        rgba(88, 166, 255, 0.16);
+  --pill-release-fg:    #d2a8ff;
+  --pill-release-bg:    rgba(210, 168, 255, 0.16);
+  --pill-installer-fg:  #f0883e;
+  --pill-installer-bg:  rgba(240, 136, 62, 0.18);
+  --pill-web-fg:        #79c0ff;
+  --pill-web-bg:        rgba(121, 192, 255, 0.16);
+  --pill-tizen-fg:      #ffa657;
+  --pill-tizen-bg:      rgba(255, 166, 87, 0.18);
+
+  /* Plan-step tag pill (UI_SPEC §6.3) */
+  --pill-safe-fg:       #3fb950;
+  --pill-safe-bg:       rgba(63, 185, 80, 0.14);
+  --pill-time-fg:       #d29922;
+  --pill-time-bg:       rgba(210, 153, 34, 0.16);
+  --pill-risky-fg:      #f85149;
+  --pill-risky-bg:      rgba(248, 81, 73, 0.16);
+
+  /* ── Typography ────────────────────────────────────────────────────────── */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, "Fira Code",
+               "Source Code Pro", monospace;
+
+  --fs-12: 12px;
+  --fs-13: 13px;
+  --fs-14: 14px;
+  --fs-15: 15px;
+  --fs-16: 16px;
+  --fs-18: 18px;
+  --fs-20: 20px;
+
+  --lh-tight:  1.2;
+  --lh-normal: 1.45;
+  --lh-loose:  1.6;
+
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semibold: 600;
+  --fw-bold:    700;
+
+  /* ── Spacing scale (4-pt grid) ─────────────────────────────────────────── */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-7: 32px;
+  --s-8: 40px;
+
+  /* ── Radii ─────────────────────────────────────────────────────────────── */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 12px;
+
+  /* ── Shadows ───────────────────────────────────────────────────────────── */
+  --shadow-card:   0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-modal:  0 12px 32px rgba(0, 0, 0, 0.55);
+  --shadow-focus:  0 0 0 2px rgba(63, 185, 80, 0.55);
+
+  /* ── Motion ────────────────────────────────────────────────────────────── */
+  --t-fast:   100ms ease-out;
+  --t-normal: 180ms ease-out;
+  --t-slow:   280ms ease-out;
+
+  /* ── Layout dimensions ─────────────────────────────────────────────────── */
+  --title-bar-h:  56px;
+  --filter-bar-h: 44px;
+  --status-bar-h: 28px;
+  --card-min-w:   460px;
+  --card-min-h:   180px;
+  --activity-w:   360px;  /* recent-activity rail */
+}
+
+/* Light theme stays a contract (UI_SPEC §2.4) but ships visually parked behind a future
+ * setting. The keys mirror the dark ones; tokens above are the runtime defaults. */
+:root[data-theme="light"] {
+  --bg-app:        #f6f8fa;
+  --bg-panel:      #ffffff;
+  --bg-panel-2:    #f0f3f6;
+  --bg-input:      #ffffff;
+  --bg-hover:      #eaeef2;
+  --bg-selected:   #d0d7de;
+
+  --border-subtle: #d0d7de;
+  --border-muted:  #eaeef2;
+  --border-strong: #8c959f;
+
+  --fg-primary:    #1f2328;
+  --fg-secondary:  #59636e;
+  --fg-muted:      #818b98;
+  --fg-on-accent:  #ffffff;
+
+  --accent:        #1f883d;
+  --accent-hover:  #1a7f37;
+  --accent-press:  #196c2e;
+}

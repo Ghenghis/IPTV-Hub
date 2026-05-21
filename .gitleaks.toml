@@ -1,0 +1,21 @@
+title = "IPTV Hub gitleaks config"
+
+# Use the default gitleaks rules (extends keyword pulls them in).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Paths and patterns the IPTV Hub project deliberately commits."
+paths = [
+  '''(.*?)(jpg|gif|doc|pdf|bin|svg|png|ico|webp)$''',
+  '''node_modules/.*''',
+  '''target/.*''',
+  '''frontend/dist/.*''',
+  '''schema/examples/.*\.json$''',
+]
+regexTarget = "match"
+regexes = [
+  # Manifest examples use the public github.com pattern, never tokens.
+  '''https://github\.com/[^"]+''',
+  '''https://api\.github\.com/[^"]+''',
+]

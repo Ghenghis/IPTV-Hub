@@ -1,0 +1,60 @@
+%% IPTV Hub — Release-binary update flow
+
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as Frontend
+    participant Core as Rust core
+    participant Rel as sources::release
+    participant FS as Filesystem
+    participant DB as SQLite
+    participant API as GitHub Releases API
+    participant CDN as Asset CDN
+
+    User->>UI: click "Update" on Stremio card
+    UI->>Core: plan_update("stremio")
+    Core->>Rel: plan(app)
+    Rel->>API: GET /repos/{repo}/releases/latest
+    API-->>Rel: { tag_name, assets[], body }
+    Rel->>Rel: match asset_pattern, extract sha256 from body or sha256_endpoint
+    Rel-->>Core: UpdatePlan { from_ver, to_ver, asset_url, sha256, size, notes }
+    Core-->>UI: plan
+    UI-->>User: render Update modal (release notes)
+
+    User->>UI: click "Apply update"
+    UI->>Core: apply_update("stremio", plan)
+    Core->>DB: insert update_history(running)
+    Core->>Rel: apply(app, plan, ctx)
+
+    Rel->>FS: snapshot install_dir → cache/rollback/stremio/<ver>-<ts>.tar.zst
+    Rel->>DB: insert snapshot row
+
+    Rel->>CDN: GET asset (with Range for resume)
+    CDN-->>Rel: stream → cache/installers/stremio/<file>.partial
+    Rel->>FS: rename .partial → final
+    Rel->>Rel: sha256(file) == plan.sha256?
+    alt mismatch
+        Rel-->>Core: Err("sha256 mismatch")
+        Core->>Rel: rollback(snapshot_id)
+        Core->>DB: update history(failed)
+        Core-->>UI: error event
+    else match
+        alt install_strategy = extract
+            Rel->>FS: extract archive into install_dir (atomic dir swap)
+        else install_strategy = run-installer
+            Rel->>FS: exec downloaded .exe with install_args
+            FS-->>Rel: exit code
+        else install_strategy = copy
+            Rel->>FS: copy file → install_dir/<name>
+        end
+
+        Rel->>Core: smoke_test::run(app.health)
+        alt smoke ok
+            Core->>DB: update apps.current_version, history(applied)
+            Core-->>UI: success event
+        else smoke fail
+            Core->>Rel: rollback(snapshot_id)
+            Core->>DB: update history(failed)
+            Core-->>UI: error event
+        end
+    end

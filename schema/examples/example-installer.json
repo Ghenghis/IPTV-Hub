@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "apps_root": "C:\\IPTV",
+  "user_data_root": "C:\\IPTV\\user-data",
+  "cache_root": "C:\\IPTV\\cache",
+  "apps": [
+    {
+      "id": "authoiptv",
+      "name": "AuthoIPTV",
+      "type": "installer",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "AU" },
+      "polling": { "enabled": true, "interval_minutes": 240 },
+      "launch": {
+        "kind": "exe-shortcut",
+        "command": "%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\AuthoIPTV.lnk",
+        "wait_for": { "kind": "process", "value": "AuthoIPTV.exe", "timeout_ms": 15000 }
+      },
+      "source": {
+        "vendor": "AuthoIPTV Project",
+        "product_name": "AuthoIPTV",
+        "registry_uninstall_key": "AuthoIPTV",
+        "download_url": "https://example.com/releases/AuthoIPTV-Setup-{{version}}-win-x64.exe",
+        "version_endpoint": "https://api.github.com/repos/Example/AuthoIPTV/releases/latest",
+        "version_json_path": "$.tag_name",
+        "sha256_endpoint": "https://api.github.com/repos/Example/AuthoIPTV/releases/latest",
+        "sha256_json_path": "$.assets[0].digest",
+        "install_args": ["/S"],
+        "uninstall_args": ["/S"],
+        "estimated_install_minutes": 4
+      }
+    }
+  ]
+}

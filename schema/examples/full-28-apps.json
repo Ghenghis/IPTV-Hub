@@ -1,0 +1,551 @@
+{
+  "schema_version": 1,
+  "apps_root": "C:\\IPTV",
+  "user_data_root": "C:\\IPTV\\user-data",
+  "cache_root": "C:\\IPTV\\cache",
+  "apps": [
+    {
+      "id": "authoiptv",
+      "name": "AuthoIPTV",
+      "type": "installer",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "AU" },
+      "polling": { "enabled": true, "interval_minutes": 240 },
+      "launch": {
+        "kind": "exe-shortcut",
+        "command": "%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\AuthoIPTV.lnk",
+        "wait_for": { "kind": "process", "value": "AuthoIPTV.exe", "timeout_ms": 15000 }
+      },
+      "source": {
+        "vendor": "AuthoIPTV Project",
+        "product_name": "AuthoIPTV",
+        "registry_uninstall_key": "AuthoIPTV",
+        "download_url": "https://github.com/Auth-IPTV/AuthoIPTV/releases/latest/download/AuthoIPTV-Setup-{{version}}-win-x64.exe",
+        "version_endpoint": "https://api.github.com/repos/Auth-IPTV/AuthoIPTV/releases/latest",
+        "version_json_path": "$.tag_name",
+        "install_args": ["/S"]
+      }
+    },
+    {
+      "id": "cinexa",
+      "name": "cinexa",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "CX" },
+      "polling": { "enabled": true, "interval_minutes": 60 },
+      "launch": {
+        "kind": "npm",
+        "cwd": "upstream/cinexa",
+        "command": "dev",
+        "wait_for": { "kind": "http", "value": "http://localhost:3000", "timeout_ms": 30000 }
+      },
+      "health": { "kind": "http", "value": "http://localhost:3000", "timeout_ms": 30000 },
+      "source": {
+        "url": "https://github.com/cinexa/cinexa.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "post_update": ["npm ci"],
+        "post_update_cwd": "upstream/cinexa"
+      },
+      "user_data": {
+        "path": "user-data/cinexa",
+        "mount_at": "upstream/cinexa/.data",
+        "create_if_missing": true
+      }
+    },
+    {
+      "id": "clubtivi-windows",
+      "name": "clubtivi-windows",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "CL" },
+      "launch": {
+        "kind": "executable",
+        "cwd": "upstream/clubtivi-windows",
+        "command": "clubtivi.exe",
+        "wait_for": { "kind": "process", "value": "clubtivi.exe", "timeout_ms": 15000 }
+      },
+      "source": {
+        "url": "https://github.com/clubtivi/clubtivi-windows.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "extreme-infinitv",
+      "name": "Extreme-InfiniTV",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "EI" },
+      "launch": {
+        "kind": "npm",
+        "cwd": "upstream/Extreme-InfiniTV",
+        "command": "start"
+      },
+      "source": {
+        "url": "https://github.com/example/Extreme-InfiniTV.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "post_update": ["npm ci"],
+        "post_update_cwd": "upstream/Extreme-InfiniTV"
+      }
+    },
+    {
+      "id": "free-tv-iptv",
+      "name": "free-tv-iptv",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "FT" },
+      "launch": {
+        "kind": "web-url",
+        "command": "https://github.com/Free-TV/IPTV"
+      },
+      "source": {
+        "url": "https://github.com/Free-TV/IPTV.git",
+        "branch": "master",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "harmonyiptv",
+      "name": "HarmonyIPTV",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "HI" },
+      "launch": {
+        "kind": "tauri-dev",
+        "cwd": "upstream/HarmonyIPTV"
+      },
+      "source": {
+        "url": "https://github.com/example/HarmonyIPTV.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "post_update": ["npm ci"],
+        "post_update_cwd": "upstream/HarmonyIPTV"
+      }
+    },
+    {
+      "id": "iptauriv",
+      "name": "IPTauriV",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "IP" },
+      "launch": {
+        "kind": "tauri-dev",
+        "cwd": "upstream/IPTauriV"
+      },
+      "source": {
+        "url": "https://github.com/example/IPTauriV.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "iptv",
+      "name": "iptv",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "IV" },
+      "launch": {
+        "kind": "web-url",
+        "command": "https://github.com/iptv-org/iptv"
+      },
+      "source": {
+        "url": "https://github.com/iptv-org/iptv.git",
+        "branch": "master",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "iptvnator",
+      "name": "iptvnator",
+      "type": "git",
+      "favorite": true,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "IN" },
+      "polling": { "enabled": true, "interval_minutes": 15 },
+      "launch": {
+        "kind": "npm",
+        "cwd": "upstream/iptvnator",
+        "command": "start",
+        "wait_for": { "kind": "port", "value": 4200, "timeout_ms": 30000 }
+      },
+      "health": { "kind": "port", "value": 4200, "timeout_ms": 30000 },
+      "source": {
+        "url": "https://github.com/4gray/iptvnator.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "post_update": ["npm ci"],
+        "post_update_cwd": "upstream/iptvnator"
+      },
+      "user_data": {
+        "path": "user-data/iptvnator",
+        "mount_at": "upstream/iptvnator/userData",
+        "create_if_missing": true
+      }
+    },
+    {
+      "id": "iptv-restream",
+      "name": "IPTV-Restream",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "IR" },
+      "launch": {
+        "kind": "npm",
+        "cwd": "upstream/IPTV-Restream",
+        "command": "start"
+      },
+      "source": {
+        "url": "https://github.com/example/IPTV-Restream.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "post_update": ["npm ci"],
+        "post_update_cwd": "upstream/IPTV-Restream"
+      }
+    },
+    {
+      "id": "iptv-stream",
+      "name": "iptv-stream",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "IS" },
+      "launch": {
+        "kind": "executable",
+        "cwd": "upstream/iptv-stream",
+        "command": "iptv-stream.exe"
+      },
+      "source": {
+        "url": "https://github.com/example/iptv-stream.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "maxvideoplayer",
+      "name": "MaxVideoPlayer",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "MV" },
+      "launch": {
+        "kind": "executable",
+        "cwd": "upstream/MaxVideoPlayer",
+        "command": "MaxVideoPlayer.exe"
+      },
+      "source": {
+        "url": "https://github.com/example/MaxVideoPlayer.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "neptune-tv",
+      "name": "neptune-tv",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "NT" },
+      "launch": {
+        "kind": "npm",
+        "cwd": "upstream/neptune-tv",
+        "command": "start"
+      },
+      "source": {
+        "url": "https://github.com/example/neptune-tv.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "post_update": ["npm ci"],
+        "post_update_cwd": "upstream/neptune-tv"
+      }
+    },
+    {
+      "id": "nuvioweb",
+      "name": "NuvioWeb",
+      "type": "web",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "NV" },
+      "launch": {
+        "kind": "npm",
+        "cwd": "upstream/NuvioWeb",
+        "command": "dev",
+        "wait_for": { "kind": "http", "value": "http://localhost:5173", "timeout_ms": 30000 }
+      },
+      "health": { "kind": "http", "value": "http://localhost:5173", "timeout_ms": 30000 },
+      "source": {
+        "url": "https://github.com/example/NuvioWeb.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "package_manager": "npm",
+        "install_command": "ci",
+        "start_command": "dev",
+        "port": 5173
+      }
+    },
+    {
+      "id": "open-tv",
+      "name": "open-tv",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "OT" },
+      "polling": { "enabled": true, "interval_minutes": 30 },
+      "launch": {
+        "kind": "tauri-dev",
+        "cwd": "upstream/open-tv"
+      },
+      "source": {
+        "url": "https://github.com/Fredolx/open-tv.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "post_update": ["npm ci"],
+        "post_update_cwd": "upstream/open-tv"
+      },
+      "user_data": {
+        "path": "user-data/open-tv",
+        "mount_at": "upstream/open-tv/.data",
+        "create_if_missing": true
+      }
+    },
+    {
+      "id": "orbiscast",
+      "name": "orbiscast",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "OR" },
+      "polling": { "enabled": true, "interval_minutes": 30 },
+      "launch": {
+        "kind": "tauri-dev",
+        "cwd": "upstream/orbiscast"
+      },
+      "source": {
+        "url": "https://github.com/example/orbiscast.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "pitv",
+      "name": "PiTV",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "PT" },
+      "launch": {
+        "kind": "executable",
+        "cwd": "upstream/PiTV",
+        "command": "PiTV.exe"
+      },
+      "source": {
+        "url": "https://github.com/example/PiTV.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "react-iptv",
+      "name": "react-iptv",
+      "type": "web",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "RE" },
+      "launch": {
+        "kind": "npm",
+        "cwd": "upstream/react-iptv",
+        "command": "dev",
+        "wait_for": { "kind": "http", "value": "http://localhost:5174", "timeout_ms": 30000 }
+      },
+      "source": {
+        "url": "https://github.com/example/react-iptv.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "package_manager": "npm",
+        "install_command": "ci",
+        "start_command": "dev",
+        "port": 5174
+      }
+    },
+    {
+      "id": "smart-iptv-web",
+      "name": "Smart-IPTV-Web",
+      "type": "web",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "SW" },
+      "launch": {
+        "kind": "npm",
+        "cwd": "upstream/Smart-IPTV-Web",
+        "command": "dev"
+      },
+      "source": {
+        "url": "https://github.com/example/Smart-IPTV-Web.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "package_manager": "npm",
+        "install_command": "ci",
+        "start_command": "dev",
+        "port": 5175
+      }
+    },
+    {
+      "id": "stalker-ui",
+      "name": "stalker-ui",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "SU" },
+      "launch": {
+        "kind": "npm",
+        "cwd": "upstream/stalker-ui",
+        "command": "start"
+      },
+      "source": {
+        "url": "https://github.com/example/stalker-ui.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "stremio",
+      "name": "Stremio",
+      "type": "release-binary",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "ST" },
+      "polling": { "enabled": true, "interval_minutes": 60 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "upstream/stremio",
+        "command": "stremio.exe"
+      },
+      "source": {
+        "repo": "Stremio/stremio-shell",
+        "asset_pattern": ".*[Ww]in.*x64.*\\.(zip|exe)$",
+        "version_strategy": "semver",
+        "install_dir": "upstream/stremio",
+        "install_strategy": "extract"
+      }
+    },
+    {
+      "id": "tvapp",
+      "name": "TVapp",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "TV" },
+      "launch": {
+        "kind": "npm",
+        "cwd": "upstream/TVapp",
+        "command": "start"
+      },
+      "source": {
+        "url": "https://github.com/example/TVapp.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "wizju-iptv-player",
+      "name": "wizju-iptv-player",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "WZ" },
+      "launch": {
+        "kind": "executable",
+        "cwd": "upstream/wizju-iptv-player",
+        "command": "wizju-player.exe"
+      },
+      "source": {
+        "url": "https://github.com/example/wizju-iptv-player.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "xstream-player",
+      "name": "xstream-player",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "XS" },
+      "launch": {
+        "kind": "npm",
+        "cwd": "upstream/xstream-player",
+        "command": "start"
+      },
+      "source": {
+        "url": "https://github.com/example/xstream-player.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "post_update": ["npm ci"],
+        "post_update_cwd": "upstream/xstream-player"
+      }
+    },
+    {
+      "id": "ynotv",
+      "name": "ynotv",
+      "type": "git",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "YN" },
+      "launch": {
+        "kind": "npm",
+        "cwd": "upstream/ynotv",
+        "command": "start"
+      },
+      "source": {
+        "url": "https://github.com/example/ynotv.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "crunchyroll-tizen",
+      "name": "Crunchyroll (Tizen)",
+      "type": "tizen-ipk",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "CR" },
+      "polling": { "enabled": true, "interval_minutes": 1440 },
+      "launch": {
+        "kind": "tizen-deploy",
+        "command": "cache/installers/crunchyroll-tizen/com.difix.crunchyroll_1.0.0_all.ipk"
+      },
+      "source": {
+        "source_kind": "github-release",
+        "repo": "difix/crunchyroll-tizen",
+        "asset_pattern": ".*\\.ipk$"
+      }
+    },
+    {
+      "id": "fred-tv",
+      "name": "Fred.TV",
+      "type": "installer",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "FT" },
+      "polling": { "enabled": true, "interval_minutes": 240 },
+      "launch": {
+        "kind": "exe-shortcut",
+        "command": "%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Fred.TV.lnk",
+        "wait_for": { "kind": "process", "value": "Fred.TV.exe", "timeout_ms": 15000 }
+      },
+      "source": {
+        "vendor": "Fred.TV",
+        "product_name": "Fred.TV",
+        "registry_uninstall_key": "Fred.TV",
+        "download_url": "https://github.com/Fredolx/Fred.TV/releases/latest/download/Fred.TV_{{version}}_x64_en-US.msi",
+        "version_endpoint": "https://api.github.com/repos/Fredolx/Fred.TV/releases/latest",
+        "version_json_path": "$.tag_name",
+        "install_args": ["/quiet", "/norestart"]
+      }
+    },
+    {
+      "id": "iptv-desktop",
+      "name": "iptv-desktop",
+      "type": "installer",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "ID" },
+      "launch": {
+        "kind": "exe-shortcut",
+        "command": "%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\iptv-desktop.lnk"
+      },
+      "source": {
+        "vendor": "iptv-desktop",
+        "product_name": "iptv-desktop",
+        "registry_uninstall_key": "iptv-desktop",
+        "download_url": "https://github.com/example/iptv-desktop/releases/latest/download/iptv-desktop-{{version}}-setup.exe",
+        "version_endpoint": "https://api.github.com/repos/example/iptv-desktop/releases/latest",
+        "version_json_path": "$.tag_name",
+        "install_args": ["/S"]
+      }
+    }
+  ]
+}

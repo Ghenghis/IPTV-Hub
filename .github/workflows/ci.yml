@@ -1,0 +1,138 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUSTFLAGS: '-D warnings'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  forbid-stubs:
+    name: forbid-stubs tripwire
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run forbid-stubs
+        run: bash scripts/forbid-stubs.sh
+
+  schema-validate:
+    name: JSON schema + examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install jsonschema
+        run: pip install --quiet jsonschema==4.23.0
+      - name: Validate schema and all examples
+        run: |
+          python - <<'PY'
+          import json, sys
+          from jsonschema import Draft202012Validator
+          schema = json.load(open("schema/apps.schema.json"))
+          Draft202012Validator.check_schema(schema)
+          v = Draft202012Validator(schema)
+          import glob
+          failed = []
+          for path in glob.glob("schema/examples/*.json"):
+              errs = list(v.iter_errors(json.load(open(path))))
+              if errs:
+                  failed.append((path, [str(e) for e in errs[:3]]))
+                  for e in errs[:3]:
+                      print(f"  {path}: {e.message}")
+          if failed:
+              sys.exit(1)
+          print(f"validated schema and {len(glob.glob('schema/examples/*.json'))} examples")
+          PY
+
+  rust-checks:
+    name: rust (fmt, clippy, build, test)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          components: rustfmt, clippy
+      - name: Install Linux deps (tauri)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
+            patchelf libssl-dev
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: cargo build
+        run: cargo build --workspace --locked
+      - name: cargo test
+        run: cargo test --workspace --locked
+
+  frontend-checks:
+    name: frontend (tsc, prettier)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run build
+
+  e2e-smoke:
+    name: e2e smoke (Windows only)
+    runs-on: windows-latest
+    needs: [rust-checks, frontend-checks]
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.82.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build release MSI
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+          cd ..
+          cargo tauri build --target x86_64-pc-windows-msvc
+      - name: Upload MSI as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iptv-hub-msi
+          path: src-tauri/target/release/bundle/msi/*.msi
+          retention-days: 14

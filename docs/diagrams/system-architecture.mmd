@@ -1,0 +1,56 @@
+%% IPTV Hub — System architecture
+%% Render: https://mermaid.live or any GitHub markdown viewer.
+
+flowchart LR
+    subgraph Tauri["IPTV Hub (single Tauri process)"]
+        direction TB
+        FE["Frontend (Webview)<br/>vanilla TS + Web Components"]
+        IPC{{"Tauri IPC bridge"}}
+        Core["Rust core<br/>(tokio + sqlx + git2 + reqwest)"]
+        Poll["Poller (long-lived task)"]
+        Sources["Source trait<br/>git / release / installer / web / tizen"]
+        Roll["Rollback engine"]
+        Smoke["Smoke test runner"]
+        Launch["Launcher (process spawn)"]
+        DB[("SQLite<br/>apps · history · snapshots · activity")]
+
+        FE <--> IPC
+        IPC <--> Core
+        Core --> Poll
+        Core --> Sources
+        Core --> Roll
+        Core --> Smoke
+        Core --> Launch
+        Core <--> DB
+        Poll --> Sources
+    end
+
+    subgraph FS["Filesystem"]
+        UP["upstream/<br/>(managed)"]
+        UD["user-data/<br/>(yours)"]
+        CA["cache/<br/>rollback · installers · icons · logs"]
+    end
+
+    subgraph Ext["External"]
+        GH["GitHub / GitLab / mirrors"]
+        Vend["Vendor MSI URLs"]
+        TV["Samsung TV (sdb)"]
+        KC[["OS keychain<br/>via keyring-rs"]]
+    end
+
+    Sources -. fetch .-> GH
+    Sources -. download .-> Vend
+    Sources -. deploy .-> TV
+    Sources --> UP
+    Roll --> CA
+    Launch --> UP
+    Core <-. tokens .-> KC
+
+    UP -. symlinks .-> UD
+
+    classDef ext fill:#3a2f5a,color:#c9c0f0,stroke:#3C3489;
+    classDef fs  fill:#1a4a3a,color:#7ed4b2,stroke:#085041;
+    classDef hub fill:#1a3a52,color:#9ec5f0,stroke:#0C447C;
+    class Ext,GH,Vend,TV,KC ext;
+    class FS,UP,UD,CA fs;
+    class Tauri,FE,IPC,Core,Poll,Sources,Roll,Smoke,Launch,DB hub;

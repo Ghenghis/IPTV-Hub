@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "apps_root": "C:\\IPTV",
+  "user_data_root": "C:\\IPTV\\user-data",
+  "cache_root": "C:\\IPTV\\cache",
+  "apps": [
+    {
+      "id": "smart-iptv-web",
+      "name": "Smart-IPTV-Web",
+      "type": "web",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "SW" },
+      "launch": {
+        "kind": "npm",
+        "cwd": "upstream/Smart-IPTV-Web",
+        "command": "dev",
+        "args": [],
+        "wait_for": { "kind": "http", "value": "http://localhost:5173", "timeout_ms": 30000 }
+      },
+      "health": { "kind": "http", "value": "http://localhost:5173", "timeout_ms": 30000 },
+      "source": {
+        "url": "https://github.com/example/Smart-IPTV-Web.git",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "package_manager": "npm",
+        "install_command": "ci",
+        "start_command": "dev",
+        "port": 5173
+      },
+      "user_data": {
+        "path": "user-data/smart-iptv-web",
+        "mount_at": "upstream/Smart-IPTV-Web/.data",
+        "create_if_missing": true
+      }
+    }
+  ]
+}

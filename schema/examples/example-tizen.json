@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "apps_root": "C:\\IPTV",
+  "user_data_root": "C:\\IPTV\\user-data",
+  "cache_root": "C:\\IPTV\\cache",
+  "apps": [
+    {
+      "id": "crunchyroll-tizen",
+      "name": "Crunchyroll (Tizen)",
+      "type": "tizen-ipk",
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "CR" },
+      "polling": { "enabled": true, "interval_minutes": 1440 },
+      "launch": {
+        "kind": "tizen-deploy",
+        "command": "cache/installers/crunchyroll-tizen/com.difix.crunchyroll_1.1.6_all.ipk",
+        "args": []
+      },
+      "source": {
+        "source_kind": "github-release",
+        "repo": "difix/crunchyroll-tizen",
+        "asset_pattern": ".*\\.ipk$",
+        "device_serial": null,
+        "version_strategy": "semver"
+      }
+    }
+  ]
+}
