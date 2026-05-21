@@ -1,0 +1,73 @@
+# /etc/nginx/auth-gate.conf  — included from every protected site config.
+#
+# Lane: lane-cloud-pack. Pairs with /etc/nginx/cloudflare-real-ip.conf
+# (shipped in lane-a-provider-registry, doc 52).
+#
+# Usage in a site config:
+#
+#   server {
+#     listen 443 ssl http2;
+#     server_name opentv.daveai.tech;
+#
+#     include /etc/nginx/cloudflare-real-ip.conf;   # real visitor IPs
+#     include /etc/nginx/auth-gate.conf;            # family-only gate
+#
+#     location / {
+#       auth_request /outpost.goauthentik.io/auth/nginx;
+#       error_page 401 = @authentik_login;
+#       proxy_pass http://127.0.0.1:5173;
+#     }
+#   }
+#
+# This file defines:
+#   - the /outpost.goauthentik.io/ upstream that auth_request hits
+#   - the @authentik_login fallback that 401s become
+#   - the auth response headers Authentik returns so apps can identify the
+#     logged-in family member if they want to (X-authentik-username etc.)
+
+# Upstream pointing at the Authentik outpost container. The outpost is part
+# of the authentik-server container itself; it listens on the same port as
+# the admin UI but on a different path tree.
+location = /outpost.goauthentik.io/auth/nginx {
+    internal;
+
+    proxy_pass         http://127.0.0.1:9000;
+    proxy_pass_request_body off;
+    proxy_set_header   Content-Length "";
+
+    # Pass the original request context so Authentik can decide per-host
+    # whether the user has permission.
+    proxy_set_header   Host               $host;
+    proxy_set_header   X-Original-URL     $scheme://$http_host$request_uri;
+    proxy_set_header   X-Original-Method  $request_method;
+    proxy_set_header   X-Forwarded-For    $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Host   $http_host;
+    proxy_set_header   X-Forwarded-Proto  $scheme;
+    proxy_set_header   X-Real-IP          $remote_addr;
+}
+
+# Forward Authentik's outpost callback (covers the OIDC flows, including
+# device code, that the auth UI hands off to).
+location /outpost.goauthentik.io {
+    proxy_pass         http://127.0.0.1:9000/outpost.goauthentik.io;
+    proxy_set_header   Host               $host;
+    proxy_set_header   X-Original-URL     $scheme://$http_host$request_uri;
+    proxy_set_header   X-Forwarded-For    $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Host   $http_host;
+    proxy_set_header   X-Forwarded-Proto  $scheme;
+    proxy_set_header   X-Real-IP          $remote_addr;
+}
+
+# Where unauthenticated requests land. Authentik's outpost decides whether
+# to challenge with a login form, the device code page, or an MFA step.
+location @authentik_login {
+    return 302 /outpost.goauthentik.io/start?rd=$scheme://$http_host$request_uri;
+}
+
+# Auth response headers — set on the variable scope so any `location` block
+# in the site config can include them with `auth_request_set`.
+auth_request_set $authentik_username $upstream_http_x_authentik_username;
+auth_request_set $authentik_groups   $upstream_http_x_authentik_groups;
+auth_request_set $authentik_email    $upstream_http_x_authentik_email;
+auth_request_set $authentik_name     $upstream_http_x_authentik_name;
+auth_request_set $authentik_uid      $upstream_http_x_authentik_uid;

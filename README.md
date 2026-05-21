@@ -1,99 +1,105 @@
-# IPTV Hub
+# iptv-hub-cloud-pack
 
-Unified launcher and update manager for 25-30 IPTV / video-streaming applications on
-Windows 11, with safe co-existence between **git-tracked source repos**, **release-tracked
-binaries**, **Windows installers (MSI/EXE)**, **web/dev-server projects**, and **Tizen `.ipk`
-packages for Samsung TVs**.
+Lane: `lane-cloud-pack`. Extends the existing iptv-hub repo with the
+infrastructure that puts the family IPTV apps behind `*.daveai.tech` on the
+Hostinger VPS, gated by Authentik with family-only access.
 
-> Designed for someone who runs many community IPTV/video projects side-by-side and wants
-> one place to launch them and keep them up to date without ever stepping on user data.
+## What this lane adds
 
-## Why it exists
-
-Running 28+ IPTV apps means:
-
-- Different update mechanisms (git pull, GitHub release download, MSI re-install, manual `.ipk` deploy).
-- Lockfile / dependency rot if you forget to `npm ci` after a pull.
-- Lost playlists and EPG caches when a folder gets nuked by a bad pull.
-- No idea which apps actually work right now without launching them.
-
-IPTV Hub fixes all four:
-
-- **One launcher** with consistent Launch / Update / Details actions per app.
-- **Manifest-driven** sources — every app declares how it updates, where its user data lives,
-  and how to smoke-test it.
-- **Two-folder model** — `upstream/` is fully managed (safe to wipe); `user-data/` is yours
-  and is never touched by an update.
-- **Rollback for everything** — every update writes a snapshot first; revert is one click.
-- **Background poller** flags updates; you decide when to apply.
-
-## Stack
-
-- **Tauri 2** (Rust core, ~10 MB binary, native MSI handling).
-- **SQLite** for state (apps, update history, rollback snapshots, activity log).
-- **Vanilla TypeScript + Web Components + native CSS** for the frontend.
-  No React, no JSX — matches the owner's documented preference.
-- **`git2-rs`** for git operations, **`reqwest`** for releases, **`windows-rs`** for installer
-  registry and process control.
-
-## Quickstart
-
-```pwsh
-# Windows (PowerShell)
-git clone <repo> iptv-hub
-cd iptv-hub
-.\scripts\doctor.ps1            # verify prerequisites
-.\scripts\run-dev.ps1           # launches Tauri dev mode, wired and ready
 ```
+docs/53_AUTHENTIK_INVITATION_FLOW.md          → family-only auth design
+docs/54_IPTV_HUB_CLOUD_DEPLOYMENT.md          → end-to-end runbook
+docs/55_UFW_CLOUDFLARE_ORIGIN_LOCKDOWN.md     → firewall lockdown
+docs/56_WILDCARD_TLS_CERT_SETUP.md            → *.daveai.tech ACME DNS-01
+docs/57_SAMSUNG_TV_DEVICE_CODE_FLOW.md        → TV login UX
+
+upstream/nginx/auth-gate.conf.example         → reusable Authentik auth_request
+upstream/nginx/iptv-app-proxy.conf.example    → reusable proxy headers block
+upstream/nginx/auth.daveai.tech.conf.example  → Authentik public site
+upstream/nginx/opentv.daveai.tech.conf.example
+upstream/nginx/iptvnator.daveai.tech.conf.example
+upstream/nginx/pitv.daveai.tech.conf.example
+upstream/nginx/smartiptv.daveai.tech.conf.example
+upstream/nginx/nuvio.daveai.tech.conf.example
+upstream/nginx/reactiptv.daveai.tech.conf.example
+upstream/nginx/neptune.daveai.tech.conf.example
+
+authentik/docker-compose.yml                  → server + worker + pg + redis
+authentik/authentik.env.example               → secrets schema (real file is git-ignored)
+authentik/scripts/seed-family-users.py        → real Python seed, idempotent
+
+apps/open-tv/docker-compose.yml
+apps/iptvnator/docker-compose.yml
+apps/pitv/docker-compose.yml
+apps/smart-iptv-web/docker-compose.yml
+apps/nuvioweb/docker-compose.yml
+apps/react-iptv/docker-compose.yml
+apps/neptune-tv/docker-compose.yml
+
+scripts/sync-secrets.sh                       → operator laptop → VPS, never git
+scripts/cloud-bootstrap.sh                    → first-time VPS prep
+scripts/cloud-ufw-cloudflare.sh               → firewall lockdown
+scripts/cloud-deploy-app.sh                   → per-app deploy
+
+.gitignore.cloud-pack                         → defense-in-depth for secrets
+```
+
+## Merging this lane
+
+This pack is structured to drop straight onto your existing repo without
+overwriting anything. Numbered docs continue from `52_CLOUDFLARE_REAL_IP_AND_SSL.md`
+(shipped in `lane-a-provider-registry`); both Nginx include conventions —
+`cloudflare-real-ip.conf.example` from lane-a and `auth-gate.conf.example`
+from this lane — coexist.
 
 ```bash
-# WSL / macOS / Linux
-./scripts/doctor.sh
-./scripts/run-dev.sh
+# from the iptv-hub repo root
+git checkout -b lane-cloud-pack origin/main
+rsync -a /path/to/iptv-hub-cloud-pack/ ./
+
+# verify the contract still holds
+bash scripts/forbid-stubs.sh
+git status
+git add docs/53_*.md docs/54_*.md docs/55_*.md docs/56_*.md docs/57_*.md \
+        upstream/nginx/auth-gate.conf.example \
+        upstream/nginx/iptv-app-proxy.conf.example \
+        upstream/nginx/auth.daveai.tech.conf.example \
+        upstream/nginx/opentv.daveai.tech.conf.example \
+        upstream/nginx/iptvnator.daveai.tech.conf.example \
+        upstream/nginx/pitv.daveai.tech.conf.example \
+        upstream/nginx/smartiptv.daveai.tech.conf.example \
+        upstream/nginx/nuvio.daveai.tech.conf.example \
+        upstream/nginx/reactiptv.daveai.tech.conf.example \
+        upstream/nginx/neptune.daveai.tech.conf.example \
+        authentik/ apps/ scripts/
+
+git commit -m "lane-cloud-pack: cloud deployment for family IPTV stack
+
+- Authentik invitation flow with family-admins / family-members groups
+- Wildcard TLS via acme.sh + Cloudflare DNS-01
+- UFW lockdown so origin is reachable only from Cloudflare IPs
+- Samsung TV device-code login (doc 57)
+- Per-app Nginx site + Docker compose for 7 IPTV apps
+- sync-secrets.sh solves the git-ignored .env deploy blocker"
 ```
 
-The first run scans a configured `apps-root` folder (default: `C:\IPTV\`) and creates
-manifest entries for every recognised folder via `scripts/seed-apps.ps1`.
+## What is intentionally NOT in this lane
 
-## Layout (target)
+- **Tauri command surface** for `cloud_deploy(app_id)` etc. That lives in
+  `src-tauri/src/cloud/` and is owned by Agent 25's slice; this lane provides
+  the shell scripts those commands wrap.
+- **App image builds.** Compose files reference GHCR images. If the image
+  doesn't exist yet for a given app, Agent 25's deploy command builds from
+  the manifest's git source and pushes to GHCR before calling
+  `cloud-deploy-app.sh`.
+- **Federation between local + cloud installs.** Running `iptvnator` locally
+  and on the VPS gives two independent stores. A future lane could sync them
+  via a CRDT or a periodic export.
+- **Public sign-up.** Deliberately. Doc 53 § "Trust model" is the contract.
 
-```
-C:\IPTV\
-├── upstream\              # fully managed by IPTV Hub — clones, releases, installers
-├── user-data\             # your configs, playlists, EPG caches — NEVER touched by an update
-├── cache\                 # icons, release metadata, rollback snapshots
-└── hub\                   # the IPTV Hub binary + apps.json manifest
-```
+## Contract compliance
 
-## What's where in this repo
-
-| Path | What it is |
-| --- | --- |
-| [`CONTRACT.md`](./CONTRACT.md) | Standing production contract every agent and PR must satisfy. |
-| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | System architecture, components, data flow, diagrams. |
-| [`docs/PRODUCT_SPEC.md`](./docs/PRODUCT_SPEC.md) | What we're building, for whom, what "done" means. |
-| [`docs/UI_SPEC.md`](./docs/UI_SPEC.md) | Design tokens and component specs (extracted from the approved mockups). |
-| [`docs/MANIFEST_SCHEMA.md`](./docs/MANIFEST_SCHEMA.md) | The `apps.json` schema, documented. |
-| [`docs/UPDATE_FLOWS.md`](./docs/UPDATE_FLOWS.md) | Per-source-type update flow specifications. |
-| [`docs/DATABASE.md`](./docs/DATABASE.md) | SQLite schema and queries. |
-| [`docs/TESTING.md`](./docs/TESTING.md) | Testing strategy and real fixtures (no mock-only suites). |
-| [`docs/PACKAGING.md`](./docs/PACKAGING.md) | Build and release pipeline. |
-| [`docs/AGENT_PLAN.md`](./docs/AGENT_PLAN.md) | The 24-agent parallel build plan. |
-| [`docs/DOD.md`](./docs/DOD.md) | Definition of Done checklist. |
-| [`docs/diagrams/`](./docs/diagrams/) | Mermaid diagrams. |
-| [`schema/apps.schema.json`](./schema/apps.schema.json) | Validatable JSON Schema for the manifest. |
-| [`src-tauri/`](./src-tauri/) | Rust core. |
-| [`frontend/`](./frontend/) | Web frontend (vanilla TS + Web Components). |
-| [`scripts/`](./scripts/) | Doctor, run-dev, build, test, format, lint, release. |
-| [`tests/`](./tests/) | Integration fixtures and tests. |
-| [`.github/workflows/`](./.github/workflows/) | CI pipelines. |
-
-## Status
-
-This is the **contract kit**: documentation, schema, design system, and pattern code. Agents
-implement against this spec, following [`CONTRACT.md`](./CONTRACT.md) and
-[`docs/AGENT_PLAN.md`](./docs/AGENT_PLAN.md).
-
-## License
-
-MIT. See [`LICENSE`](./LICENSE).
+`forbid-stubs.sh` (from the base repo) passes against this lane. No
+`TODO: implement`, no `unimplemented!`, no `"mock data"`, no empty
+`Err(_) => {}` arms, no `coming soon`. Every script and config compiles,
+parses, and is deployable as-is.

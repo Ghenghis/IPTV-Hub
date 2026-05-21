@@ -1,0 +1,40 @@
+## /opt/iptv-hub/apps/react-iptv/docker-compose.yml
+##
+## Lane: lane-cloud-pack. Mirrored by Nginx at reactiptv.daveai.tech.
+##
+## Bound to 127.0.0.1:8006 only. Nginx is the sole entrypoint; the public
+## firewall additionally blocks direct origin access (doc 55).
+##
+## Image strategy: pulled from GHCR. If a CI build is required (image
+## doesn't exist yet), Agent 25's `cloud_deploy` slice will build it from
+## the manifest's git source and push it to the operator's GHCR namespace
+## before running this compose. For v0 the image reference below is the
+## post-build artifact.
+
+services:
+  react-iptv:
+    image: ghcr.io/iptv-hub/react-iptv:latest
+    container_name: app-react-iptv
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8006:5174'   # host:container — internal port from the app's docs
+    volumes:
+      - /opt/iptv-hub/user-data/react-iptv:/data
+    environment:
+      NODE_ENV: production
+      DATA_DIR: /data
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:5174/ >/dev/null || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '5' }
+    networks:
+      - iptv-hub-internal
+
+networks:
+  iptv-hub-internal:
+    external: true

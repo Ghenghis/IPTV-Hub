@@ -1,0 +1,100 @@
+## /opt/iptv-hub/authentik/docker-compose.yml
+##
+## Lane: lane-cloud-pack. Authentik 2024.10 stack — server + worker +
+## postgres + redis. Server binds to 127.0.0.1:9000 only; Nginx fronts it
+## (see upstream/nginx/auth.daveai.tech.conf.example).
+##
+## Image pins are explicit. Auto-updating is intentionally not configured —
+## doc 53 documents the manual upgrade procedure.
+
+x-authentik-env: &authentik-env
+  AUTHENTIK_REDIS__HOST: redis
+  AUTHENTIK_POSTGRESQL__HOST: postgresql
+  AUTHENTIK_POSTGRESQL__USER: authentik
+  AUTHENTIK_POSTGRESQL__NAME: authentik
+  AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_PG_PASS}
+  AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+  AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN}
+  AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
+  AUTHENTIK_BOOTSTRAP_EMAIL: fnice1971@gmail.com
+  AUTHENTIK_LOG_LEVEL: info
+  # Cookie scoped to the parent domain so SSO covers every app subdomain.
+  AUTHENTIK_COOKIE_DOMAIN: .daveai.tech
+  AUTHENTIK_EMAIL__HOST: ${SMTP_HOST}
+  AUTHENTIK_EMAIL__PORT: ${SMTP_PORT}
+  AUTHENTIK_EMAIL__USERNAME: ${SMTP_USERNAME}
+  AUTHENTIK_EMAIL__PASSWORD: ${SMTP_APP_PASSWORD}
+  AUTHENTIK_EMAIL__USE_TLS: 'true'
+  AUTHENTIK_EMAIL__USE_SSL: 'false'
+  AUTHENTIK_EMAIL__FROM: ${SMTP_FROM}
+  # Trust the X-Forwarded-* headers from the Nginx in front of us.
+  AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS: 127.0.0.1/32,172.16.0.0/12
+
+services:
+  postgresql:
+    image: docker.io/library/postgres:16.4-alpine
+    container_name: authentik-db
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -d "${AUTHENTIK_PG_DB:-authentik}" -U "${AUTHENTIK_PG_USER:-authentik}"']
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: ${AUTHENTIK_PG_PASS}
+      POSTGRES_USER: authentik
+      POSTGRES_DB: authentik
+
+  redis:
+    image: docker.io/library/redis:7.4-alpine
+    container_name: authentik-redis
+    restart: unless-stopped
+    command: --save 60 1 --loglevel warning
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli ping | grep PONG']
+      start_period: 10s
+      interval: 30s
+      retries: 5
+      timeout: 3s
+    volumes:
+      - ./data/redis:/data
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2024.10.5
+    container_name: authentik-server
+    restart: unless-stopped
+    command: server
+    environment: *authentik-env
+    volumes:
+      - ./data/media:/media
+      - ./data/templates:/templates
+    ports:
+      # Bound to localhost only. Nginx upstreams to this.
+      - '127.0.0.1:9000:9000'
+    depends_on:
+      postgresql: { condition: service_healthy }
+      redis:      { condition: service_healthy }
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2024.10.5
+    container_name: authentik-worker
+    restart: unless-stopped
+    command: worker
+    environment: *authentik-env
+    # Worker needs Docker socket for the embedded outpost. Read-only is enough.
+    volumes:
+      - ./data/media:/media
+      - ./data/certs:/certs
+      - ./data/templates:/templates
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      postgresql: { condition: service_healthy }
+      redis:      { condition: service_healthy }
+
+networks:
+  default:
+    name: iptv-hub-internal
+    driver: bridge

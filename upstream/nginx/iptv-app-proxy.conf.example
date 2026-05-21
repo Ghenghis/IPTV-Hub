@@ -1,0 +1,44 @@
+# /etc/nginx/iptv-app-proxy.conf  — common proxy_pass headers + WebSocket upgrade.
+#
+# Lane: lane-cloud-pack. Included inside `location /` blocks of each app site
+# to keep the per-app config small and the cross-cutting concerns in one file.
+#
+# Usage:
+#
+#   location / {
+#     auth_request /outpost.goauthentik.io/auth/nginx;
+#     error_page 401 = @authentik_login;
+#
+#     include /etc/nginx/iptv-app-proxy.conf;
+#     proxy_pass http://127.0.0.1:5173;     # the only line that varies per app
+#   }
+
+proxy_http_version 1.1;
+
+# WebSocket / SSE / streaming upgrade.
+proxy_set_header   Upgrade            $http_upgrade;
+proxy_set_header   Connection         $connection_upgrade;
+
+# Identity passthrough — the app can identify which family member is on the
+# other end without re-authenticating.
+proxy_set_header   Host               $host;
+proxy_set_header   X-Real-IP          $remote_addr;
+proxy_set_header   X-Forwarded-For    $proxy_add_x_forwarded_for;
+proxy_set_header   X-Forwarded-Proto  $scheme;
+proxy_set_header   X-Forwarded-Host   $http_host;
+proxy_set_header   X-authentik-username $authentik_username;
+proxy_set_header   X-authentik-groups   $authentik_groups;
+proxy_set_header   X-authentik-email    $authentik_email;
+proxy_set_header   X-authentik-name     $authentik_name;
+proxy_set_header   X-authentik-uid      $authentik_uid;
+
+# Streaming-friendly timeouts. IPTV apps long-poll and SSE freely.
+proxy_buffering            off;
+proxy_request_buffering    off;
+proxy_read_timeout         3600s;
+proxy_send_timeout         3600s;
+proxy_connect_timeout      10s;
+
+# Don't let upstream apps set their own caching headers that would interfere
+# with the auth gate.
+proxy_set_header           Accept-Encoding "";

@@ -47,3 +47,38 @@ desktop.ini
 *.dmg
 *.AppImage
 !schema/examples/*.json
+# Lane: lane-cloud-pack — append to the repo's existing .gitignore.
+#
+# Defense-in-depth for the "git-ignored .env is not getting onto the VPS"
+# blocker that scripts/sync-secrets.sh solves. The sync script is the
+# authorised path; these rules ensure secrets never accidentally land in git
+# even if someone copies a real .env into the repo by mistake.
+
+# Authentik / SMTP / Cloudflare real envs (only .example may be committed)
+authentik/*.env
+authentik/!*.env.example
+authentik/data/
+
+# App env files (per-app secrets if any app ever has them)
+apps/*/.env
+apps/*/!.env.example
+apps/*/data/
+
+# Operator local secrets directory — should never appear in the repo, but
+# if someone symlinks it in, ignore it.
+.iptv-hub-secrets/
+**/.iptv-hub-secrets/
+
+# acme.sh and Let's Encrypt
+.acme.sh/
+letsencrypt/
+*.pem
+*.key
+!**/*.pem.example
+!**/*.key.example
+
+# Runtime artifacts on the VPS — never committed
+/opt/iptv-hub/
+logs/
+cache/rollback/
+
