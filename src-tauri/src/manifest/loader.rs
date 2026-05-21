@@ -5,15 +5,14 @@
 //! `schema/apps.schema.json` so the binary is self-contained.
 
 use std::path::Path;
-
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::errors::CoreError;
 use crate::manifest::types::Manifest;
 
 const SCHEMA_JSON: &str = include_str!("../../../schema/apps.schema.json");
 
-static SCHEMA: Lazy<jsonschema::JSONSchema> = Lazy::new(|| {
+static SCHEMA: LazyLock<jsonschema::JSONSchema> = LazyLock::new(|| {
     let value: serde_json::Value =
         serde_json::from_str(SCHEMA_JSON).expect("embedded schema must be valid JSON");
     jsonschema::JSONSchema::options()
