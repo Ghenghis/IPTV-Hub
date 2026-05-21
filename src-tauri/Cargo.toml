@@ -72,6 +72,9 @@ zip          = { version = "2", default-features = false, features = ["deflate"]
 # Pattern matching for release + tizen asset_pattern
 regex        = "1"
 
+# Executable lookup honouring PATHEXT on Windows (Command::new doesn't resolve .cmd/.bat)
+which        = "7"
+
 # Path / fs
 fs2          = "0.4"
 walkdir      = "2"

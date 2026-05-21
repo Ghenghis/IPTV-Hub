@@ -72,6 +72,14 @@ const DEFAULT_GITHUB_API_BASE: &str = "https://api.github.com";
 /// shim from `tests/fixtures/bin/`; production picks up the real Samsung `sdb`.
 const SDB_BINARY: &str = "sdb";
 
+/// Resolve `sdb` honouring Windows PATHEXT (`.exe`, `.cmd`, `.bat`, ...) so the test
+/// fixture `sdb.cmd` is found in the same way the real Samsung `sdb.exe` would be.
+/// Returns the original name as a last resort; the spawn will then surface the
+/// "sdb not found on PATH" `CoreError::NotSupported` we already emit.
+fn resolve_sdb_path() -> std::path::PathBuf {
+    which::which(SDB_BINARY).unwrap_or_else(|_| std::path::PathBuf::from(SDB_BINARY))
+}
+
 #[derive(Debug, Clone)]
 struct GithubRelease {
     tag_name: String,
@@ -641,7 +649,7 @@ struct SdbInstallResult {
 }
 
 async fn run_sdb_devices() -> Result<SdbDevicesResult, CoreError> {
-    let output = Command::new(SDB_BINARY)
+    let output = Command::new(resolve_sdb_path())
         .arg("devices")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -688,7 +696,7 @@ async fn run_sdb_install(
     args.push(ipk.to_string_lossy().into_owned());
     let command_repr = format!("{SDB_BINARY} {}", args.join(" "));
 
-    let output = Command::new(SDB_BINARY)
+    let output = Command::new(resolve_sdb_path())
         .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
