@@ -63,6 +63,9 @@ git2         = { version = "0.19", default-features = false, features = ["vendor
 sha2         = "0.10"
 hex          = "0.4"
 
+# Regex (used by tizen source for asset_pattern matching against release assets)
+regex        = "1"
+
 # Compression / archive (rollback snapshots)
 zstd         = "0.13"
 tar          = "0.4"
@@ -103,6 +106,14 @@ keyring      = "3"
 tokio        = { version = "1", features = ["full", "test-util"] }
 hyper        = { version = "1", features = ["full"] }
 hyper-util   = { version = "0.1", features = ["full"] }
+http-body-util = "0.1"
 tempfile     = "3"
 pretty_assertions = "1"
 insta        = { version = "1", features = ["yaml"] }
+# Re-exposed for integration tests (also in main deps, declared here so the test
+# binary can name them as dependencies in its own resolver scope).
+serde_json   = "1"
+sha2         = "0.10"
+hex          = "0.4"
+parking_lot  = "0.12"
+tokio-util   = { version = "0.7", features = ["rt"] }

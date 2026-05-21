@@ -12,6 +12,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Contract kit scaffolding: README, CONTRACT, ARCHITECTURE, SECURITY, docs/, schema/,
   src-tauri/ skeleton, frontend/ skeleton, scripts/, CI workflow, and the 24-agent
   build plan.
+- Agent 09: `sources::tizen::TizenSource` implementing fetch (github-release | url)
+  with sha-256 verification and a real `sdb` wrapper for Samsung TV deploy. Fixture
+  `sdb` shims (`tests/fixtures/bin/sdb.cmd` + `tests/fixtures/bin/sdb`) drive
+  integration tests that PATH-override the lookup. Tests cover both fetch kinds,
+  the deploy happy path, the "no devices paired" diagnostic, and the install-failure
+  diagnostic.
 
 ## [0.1.0] — TBD
 

@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Fixture shim for `sdb` used by the Tizen integration tests on POSIX hosts.
+# Drives the same behaviour as tests/fixtures/bin/sdb.cmd does on Windows.
+
+set -eu
+
+cmd=""
+serial=""
+arg2=""
+
+if [ "$#" -ge 1 ]; then
+  cmd="$1"
+fi
+
+if [ "$cmd" = "-s" ]; then
+  if [ "$#" -lt 3 ]; then
+    echo "missing args after -s" 1>&2
+    exit 2
+  fi
+  serial="$2"
+  cmd="$3"
+  shift 3
+fi
+
+case "$cmd" in
+  devices)
+    if [ "${IPTV_HUB_TEST_SDB_MODE:-ok}" = "no-devices" ]; then
+      echo "List of devices attached"
+      exit 0
+    fi
+    echo "List of devices attached"
+    if [ -n "$serial" ]; then
+      printf '%s\tdevice\n' "$serial"
+    else
+      printf '0123456789ABCDEF\tdevice\n'
+    fi
+    exit 0
+    ;;
+  install)
+    if [ "${IPTV_HUB_TEST_SDB_MODE:-ok}" = "install-fail" ]; then
+      echo "install failed: corrupted ipk" 1>&2
+      exit 1
+    fi
+    arg2="${1:-}"
+    if [ -n "$serial" ]; then
+      echo "Installed $arg2 on $serial"
+    else
+      echo "Installed $arg2"
+    fi
+    exit 0
+    ;;
+  *)
+    echo "unknown subcommand: $cmd" 1>&2
+    exit 2
+    ;;
+esac

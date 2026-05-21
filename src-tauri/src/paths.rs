@@ -64,4 +64,16 @@ impl AppPaths {
     pub fn manifest_path(&self) -> PathBuf { self.data_dir.join("apps.json") }
     pub fn database_path(&self) -> PathBuf { self.data_dir.join("iptv-hub.db") }
     pub fn logs_dir(&self) -> PathBuf { self.data_dir.join("logs") }
+
+    /// Build an [`AppPaths`] rooted at `root` without needing a Tauri AppHandle.
+    /// Used by integration tests that exercise sources against tempdir-rooted trees.
+    /// `data_dir` is `<root>` and `apps_root` is `<root>/apps`, mirroring the portable
+    /// install layout.
+    #[doc(hidden)]
+    pub fn for_tests(root: PathBuf) -> Self {
+        Self {
+            data_dir: root.clone(),
+            apps_root: root.join("apps"),
+        }
+    }
 }
