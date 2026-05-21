@@ -27,6 +27,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `src-tauri/tests/integration_web.rs` exercise fetch, install, port-collision
   selection, and lockfile-drift install triggering against a bare git repo built
   at test time from `src-tauri/tests/fixtures/apps/tiny-web-app/`.
+- `tizen-ipk` source (Agent 09): `TizenSource` implementing fetch (github-release | url)
+  with sha-256 verification and a real `sdb` wrapper for Samsung TV deploy. Fixture
+  `sdb` shims (`tests/fixtures/bin/sdb.cmd` + `tests/fixtures/bin/sdb`) drive
+  integration tests that PATH-override the lookup. Tests cover both fetch kinds,
+  the deploy happy path, the "no devices paired" diagnostic, and the install-failure
+  diagnostic.
 
 ## [0.1.0] — TBD
 

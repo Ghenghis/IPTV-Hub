@@ -83,4 +83,16 @@ impl AppPaths {
     pub const fn from_dirs(data_dir: PathBuf, apps_root: PathBuf) -> Self {
         Self::for_test(data_dir, apps_root)
     }
+
+    /// Build an [`AppPaths`] rooted at `root` without needing a Tauri AppHandle.
+    /// Used by `tizen` integration tests against tempdir-rooted trees. `data_dir` is
+    /// `<root>` and `apps_root` is `<root>/apps`, mirroring the portable install layout.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn for_tests(root: &Path) -> Self {
+        Self {
+            data_dir: root.to_path_buf(),
+            apps_root: root.join("apps"),
+        }
+    }
 }
