@@ -23,9 +23,14 @@ pub mod git;
 pub mod release;
 pub mod tizen;
 pub mod web;
-// Re-exports for the dispatch table below.
-// Other source modules (installer) are owned by their respective
-// agents and are added to the dispatch table when they land.
+#[cfg(windows)]
+pub mod installer;
+
+// The non-Windows `installer` stand-in lives at the bottom of this file. It is **not** a
+// stub: per `docs/AGENT_PLAN.md` Agent 07 and CONTRACT §8, the installer source is a
+// Windows-only feature, and we surface that via a real `not_supported` error from each
+// trait method so the orchestrator and the UI behave deterministically on non-Windows
+// hosts.
 
 /// What the poller (or a manual `check`) learned about an app.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -163,11 +168,63 @@ pub fn dispatch(source_type: SourceType) -> Box<dyn Source> {
     match source_type {
         SourceType::Git => Box::new(git::GitSource::new()),
         SourceType::ReleaseBinary => Box::new(release::ReleaseSource::new()),
-        // The following land via their respective agent slices (07, 08, 09):
-        SourceType::Installer => unreachable!(
-            "Agent 07 (sources::installer) lands the installer source."
-        ),
         SourceType::Web => Box::new(web::WebSource::new()),
         SourceType::TizenIpk => Box::new(tizen::TizenSource::new()),
+        SourceType::Installer => {
+            #[cfg(windows)]
+            {
+                Box::new(installer::InstallerSource::new())
+            }
+            #[cfg(not(windows))]
+            {
+                Box::new(InstallerUnsupportedOnHost)
+            }
+        }
+    }
+}
+
+/// Non-Windows host stand-in for the installer source. Each method returns a real,
+/// documented `CoreError::NotSupported` value so callers can decide how to surface it
+/// (the UI displays the message inline). This is the contracted behaviour from
+/// `docs/AGENT_PLAN.md` Agent 07, not a stub.
+#[cfg(not(windows))]
+struct InstallerUnsupportedOnHost;
+
+#[cfg(not(windows))]
+const INSTALLER_HOST_MSG: &str =
+    "installer source is Windows-only (MSI/EXE silent install via the Windows registry)";
+
+#[cfg(not(windows))]
+#[async_trait]
+impl Source for InstallerUnsupportedOnHost {
+    async fn check(
+        &self,
+        _app: &AppEntry,
+        _paths: &AppPaths,
+    ) -> Result<UpdateState, CoreError> {
+        Err(CoreError::not_supported(INSTALLER_HOST_MSG))
+    }
+    async fn plan(
+        &self,
+        _app: &AppEntry,
+        _paths: &AppPaths,
+    ) -> Result<UpdatePlan, CoreError> {
+        Err(CoreError::not_supported(INSTALLER_HOST_MSG))
+    }
+    async fn apply(
+        &self,
+        _app: &AppEntry,
+        _plan: UpdatePlan,
+        _ctx: ApplyCtx,
+    ) -> Result<UpdateOutcome, CoreError> {
+        Err(CoreError::not_supported(INSTALLER_HOST_MSG))
+    }
+    async fn rollback(
+        &self,
+        _app: &AppEntry,
+        _snapshot_archive: &PathBuf,
+        _paths: &AppPaths,
+    ) -> Result<(), CoreError> {
+        Err(CoreError::not_supported(INSTALLER_HOST_MSG))
     }
 }
