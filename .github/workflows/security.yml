@@ -22,7 +22,13 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
       - name: Run cargo audit (fail on critical/high)
-        run: cargo audit --deny warnings
+        # RUSTSEC-2023-0071 (medium 5.9) is a Marvin-attack timing sidechannel
+        # in `rsa 0.9.x`, transitively pulled in via `sqlx-mysql` — we ship
+        # `sqlx` with only the `sqlite` feature and never construct an
+        # `RsaPrivateKey` at runtime, so the vulnerable code path is
+        # unreachable. Documented in SECURITY_AUDIT.md. CONTRACT §3 only
+        # gates "unaddressed critical/high"; this is an addressed medium.
+        run: cargo audit --deny warnings --ignore RUSTSEC-2023-0071
 
   npm-audit:
     name: npm audit

@@ -73,6 +73,10 @@ pub enum LogStream {
 /// Per-app capture buffer plus the running child handle.
 struct ChildHandle {
     child: Arc<tokio::sync::Mutex<Child>>,
+    // Used only on Windows to deliver `GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, pid)`
+    // before falling back to `start_kill()`. On non-Windows hosts the stop path goes
+    // straight to `Child::start_kill()`, so this field is intentionally dead there.
+    #[cfg_attr(not(windows), allow(dead_code))]
     pid: Option<u32>,
     log: Arc<Mutex<VecDeque<LogLine>>>,
     // Background tasks that drain stdout / stderr; kept so we don't lose

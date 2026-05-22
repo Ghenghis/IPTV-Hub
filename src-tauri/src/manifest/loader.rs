@@ -176,6 +176,6 @@ const fn default_root(value: &str) -> &str {
 }
 
 #[cfg(not(target_os = "windows"))]
-const fn default_root(_: &str) -> &str {
+const fn default_root(_: &str) -> &'static str {
     "/tmp/iptv-hub"
 }

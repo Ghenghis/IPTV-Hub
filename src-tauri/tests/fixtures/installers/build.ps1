@@ -167,7 +167,11 @@ function Build-Msi {
         $wixobj = [System.IO.Path]::ChangeExtension($wxsPath, '.wixobj')
         & $candle.Source -arch x64 -out $wixobj $wxsPath 2>&1 | Write-Host
         if ($LASTEXITCODE -ne 0) { throw "candle failed for v$Version (exit $LASTEXITCODE)" }
-        & $light.Source -out $OutPath $wixobj 2>&1 | Write-Host
+        # `-sval` suppresses ICE validation. Modern Windows runner images ship
+        # a stricter `light.exe` that fails ICE69/ICE204 on our minimal fixture
+        # WiX (no Manufacturer/UpgradeCode/etc. — that's intentional for the
+        # tiny test MSI). We don't care about those validations for fixtures.
+        & $light.Source -sval -out $OutPath $wixobj 2>&1 | Write-Host
         if ($LASTEXITCODE -ne 0) { throw "light failed for v$Version (exit $LASTEXITCODE)" }
     }
 
