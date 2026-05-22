@@ -60,8 +60,10 @@ fn lookup_app(state: &State<'_, AppState>, id: &str) -> Result<AppEntry, CoreErr
 
 /// Append one row to `activity_log`. Mirrors `poller::insert_activity`: the
 /// insert is best-effort so a transient DB hiccup never breaks a launch. Any
-/// error is swallowed because the launch itself has already happened (or
-/// already failed) and the caller's `CoreError` is what the UI surfaces.
+/// error is logged at `warn!` (operator-visible via `RUST_LOG=warn`) but does
+/// NOT propagate — the launch itself has already happened (or already failed)
+/// and the caller's `CoreError` is what the UI surfaces. See
+/// [`crate::db::audit_write`] for the rationale.
 async fn log_activity(
     state: &State<'_, AppState>,
     app_id: &str,
@@ -69,15 +71,18 @@ async fn log_activity(
     level: &str,
     message: &str,
 ) {
-    let _ = sqlx::query(
-        "INSERT INTO activity_log (at, app_id, action, level, message) \
-         VALUES (datetime('now'), ?, ?, ?, ?)",
+    crate::db::audit_write(
+        "log_launch_activity",
+        sqlx::query(
+            "INSERT INTO activity_log (at, app_id, action, level, message) \
+             VALUES (datetime('now'), ?, ?, ?, ?)",
+        )
+        .bind(app_id)
+        .bind(action)
+        .bind(level)
+        .bind(message)
+        .execute(&state.db),
     )
-    .bind(app_id)
-    .bind(action)
-    .bind(level)
-    .bind(message)
-    .execute(&state.db)
     .await;
 }
 
