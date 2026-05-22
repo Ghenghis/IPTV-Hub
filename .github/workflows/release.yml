@@ -34,8 +34,19 @@ jobs:
           cd frontend
           npm ci
           npm run build
+      - name: Install cargo-tauri-cli (idempotent, matches scripts/build.ps1)
+        shell: pwsh
+        run: |
+          & cargo tauri --version *> $null
+          if ($LASTEXITCODE -ne 0) {
+            cargo install tauri-cli --locked --version '^2.0'
+            if ($LASTEXITCODE -ne 0) { throw 'cargo install tauri-cli failed' }
+          }
       - name: Build Tauri bundle
-        run: cargo tauri build --target x86_64-pc-windows-msvc
+        shell: pwsh
+        run: |
+          cargo tauri build --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { throw 'cargo tauri build failed' }
       - name: Compute checksums
         shell: pwsh
         run: |

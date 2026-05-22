@@ -158,13 +158,23 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
-      - name: Build release MSI
+      - name: Install cargo-tauri-cli (idempotent, matches scripts/build.ps1)
+        shell: pwsh
         run: |
-          cd frontend
-          npm ci
-          npm run build
-          cd ..
+          & cargo tauri --version *> $null
+          if ($LASTEXITCODE -ne 0) {
+            cargo install tauri-cli --locked --version '^2.0'
+            if ($LASTEXITCODE -ne 0) { throw 'cargo install tauri-cli failed' }
+          }
+      - name: Build release MSI
+        shell: pwsh
+        run: |
+          Push-Location frontend
+          try { npm ci; if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' } } finally { Pop-Location }
+          Push-Location frontend
+          try { npm run build; if ($LASTEXITCODE -ne 0) { throw 'npm run build failed' } } finally { Pop-Location }
           cargo tauri build --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { throw 'cargo tauri build failed' }
       - name: Upload MSI as artifact
         uses: actions/upload-artifact@v4
         with:
