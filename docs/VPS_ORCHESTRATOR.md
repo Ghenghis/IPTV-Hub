@@ -42,13 +42,47 @@ What's different on VPS: orchestration is **server-side** instead of native. The
 │   ├── cargo/                         shared Rust build cache where applicable
 │   ├── node-modules-<app>/            per-app node_modules tarball if useful
 │   └── docker/                        BuildKit cache mount
-├── releases/<app>/<sha-or-version>/   atomic release dirs — one per built version
+├── releases/<app>/<sha-or-version>/   release METADATA dir, one per built version
+│                                      (build context snapshot, build log, resolved
+│                                      docker-compose fragment, healthcheck script,
+│                                      smoke-test output, build/healthcheck timestamps).
+│                                      The RUNTIME artifact for each release is a
+│                                      Docker image tagged `iptv-hub/<app>:<sha>`;
+│                                      this directory holds the metadata that pins
+│                                      that image to a release.
 ├── live/<app>                         symlink → releases/<app>/<current-sha>/
+│                                      Pointing the symlink at the metadata dir
+│                                      gives an operator a single path to inspect
+│                                      "what is currently live" (build log,
+│                                      healthcheck output, compose fragment) WITHOUT
+│                                      decoding which image tag is running. The
+│                                      symlink and the running image are kept in
+│                                      lock-step by `swap_live()` (see "Atomic
+│                                      swap" below).
 ├── data/<app>/                        per-app persistent user-data (volumes), NEVER wiped on update
 ├── logs/<app>/                        per-app stdout/stderr + healthcheck output, rotated by N days
 ├── locks/                             advisory file locks (per-app update lock + global concurrency)
 └── state/orchestrator.db              SQLite control-plane state (apps, releases, history)
 ```
+
+### Why both a host dir AND a Docker image per release
+
+(Resolving the architectural ambiguity flagged in code review on this PR.)
+
+The release "thing" lives in **two** places, by design:
+
+| Where | What | Why |
+|---|---|---|
+| `iptv-hub/<app>:<sha>` Docker image tag | The runtime artifact — application code, dependencies, base image | This is what the container manager pulls / runs / kills. The orchestrator NEVER mutates a running container's filesystem from the host. The image is the unit of immutability. |
+| `releases/<app>/<sha>/` host directory | Release metadata: build context snapshot, build log, the resolved `docker-compose.service.yml` that pins this exact image tag, the healthcheck script + smoke output, build/swap timestamps | Operators need to be able to read these without `docker exec`. CI / a remote backup can sync these directories. The build log specifically is required by acceptance criterion 3 ("Update fails → UI shows real build/smoke logs") — the log is a file, not a Docker layer. |
+
+The host directory is **not** mounted into the runtime container. The runtime container's filesystem is whatever the `iptv-hub/<app>:<sha>` image declares. The only host paths that bind-mount at runtime are:
+- `data/<app>/` for user-data volumes (persistent across releases — schema is per-app's manifest, not the orchestrator's).
+- `logs/<app>/` for stdout/stderr capture (optional; many apps stream via the Docker logging driver instead).
+
+The `releases/<app>/<sha>/docker-compose.service.yml` is rendered by the orchestrator at build time. It pins the image tag (`image: iptv-hub/<app>:<sha>`) so that `docker compose up -d` against that fragment brings up exactly that release, regardless of what `latest` resolves to. The pinned tag is how the atomic swap works: the orchestrator runs `docker compose -f releases/<app>/<new-sha>/docker-compose.service.yml up -d`, healthchecks, then flips the symlink and removes the old container.
+
+This also defines the prune rule precisely: a release directory can be deleted ONLY when (a) `live/<app>` does not symlink to it AND (b) the image tag `iptv-hub/<app>:<sha>` is no longer referenced by any running container. Image pruning piggy-backs on the directory prune; `docker image rm iptv-hub/<app>:<sha>` runs after the directory is removed.
 
 Concrete rules:
 
@@ -99,7 +133,7 @@ A failed build during the BUILDING transition keeps the prior `live/<app>` symli
 | 2 | **Orchestrator API** | HTTP endpoints: `GET /apps`, `GET /apps/:id`, `POST /apps/:id/launch`, `POST /apps/:id/update`, `GET /apps/:id/logs`, `POST /apps/:id/rollback` | New `src-tauri/src/bin/iptv-hub-orchestrator.rs` (axum or rocket), shipped as a separate binary alongside the Tauri desktop one. **Same Rust workspace**; same `iptv_hub_core` lib. |
 | 3 | **Update worker queue** | Tokio task pool bounded by `locks/global.sem`; dequeues per-app update jobs, takes the per-app lock, runs build + smoke + swap | Same orchestrator binary |
 | 4 | **Per-app repo manager** | Owns `repos/<app>`. `fetch_or_clone`, `current_sha`, `checkout_sha`, `apply_pending_update`. Re-uses `iptv_hub_core::sources::git` where possible. | New `src-tauri/src/orchestrator/repo.rs` |
-| 5 | **Per-app container manager** | Owns Docker containers for each live release. `build`, `up`, `health_probe`, `stop`, `rm`. Re-uses `deploy/apps/<app>/Dockerfile` already in repo. | New `src-tauri/src/orchestrator/container.rs` |
+| 5 | **Per-app container manager** | Owns Docker images + containers for each live release. `build_image(app, sha) -> ImageTag` (produces `iptv-hub/<app>:<sha>`), `compose_up(release_dir)` (renders the pinned `docker-compose.service.yml` in the release dir and runs `docker compose up -d --no-deps`), `health_probe`, `stop`, `rm`. The host `releases/<app>/<sha>/` dir holds release metadata only (build log, compose fragment, healthcheck output); the runtime code lives in the image tag, not in the host directory. Re-uses `deploy/apps/<app>/Dockerfile` already in repo as the build context. | New `src-tauri/src/orchestrator/container.rs` |
 | 6 | **Nginx fragment integration** | After a successful swap, ensure the nginx fragment for that app points at the new container's loopback port. Re-uses `deploy/nginx/` already in repo. | Existing files, new `src-tauri/src/orchestrator/nginx.rs` |
 | 7 | **Healthcheck registry** | For each running container: HTTP probe / TCP probe (per app's declared `health.kind`), rolling-window pass-count to gate the swap. Re-uses existing `manifest.app.health` schema. | New `src-tauri/src/orchestrator/health.rs` |
 | 8 | **Activity + update history log** | Same SQLite schema as desktop (`activity_log`, `update_history`, `snapshots` tables). Persists at `state/orchestrator.db`. | Re-uses existing `src-tauri/src/db/queries.rs` |
@@ -124,14 +158,32 @@ POST /apps/iptv-restream/update
 ├── Step 4: fetch upstream into repos/iptv-restream
 │   │       git fetch --prune origin
 ├── Step 5: compute new sha; allocate releases/iptv-restream/<sha>/
-├── Step 6: build into the new release dir (docker build, BuildKit cache mount)
-│   │       fail → log; do NOT touch live/; release lock+sem; return 500 { logs_url }
-├── Step 7: smoke test against the freshly-built container on a temp port
-│   │       fail → log; rm releases/<sha>; release lock+sem; return 500
+│           and write build context snapshot + initial metadata into it
+├── Step 6: docker build -t iptv-hub/iptv-restream:<sha> (BuildKit cache mount)
+│   │       Build output streams into releases/<sha>/build.log on the host.
+│   │       The release directory holds the build LOG, not the built code; the
+│   │       built code lives inside the image tag.
+│   │       fail → leave build.log in place; do NOT touch live/;
+│   │              release lock+sem; return 500 { logs_url }
+├── Step 7: render releases/<sha>/docker-compose.service.yml pinning
+│           `image: iptv-hub/iptv-restream:<sha>` and a temporary
+│           loopback port. `docker compose -f <that-file> up -d` brings the
+│           candidate container up. Run the per-app smoke test against it.
+│           fail → docker compose down; mark dir failed; release lock+sem; return 500
 ├── Step 8: healthcheck rolling window (e.g., 3 consecutive HTTP 200 within 30s)
-│   │       fail → log; container down; rm releases/<sha>; release lock+sem; return 500
-├── Step 9: ATOMIC SWAP — ln -sfn releases/<sha> live/iptv-restream
-│   │       and reconfigure docker-compose to bind that release
+│           against the candidate container.
+│           fail → docker compose down; mark dir failed; release lock+sem; return 500
+├── Step 9: ATOMIC SWAP — three coordinated operations executed in this order:
+│           (1) re-render the production-side docker-compose for the app to
+│               pin `image: iptv-hub/iptv-restream:<sha>` on the prod port,
+│           (2) `docker compose up -d --no-deps iptv-restream` with that file,
+│               which replaces the old container with the new one,
+│           (3) `ln -sfn releases/<sha> live/iptv-restream` so the host-side
+│               "what is live" pointer matches the running image.
+│           If step (2) fails, the symlink (3) is NOT updated and the previous
+│           container is restored via `docker compose up -d` with the previous
+│           release's pinned fragment (read from the OLD live/<app>/
+│           docker-compose.service.yml).
 ├── Step 10: prune older releases per policy (keep 3)
 ├── Step 11: release lock+sem; emit `iptv-hub://activity` + `iptv-hub://status`
 └── 200 OK { new_sha, elapsed_ms, log_url }
