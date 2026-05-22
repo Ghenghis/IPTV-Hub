@@ -363,11 +363,18 @@ async fn fetch_install_start_health_check_stop() {
         .await;
     }
 
-    let ok = http_get_within(port, Duration::from_secs(10)).await;
+    // 30s timeout (was 10s). On cold Windows GitHub runners the Node subprocess
+    // can take 8-12 seconds just to bind — observed failing twice on PR #5 CI
+    // even though the test passes locally in ~2s. The 30s ceiling is still well
+    // under the cargo-test 60s default and aborts the test quickly if the
+    // server is truly broken (vs. just slow to warm).
+    let timeout = Duration::from_secs(30);
+    let ok = http_get_within(port, timeout).await;
     let _ = child.kill().await;
     assert!(
         ok,
-        "tiny-web-app did not answer HTTP 200 on port {port} within 10s"
+        "tiny-web-app did not answer HTTP 200 on port {port} within {}s",
+        timeout.as_secs()
     );
 }
 
