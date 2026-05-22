@@ -90,7 +90,7 @@ operator with reproduce commands.
 | All Rust code (orchestrator binary, repo/container/health/disk managers, HTTP API, SQLite control plane) | Real DNS + TLS termination (`hub.<domain>`) |
 | Unit tests for path resolution, locks, parse functions | First-time `users.toml` bootstrap (one-shot setup URL) |
 | Integration tests against real Docker (Docker Desktop or local Docker on this Windows box) | systemd unit installation + on-boot start |
-| Playwright UI tests against the static `vps.html` (Vite-served) | Real-disk preflight numbers (28 GB of real DaveTV apps) |
+| Playwright UI tests against the static `vps.html` (Vite-served) | Real-disk preflight numbers (27–30 GB raw catalogue clones, ~60–80 GB working set once 3 releases × Docker images × build caches × logs are factored in — see `VPS_ORCHESTRATOR.md` storage-reality block) |
 | docker-compose generation + `docker compose config` validation | Edge nginx reload after `users.toml` is set up |
 | Local build of `wizju-iptv-player` end-to-end on Docker Desktop, including the orchestrator-driven build path | Real run against `git fetch` traffic from `j2jstudio/wizju-iptv-player` on the VPS network |
 | Failure-path E2E (intentional build error, orchestrator catches it, last-known-good stays live) | Real-traffic Playwright over HTTPS against the VPS hostname |
@@ -115,8 +115,11 @@ artifact in this plan's Phase 8). Both must exist before we claim
 | **P8** | `feat/orchestrator-provider` | Provider Vault integration via the launcher-page protocol (`/launch/<app>?t=<token>`) for `LocalStorageSeed` adapter kinds | Integration test against a stub Xtream server using a runner-secret credential; no real provider creds in repo or CI. |
 
 After P8 lands, **the operator runs the golden-path acceptance test on a
-real VPS** (8 GB free disk, Docker installed, nginx already deployed) and
-the result is captured in `docs/VPS_E2E_REPORT.md`.
+real VPS** (≥50 GB free disk so the orchestrator's 40 GiB preflight floor
+plus the wizju build estimate fits with margin — earlier drafts said
+"8 GB free disk" which would itself trigger the disk-low refusal and is
+corrected here, Docker installed, nginx already deployed) and the result
+is captured in `docs/VPS_E2E_REPORT.md`.
 
 ## Phase-after-golden-path: app matrix expansion (Wave 8)
 

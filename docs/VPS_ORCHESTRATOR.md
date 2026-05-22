@@ -13,9 +13,26 @@
 > into service first, **never** replacing a known-good live release until the
 > new one passes smoke tests.
 >
-> The catalogue is ~25 GB on disk. Recloning and rebuilding the world on every
-> click is not viable; this doc defines the persistent-cache + atomic-release
-> + per-app-lock architecture that keeps it fast and safe.
+> **Storage reality check (updated 2026-05-22).** Earlier drafts said
+> "the catalogue is ~25 GB on disk." That number understated the steady
+> state. The honest sizing is:
+>
+> - **Raw clones + node_modules + built `dist/`** for the 10
+>   web-deployable apps: ~27–30 GB. (The 18 desktop/Tizen/no-real-candidate
+>   entries are explicitly not orchestrator scope per
+>   `deploy/INVENTORY.md`.)
+> - **Working set** once the orchestrator keeps the last 3 known-good
+>   releases per app, the Docker layer cache + BuildKit cache, and
+>   rotated logs: **~60–80 GB**.
+> - **During a build** (worst case wizju-sized app): +5–10 GB scratch
+>   under `/tmp` and BuildKit's working layers.
+>
+> Recloning and rebuilding the world on every click is not viable; this
+> doc defines the persistent-cache + atomic-release + per-app-lock
+> architecture that keeps it fast and safe, and the disk-preflight rule
+> (see "Concrete rules" §6) refuses an update before any destructive
+> action whenever free disk would dip below the orchestrator's safety
+> floor.
 
 ## Scope clarification
 
@@ -104,13 +121,13 @@ Concrete rules:
    `mv -T` (GNU) maps to `renameat2(RENAME_NOREPLACE=0)` / `rename(2)` and is POSIX-atomic. From any concurrent process's view, `live/<app>` either still points at the OLD release or already points at the NEW one; it is never absent and never partial. The *new container* serving requests is brought up by `docker compose up -d --no-deps <app>` against the new release's pinned `docker-compose.service.yml`; that container restart (~1-3 s) is what nginx sees. The symlink flip is purely for operator visibility and runs separately from (and after) the container restart.
 4. **Per-app update lock.** Updates take a `flock` on `locks/<app>.lock` so two concurrent clicks can't race the same repo. The lock is taken by the worker after dequeueing a job (see "Update flow" below), NOT by the HTTP handler. The second clicker's HTTP request joins the in-flight job by returning the same `job_id` + `progress_url`, not by waiting on the flock.
 5. **Global concurrency cap.** A semaphore at `locks/global.sem` caps **1–2 heavy builds at a time**. The fourth concurrent click queues with an honest "waiting for build slot" message.
-6. **Disk preflight.** Before starting an update, `df -B1 /opt/iptv-hub` must show `free >= max(2 × est_build_size, 30 GiB)`. `est_build_size` is computed as the larger of:
+6. **Disk preflight.** Before starting an update, `df -B1 /opt/iptv-hub` must show `free >= max(2 × est_build_size, 40 GiB)`. The **40 GiB floor** (raised from the 30 GiB in earlier drafts on 2026-05-22 — operator feedback) is the orchestrator's hard safety reserve, sized against the honest working-set numbers in the storage-reality block at the top of this doc: raw clones are 27–30 GB and the full working set lands at 60–80 GB, so a 40 GiB free-floor protects SQLite + logs + an in-flight build even when most of the catalogue is already resident. `est_build_size` is computed as the larger of:
    - the size on disk of the LARGEST prior `releases/<app>/<sha>/` plus the size of any cached Docker image layers for that app (read via `docker image inspect iptv-hub/<app>:<sha>` summed across the layer chain), AND
    - the configured per-app override `app.build_size_estimate_bytes` from `apps.json` (optional, used for apps that have never built — defaults to **5 GiB**, with a per-app override required if a single layer is larger).
 
    The 2× multiplier accounts for: (a) BuildKit cache materialised during the new build (one full layer chain in addition to the prior image), (b) ~1× extra for temp scratch space (`/tmp` for `npm install`, etc.), and (c) the new release directory itself. If the estimate is wrong and the build hits ENOSPC mid-way, the worker rolls back per Step 6's failure path (build log retained, no swap, no live touch).
 
-   If the preflight check fails, the update is refused **before** any destructive action; the existing `live/` and prior releases stay untouched. The 30 GiB floor is a hard safety margin to keep the orchestrator's own logs and SQLite functioning even when the catalogue is huge.
+   If the preflight check fails, the update is refused **before** any destructive action; the existing `live/` and prior releases stay untouched. The 40 GiB floor keeps the orchestrator's own logs and SQLite functioning even when builds + rollback releases + Docker layer cache crowd the disk; the per-app `est_build_size × 2` term handles the spike during the build itself on top of that floor.
 7. **Prune policy.** After a successful swap, keep the most recent **3** known-good releases per app (configurable). Older releases are removed only if no service is currently bound. Logs older than **14 days** are gzipped; older than **90 days** are deleted. Docker images: `docker image prune` runs weekly via systemd timer with `--filter "until=168h"` (= 7 days, matches "weekly"; an earlier draft had a 336h/14d filter that contradicted the "weekly" wording — this is now consistent).
 
 ## Lifecycle states (per app)
