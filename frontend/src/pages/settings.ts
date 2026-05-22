@@ -52,6 +52,11 @@ const state: State = {
 };
 
 let unlistenStatus: (() => void) | null = null;
+// True between `unmountSettingsPage()` and the next `mountSettingsPage()`. The
+// async subscribe to `events.onStatusChanged()` may resolve after unmount; if
+// that happens with `disposed=true` we immediately call the freshly-returned
+// `unlisten` instead of stashing it, which would otherwise leak the listener.
+let disposed = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HTML escape — used everywhere we interpolate untrusted data into innerHTML.
@@ -91,13 +96,24 @@ export function mountSettingsPage(root: HTMLElement): () => void {
   state.showToken = false;
 
   root.classList.add("settings-page");
+  // Reset disposed for this mount cycle; without this, a remount after unmount
+  // would inherit the previous tear-down state and immediately throw away the
+  // next subscription.
+  disposed = false;
   render();
 
   // Subscribe to status changes from the poller / launcher so the Sources tab
   // reflects live updates (status / version / sha). The unlisten function is
   // returned from `events.onStatusChanged` and we save it for the unmount call.
+  //
+  // Race fix: the `.then((unlisten) => ...)` may resolve AFTER the user already
+  // navigated away (unmountSettingsPage ran). Without the `disposed` guard the
+  // listener would be silently stashed, never freed, and continue forwarding
+  // events into the now-detached component. Check the flag and free immediately
+  // on the late path.
   void events
     .onStatusChanged((evt: StatusChangedEvent) => {
+      if (disposed) return;
       const idx = state.apps.findIndex((a) => a.id === evt.app_id);
       if (idx < 0) return;
       const prev = state.apps[idx];
@@ -112,9 +128,14 @@ export function mountSettingsPage(root: HTMLElement): () => void {
       if (state.tab === "sources") renderTabBody();
     })
     .then((unlisten) => {
+      if (disposed) {
+        unlisten();
+        return;
+      }
       unlistenStatus = unlisten;
     })
     .catch((err: unknown) => {
+      if (disposed) return;
       // Surface the subscription failure in the Sources tab; it is non-fatal.
       state.appsError = `live status updates unavailable: ${describeError(err)}`;
       if (state.tab === "sources") renderTabBody();
@@ -127,6 +148,11 @@ export function mountSettingsPage(root: HTMLElement): () => void {
 }
 
 function unmountSettingsPage(): void {
+  // Mark disposed FIRST so any still-in-flight subscribe promise observes the
+  // flag inside its `.then` handler and frees its listener instead of stashing
+  // it. Order matters: flipping `disposed` after calling `unlistenStatus()`
+  // would still race the in-flight promise.
+  disposed = true;
   if (unlistenStatus) {
     unlistenStatus();
     unlistenStatus = null;
