@@ -134,67 +134,200 @@ A failed build during the BUILDING transition keeps the prior `live/<app>` symli
 | 3 | **Update worker queue** | Tokio task pool bounded by `locks/global.sem`; dequeues per-app update jobs, takes the per-app lock, runs build + smoke + swap | Same orchestrator binary |
 | 4 | **Per-app repo manager** | Owns `repos/<app>`. `fetch_or_clone`, `current_sha`, `checkout_sha`, `apply_pending_update`. Re-uses `iptv_hub_core::sources::git` where possible. | New `src-tauri/src/orchestrator/repo.rs` |
 | 5 | **Per-app container manager** | Owns Docker images + containers for each live release. `build_image(app, sha) -> ImageTag` (produces `iptv-hub/<app>:<sha>`), `compose_up(release_dir)` (renders the pinned `docker-compose.service.yml` in the release dir and runs `docker compose up -d --no-deps`), `health_probe`, `stop`, `rm`. The host `releases/<app>/<sha>/` dir holds release metadata only (build log, compose fragment, healthcheck output); the runtime code lives in the image tag, not in the host directory. Re-uses `deploy/apps/<app>/Dockerfile` already in repo as the build context. | New `src-tauri/src/orchestrator/container.rs` |
-| 6 | **Nginx fragment integration** | After a successful swap, ensure the nginx fragment for that app points at the new container's loopback port. Re-uses `deploy/nginx/` already in repo. | Existing files, new `src-tauri/src/orchestrator/nginx.rs` |
+| 6 | **Nginx fragment integration** | **Each app has a fixed loopback port** (assigned at onboarding from the 9600-9899 range, recorded in `deploy/INVENTORY.md`). The nginx fragment for that app is written **once at onboarding** and is NOT modified per release — the `docker compose up -d --no-deps <app>` in the swap replaces the old container with the new one **on the same fixed port**, so nginx never needs reloading. (Brief ~1-3 s downtime during container restart is acceptable for IPTV apps and avoids the complexity of a true zero-downtime blue-green switch.) The orchestrator only touches nginx fragments when an app is first onboarded or removed from the catalogue. Re-uses `deploy/nginx/` already in repo. | Existing files, new `src-tauri/src/orchestrator/nginx.rs` |
 | 7 | **Healthcheck registry** | For each running container: HTTP probe / TCP probe (per app's declared `health.kind`), rolling-window pass-count to gate the swap. Re-uses existing `manifest.app.health` schema. | New `src-tauri/src/orchestrator/health.rs` |
 | 8 | **Activity + update history log** | Same SQLite schema as desktop (`activity_log`, `update_history`, `snapshots` tables). Persists at `state/orchestrator.db`. | Re-uses existing `src-tauri/src/db/queries.rs` |
 | 9 | **Disk/cache/prune manager** | Periodic `df` preflight before accepting an update; nightly prune of old `releases/`, gzip-then-delete logs, weekly Docker prune | New `src-tauri/src/orchestrator/disk.rs` |
-| 10 | **Provider Vault integration** | At app launch, resolve credentials from the OS keychain via the existing Vault design and inject them into the container per the app's adapter (env-var / localStorage / URL query / generated M3U file). | Wraps existing `provider_*` commands in HTTP form for the orchestrator |
+| 10 | **Provider Vault integration** | At app launch, resolve credentials from the OS keychain and inject them per the app's adapter. **Important VPS-specific constraint:** the orchestrator runs server-side and CANNOT directly write to a remote user's browser `localStorage`. Per-adapter behaviour on VPS: <br>• `EnvVar` and `M3uFile` — injected directly into the container at startup (server-side, straightforward). <br>• `UrlQuery` — appended to the launch URL returned to the browser (visible in nginx access logs — only use for low-sensitivity values like portal URLs, NEVER passwords). <br>• `LocalStorageSeed` — requires a one-shot **launcher page** (see "Launcher-page protocol" below). The orchestrator's `POST /apps/:id/launch` for such apps returns a `launcher_url` that the browser visits first; the page reads single-use tokens from a one-time `/api/provider/exchange` endpoint, calls `localStorage.setItem(...)` synchronously, then `window.location.replace()` to the app URL. This keeps credentials out of GET-URL access logs while still allowing the localStorage-shaped injection. | Wraps existing `provider_*` commands + new launcher-page handler |
+
+### Launcher-page protocol (for `LocalStorageSeed`-adapter apps)
+
+The desktop Provider Vault design allows four injection shapes (env-var,
+URL query, generated M3U file, `LocalStorageSeed`). The first three port
+to the VPS orchestrator unchanged — they're all server-side. The fourth
+cannot: the orchestrator runs on the VPS and cannot reach into a remote
+browser's `localStorage`. This was flagged in code review as a viability
+concern; the resolution here documents the launcher-page protocol that
+makes it work without leaking credentials into nginx access logs.
+
+```text
+1. Browser: POST /apps/tvapp/launch
+2. Orchestrator:
+   - resolves the per-app adapter from the manifest
+   - if adapter.kind = LocalStorageSeed:
+       - mints a single-use exchange token T (random 32 bytes, base64url)
+       - stores (token=T, app_id=tvapp, ttl=60s, used=false) in
+         memory (DashMap) — NOT in SQLite, because it must never persist
+       - returns 200 {
+           launcher_url: "https://<vps>/launch/tvapp?t=<T>",
+           expires_in_s: 60
+         }
+   - else (env-var / url-query / m3u-file):
+       - returns 200 { url: "https://<vps>/apps/tvapp/" }  (existing path)
+3. Browser: GET https://<vps>/launch/tvapp?t=<T>
+4. Orchestrator: serves a static HTML page `launcher.html` that ships
+   embedded JS doing:
+     const t = new URLSearchParams(location.search).get("t");
+     const res = await fetch("/api/provider/exchange?t=" + t, { method: "POST" });
+     const seeds = await res.json();  // { localStorage: { ... }, redirect_to: "..." }
+     for (const [k, v] of Object.entries(seeds.localStorage)) {
+       localStorage.setItem(k, v);
+     }
+     location.replace(seeds.redirect_to);
+5. Orchestrator on /api/provider/exchange:
+   - looks up T; if absent or used or expired → 410 Gone
+   - marks T used (CAS), resolves the keychain entry, returns the
+     {localStorage:{...}, redirect_to:"/apps/tvapp/"} payload, expires T
+6. Browser: window.location.replace("/apps/tvapp/")
+   - The user lands on the actual app with localStorage already seeded.
+```
+
+The `T` token is **single-use, in-memory, 60-second TTL**, scoped to one
+app. Credentials never appear in a URL query parameter (so nginx access
+logs are clean), never in the SQLite DB (so a backup leak does not expose
+them), and never in the HTML/JS source (the launcher.html is static and
+contains no secrets).
 
 ## Update flow (the critical path)
+
+The HTTP API is **non-blocking**. It records an update *intent* in the SQLite
+`update_jobs` table and returns 202 immediately. The actual work happens in a
+worker task that dequeues the job, takes the per-app lock, then acquires a
+global-semaphore slot, runs build → smoke → swap, and releases both. This
+separation (acknowledged in code-review feedback against an earlier draft of
+this doc) avoids the two failure modes of doing the locking in the HTTP
+handler: the per-app lock being held during the queue wait, and HTTP requests
+serialising on the global semaphore even when their target apps' locks are
+free.
+
+### HTTP path (returns in milliseconds)
 
 ```text
 POST /apps/iptv-restream/update
 │
-├── Step 1: try_lock(locks/iptv-restream.lock)
-│   │       └── BUSY → return 409 { in_progress: true }
-│   └── OK
-├── Step 2: acquire(locks/global.sem)
-│   │       └── full → enqueue, return 202 { queued: true }
-│   └── OK
-├── Step 3: disk preflight
-│   │       df free >= max(2×est_size, 30 GiB)?
-│   │       NO  → release lock+sem, return 507 { reason: "disk-low" }
+├── Step A: look up existing job for app in update_jobs
+│   │
+│   ├── job exists & status ∈ {QUEUED, RUNNING}:
+│   │       return 202 {
+│   │         queued: true,
+│   │         job_id,
+│   │         status,                  # "queued" | "running"
+│   │         progress_url: "/apps/iptv-restream/jobs/<job_id>",
+│   │         logs_url:     "/apps/iptv-restream/jobs/<job_id>/logs"
+│   │       }
+│   │
+│   ├── job exists & status = SUCCESS within last 60 s:
+│   │       return 200 { new_sha, elapsed_ms, log_url }   # idempotent
+│   │
+│   └── otherwise (no job or last job is old/failed):
+│           continue to Step B
+│
+├── Step B: disk preflight  (cheap, no destructive action)
+│   │       df free >= max(2 × est_size, 30 GiB)?
+│   │       NO  → return 507 { reason: "disk-low", free_bytes, required_bytes }
 │   │       YES → continue
-├── Step 4: fetch upstream into repos/iptv-restream
-│   │       git fetch --prune origin
-├── Step 5: compute new sha; allocate releases/iptv-restream/<sha>/
-│           and write build context snapshot + initial metadata into it
-├── Step 6: docker build -t iptv-hub/iptv-restream:<sha> (BuildKit cache mount)
-│   │       Build output streams into releases/<sha>/build.log on the host.
-│   │       The release directory holds the build LOG, not the built code; the
-│   │       built code lives inside the image tag.
-│   │       fail → leave build.log in place; do NOT touch live/;
-│   │              release lock+sem; return 500 { logs_url }
+│
+└── Step C: INSERT INTO update_jobs (app_id, status='queued', ...) RETURNING job_id;
+           return 202 {
+             queued: true, job_id, status: "queued",
+             progress_url, logs_url
+           }
+```
+
+The HTTP path **never** takes either lock. It writes a row and returns. The
+worker is what actually races against the locks.
+
+### Worker path (the actual build, gated by locks)
+
+```text
+worker.dequeue()  →  job(app_id, job_id)
+│
+├── Step 1: lock(locks/<app_id>.lock)         # per-app; only acquired now,
+│   │                                         # AFTER dequeue, NOT at HTTP time
+│   │
+│   │  (another job for the same app cannot be dequeued because the worker
+│   │   checks `WHERE app_id = ? AND status='running'` before pulling; see
+│   │   Step A above which also de-duplicates incoming HTTP intents)
+│
+├── Step 2: acquire(global.sem)               # global; caps to 1-2 concurrent
+│   │                                         # heavy builds across all apps
+│
+├── Step 3: UPDATE update_jobs SET status='running', started_at=now() WHERE id=?
+│           emit "iptv-hub://status" { app_id, status: "BUILDING" }
+│
+├── Step 4: fetch upstream into repos/<app>
+│           git fetch --prune origin
+│
+├── Step 5: compute new sha; allocate releases/<app>/<sha>/
+│           and write build context snapshot + initial metadata
+│
+├── Step 6: docker build -t iptv-hub/<app>:<sha>
+│           Build output streams into releases/<sha>/build.log on the host.
+│           The release directory holds the build LOG, not the built code;
+│           the built code lives inside the image tag.
+│           fail → leave build.log in place; do NOT touch live/;
+│                  UPDATE update_jobs SET status='failed', error=...;
+│                  goto Step 11 (release both locks)
+│
 ├── Step 7: render releases/<sha>/docker-compose.service.yml pinning
-│           `image: iptv-hub/iptv-restream:<sha>` and a temporary
-│           loopback port. `docker compose -f <that-file> up -d` brings the
-│           candidate container up. Run the per-app smoke test against it.
-│           fail → docker compose down; mark dir failed; release lock+sem; return 500
-├── Step 8: healthcheck rolling window (e.g., 3 consecutive HTTP 200 within 30s)
+│           `image: iptv-hub/<app>:<sha>` on a temporary loopback port.
+│           `docker compose -f <that-file> up -d` brings the candidate
+│           container up. Run the per-app smoke test against it.
+│           fail → docker compose down; mark job failed; goto Step 11
+│
+├── Step 8: healthcheck rolling window (e.g., 3 consecutive HTTP 200 within 30 s)
 │           against the candidate container.
-│           fail → docker compose down; mark dir failed; release lock+sem; return 500
+│           fail → docker compose down; mark job failed; goto Step 11
+│
 ├── Step 9: ATOMIC SWAP — three coordinated operations executed in this order:
 │           (1) re-render the production-side docker-compose for the app to
-│               pin `image: iptv-hub/iptv-restream:<sha>` on the prod port,
-│           (2) `docker compose up -d --no-deps iptv-restream` with that file,
-│               which replaces the old container with the new one,
-│           (3) `ln -sfn releases/<sha> live/iptv-restream` so the host-side
+│               pin `image: iptv-hub/<app>:<sha>` on the app's FIXED prod
+│               port (assigned at onboarding, see component #6),
+│           (2) `docker compose up -d --no-deps <app>` with that file,
+│               which replaces the old container with the new one on the
+│               SAME port (nginx is not reloaded — it has always pointed at
+│               that port; brief container-restart downtime is acceptable),
+│           (3) `ln -sfn releases/<sha> live/<app>` so the host-side
 │               "what is live" pointer matches the running image.
 │           If step (2) fails, the symlink (3) is NOT updated and the previous
 │           container is restored via `docker compose up -d` with the previous
 │           release's pinned fragment (read from the OLD live/<app>/
 │           docker-compose.service.yml).
+│
 ├── Step 10: prune older releases per policy (keep 3)
-├── Step 11: release lock+sem; emit `iptv-hub://activity` + `iptv-hub://status`
-└── 200 OK { new_sha, elapsed_ms, log_url }
+│
+└── Step 11: UPDATE update_jobs SET status='success' (or 'failed') WHERE id=?;
+            emit "iptv-hub://activity" { ... } + "iptv-hub://status" {
+              app_id, status: "HEALTHY" or "FAILED"
+            };
+            release(global.sem); release(locks/<app_id>.lock);
+            worker returns to .dequeue() for the next job.
 ```
 
+### Joining an in-flight job (no client-side polling required)
+
+The `progress_url` returned by the 202 supports both polling
+(`GET /apps/<app>/jobs/<job_id>` returns the current `status` + `started_at`
++ partial `error`) and **Server-Sent Events** at
+`GET /apps/<app>/jobs/<job_id>/stream`. The SSE stream replays the
+`update_jobs` row state transitions and tails `build.log` in real time, so a
+late click on the same app while a build is running joins the same stream and
+sees the same logs as the original clicker.
+
 **Invariants enforced at every step:**
+- HTTP returns in < 50 ms. The HTTP handler does not run `docker`, `git`,
+  or any disk-write of significant size.
 - The previous `live/<app>` is touched only at Step 9.
 - A failure at Steps 4–8 leaves `live/<app>` unchanged.
-- Two concurrent clicks for the same app cannot both reach Step 4 (per-app lock).
-- More than 2 concurrent builds across all apps cannot be in flight (global sem).
-- Disk space is verified at Step 3 **before** any destructive action.
+- The per-app lock is held only by the worker, only during Steps 1–11, never
+  by the HTTP path. Concurrent clicks for the same app de-dup at Step A in
+  the HTTP path (no duplicate job is enqueued).
+- The global semaphore caps concurrent heavy builds across all apps; it is
+  acquired AFTER the per-app lock so a busy global sem does not block the
+  per-app lock from being held for other apps.
+- Disk space is verified at Step B (HTTP path) **before** any job is even
+  enqueued; the worker re-checks at Step 5 (after `git fetch` makes the
+  estimate more accurate) and bails the same way if the recheck fails.
 
 ## Launch flow (when current + healthy)
 
