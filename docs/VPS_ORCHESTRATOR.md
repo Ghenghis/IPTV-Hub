@@ -35,7 +35,7 @@ What's different on VPS: orchestration is **server-side** instead of native. The
 
 ## Hard storage policy
 
-```
+```text
 /opt/iptv-hub/
 ├── repos/<app>/                       persistent git clone, never wiped
 ├── cache/                             persistent build cache (cargo, npm, docker layers)
@@ -80,7 +80,11 @@ The host directory is **not** mounted into the runtime container. The runtime co
 - `data/<app>/` for user-data volumes (persistent across releases — schema is per-app's manifest, not the orchestrator's).
 - `logs/<app>/` for stdout/stderr capture (optional; many apps stream via the Docker logging driver instead).
 
-The `releases/<app>/<sha>/docker-compose.service.yml` is rendered by the orchestrator at build time. It pins the image tag (`image: iptv-hub/<app>:<sha>`) so that `docker compose up -d` against that fragment brings up exactly that release, regardless of what `latest` resolves to. The pinned tag is how the atomic swap works: the orchestrator runs `docker compose -f releases/<app>/<new-sha>/docker-compose.service.yml up -d`, healthchecks, then flips the symlink and removes the old container.
+The `releases/<app>/<sha>/docker-compose.service.yml` is rendered by the orchestrator at build time. It pins the image tag (`image: iptv-hub/<app>:<sha>`) so that `docker compose up -d` against that fragment brings up exactly that release, regardless of what `latest` resolves to.
+
+**The swap is the container restart, not the symlink flip.** Nginx is configured to `proxy_pass http://127.0.0.1:<APP_PORT>` (see `deploy/nginx/iptv-hub-site.conf.template`) and is unaware of the host filesystem. The orchestrator runs `docker compose -f releases/<app>/<new-sha>/docker-compose.service.yml up -d --no-deps <app>` which atomically *replaces* the running container with the new image on the same `<APP_PORT>` — that container restart is what nginx sees, with ~1-3 s of 502s during the swap (acceptable for IPTV apps; avoids the complexity of true zero-downtime blue-green). The `live/<app>` symlink is updated separately, **purely for operator visibility** (so `cat live/<app>/build.log` works); nginx never reads it.
+
+The `live/<app>` symlink flip itself is made atomic via `renameat2(2)` / `rename(2)` semantics: the orchestrator creates a *new* symlink at `live/<app>.tmp` pointing at the new release, then issues `rename("live/<app>.tmp", "live/<app>")`. POSIX guarantees that `rename(2)` is atomic — an observer either sees the old target or the new one, never the absence of `live/<app>`. We avoid `ln -sfn` precisely because `ln -sfn` calls `unlink` + `symlink` and leaves a window during which `live/<app>` does not exist; that window would break `cat live/<app>/build.log` for any concurrent operator.
 
 This also defines the prune rule precisely: a release directory can be deleted ONLY when (a) `live/<app>` does not symlink to it AND (b) the image tag `iptv-hub/<app>:<sha>` is no longer referenced by any running container. Image pruning piggy-backs on the directory prune; `docker image rm iptv-hub/<app>:<sha>` runs after the directory is removed.
 
@@ -88,15 +92,30 @@ Concrete rules:
 
 1. **Never reclone.** A repo's `.git` lives at `/opt/iptv-hub/repos/<app>` forever. Updates are `git fetch --prune && git reset --hard origin/<branch>` against that working tree.
 2. **Never delete an in-use release.** `releases/<app>/<sha>/` is removed only when (a) `live/<app>` no longer points at it AND (b) the prune policy says enough versions back.
-3. **Atomic swap.** New releases are built to a fresh `releases/<app>/<new-sha>/` directory. Once the build + smoke + healthcheck pass, `live/<app>` is updated with `ln -sfn releases/<app>/<new-sha> live/<app>` (atomic on POSIX). Nginx upstream picks up the new symlink target on its next request (no nginx reload needed if upstreams are loopback ports owned by docker containers; the swap is the container restart).
-4. **Per-app update lock.** Updates take a `flock` on `locks/<app>.lock` so two concurrent clicks can't race the same repo. The second clicker sees "update already in progress" and tails the activity log.
+3. **Atomic swap of the `live/<app>` symlink.** The orchestrator must NOT use `ln -sfn`, because `ln -sfn` performs `unlink` + `symlink` non-atomically: there is a brief window during which `live/<app>` does not exist, and a concurrent `cat live/<app>/build.log` would fail. Instead, the orchestrator creates a *new* symlink at `live/<app>.tmp` pointing at the new release directory using absolute paths, then issues a single `rename(2)` syscall to replace `live/<app>`:
+
+   ```bash
+   # All commands run with CWD=/opt/iptv-hub/ for readability, but the
+   # paths inside the syscalls below are absolute, so CWD does not matter.
+   ln -s /opt/iptv-hub/releases/<app>/<new-sha> /opt/iptv-hub/live/<app>.tmp
+   mv -T /opt/iptv-hub/live/<app>.tmp /opt/iptv-hub/live/<app>
+   ```
+
+   `mv -T` (GNU) maps to `renameat2(RENAME_NOREPLACE=0)` / `rename(2)` and is POSIX-atomic. From any concurrent process's view, `live/<app>` either still points at the OLD release or already points at the NEW one; it is never absent and never partial. The *new container* serving requests is brought up by `docker compose up -d --no-deps <app>` against the new release's pinned `docker-compose.service.yml`; that container restart (~1-3 s) is what nginx sees. The symlink flip is purely for operator visibility and runs separately from (and after) the container restart.
+4. **Per-app update lock.** Updates take a `flock` on `locks/<app>.lock` so two concurrent clicks can't race the same repo. The lock is taken by the worker after dequeueing a job (see "Update flow" below), NOT by the HTTP handler. The second clicker's HTTP request joins the in-flight job by returning the same `job_id` + `progress_url`, not by waiting on the flock.
 5. **Global concurrency cap.** A semaphore at `locks/global.sem` caps **1–2 heavy builds at a time**. The fourth concurrent click queues with an honest "waiting for build slot" message.
-6. **Disk preflight.** Before starting an update, `df -B1 /opt/iptv-hub` must show `free >= max(2× largest-app-build-size, 30 GiB)`. If not, the update is refused **before** any destructive action; the existing `live/` stays untouched.
-7. **Prune policy.** After a successful swap, keep the most recent **3** known-good releases per app (configurable). Older releases are removed only if no service is currently bound. Logs older than **14 days** are gzipped; older than **90 days** are deleted. Docker images: `docker image prune` weekly with `--filter "until=336h"`.
+6. **Disk preflight.** Before starting an update, `df -B1 /opt/iptv-hub` must show `free >= max(2 × est_build_size, 30 GiB)`. `est_build_size` is computed as the larger of:
+   - the size on disk of the LARGEST prior `releases/<app>/<sha>/` plus the size of any cached Docker image layers for that app (read via `docker image inspect iptv-hub/<app>:<sha>` summed across the layer chain), AND
+   - the configured per-app override `app.build_size_estimate_bytes` from `apps.json` (optional, used for apps that have never built — defaults to **5 GiB**, with a per-app override required if a single layer is larger).
+
+   The 2× multiplier accounts for: (a) BuildKit cache materialised during the new build (one full layer chain in addition to the prior image), (b) ~1× extra for temp scratch space (`/tmp` for `npm install`, etc.), and (c) the new release directory itself. If the estimate is wrong and the build hits ENOSPC mid-way, the worker rolls back per Step 6's failure path (build log retained, no swap, no live touch).
+
+   If the preflight check fails, the update is refused **before** any destructive action; the existing `live/` and prior releases stay untouched. The 30 GiB floor is a hard safety margin to keep the orchestrator's own logs and SQLite functioning even when the catalogue is huge.
+7. **Prune policy.** After a successful swap, keep the most recent **3** known-good releases per app (configurable). Older releases are removed only if no service is currently bound. Logs older than **14 days** are gzipped; older than **90 days** are deleted. Docker images: `docker image prune` runs weekly via systemd timer with `--filter "until=168h"` (= 7 days, matches "weekly"; an earlier draft had a 336h/14d filter that contradicted the "weekly" wording — this is now consistent).
 
 ## Lifecycle states (per app)
 
-```
+```text
                           ┌──────────────┐
                           │   UNKNOWN    │ (never built; first-click path)
                           └──────┬───────┘
@@ -124,6 +143,47 @@ Concrete rules:
 ```
 
 A failed build during the BUILDING transition keeps the prior `live/<app>` symlink pointed at the last known-good release. The activity log captures the build's stdout/stderr verbatim and the UI surfaces the failure with **real logs**, not a redacted "something went wrong."
+
+## Security and access control
+
+(Resolving the **high-severity** gap flagged in code review: the original
+draft of the Orchestrator API did not mention authentication. Since the
+orchestrator can build/launch containers, read logs, and trigger system-
+level work, an unauthenticated endpoint on a publicly-reachable VPS is an
+RCE-grade attack surface. This section is therefore part of the design,
+not a follow-up.)
+
+Every implementation phase below must enforce the following layers
+before the API listens on a non-loopback interface. Phase 1 (storage)
+may run loopback-only with no auth for local dev; Phase 5 (the HTTP
+API) MUST land all three layers in the same PR.
+
+| Layer | Mechanism | Required for |
+|---|---|---|
+| **L1 — Transport** | HTTPS only, terminated by the existing nginx in front. The orchestrator binary listens on `127.0.0.1:9700` and is never bound to a public interface. Self-test refuses to start if `--bind` is set to a non-loopback address without `--insecure-allow-public` (which is unset in production builds). | All deployments |
+| **L2 — Browser session** | First-load: HTTP Basic auth challenge against `/opt/iptv-hub/state/auth/users.toml` (Argon2id-hashed passwords; no plaintext, no credentials in `apps.json`). On success: set a `iptv_hub_session` HttpOnly + Secure + SameSite=Strict cookie carrying a 32-byte random session ID indexed in the SQLite `sessions` table. Subsequent requests authenticate by cookie. Sessions expire after 12 h idle; sliding renewal on activity. Logout deletes the session row. | Any human / browser access |
+| **L3 — Programmatic clients** | Bearer-token auth via `Authorization: Bearer <token>` for headless callers (CI, cron, scripts). Tokens are issued via an authenticated UI flow, persisted as `argon2id(token)` in SQLite, scoped to a per-token list of allowed paths (e.g., a token that can only `POST /apps/:id/launch`, not `POST /apps/:id/update`). Tokens carry an explicit expiry and can be revoked. | Headless / non-browser access |
+| **L4 — CSRF (mutating endpoints)** | Every `POST` / `DELETE` requires either an `Authorization: Bearer` header (L3) OR an `X-Iptv-Hub-Csrf` header whose value matches a server-issued per-session CSRF token. SameSite=Strict on the session cookie is the primary defense; the explicit CSRF token is belt-and-braces. | `POST /apps/:id/update`, `POST /apps/:id/launch`, `POST /apps/:id/rollback`, `DELETE /apps/:id/jobs/:job_id` |
+| **L5 — Rate limit (per-source, per-endpoint)** | Token-bucket per `(remote_ip, route, session_id)` keyed in-memory. `POST /apps/:id/update` is capped at **6 / minute / session** and **20 / minute / IP** to prevent click-spam DoS against the build worker. `GET` endpoints capped at **120 / minute / IP**. Excess returns 429 with `Retry-After`. | Mutating endpoints + log-streaming |
+| **L6 — Audit log** | Every authenticated request appended to `activity_log` with `(session_id, route, status, latency_ms, remote_ip_hash)`. `remote_ip_hash` is a salted hash, not the raw IP, so backups stay GDPR-friendly. Failed-auth attempts are logged at `warn!` and counted toward an IP-level lockout threshold (10 fails in 10 minutes → 60-minute IP block). | All authenticated traffic |
+
+**Bootstrap on first install:** The orchestrator's first start, if `users.toml`
+does not exist, prints a one-time setup URL to stdout containing a
+random 32-byte enrollment token (e.g.,
+`https://<vps>/admin/setup?t=<token>`). The operator visits the URL,
+sets the initial admin username + Argon2id password, and the token is
+consumed and deleted. Subsequent starts refuse to serve `/admin/*` until
+a valid session is presented. No default credentials exist in the build.
+
+**What this design explicitly does NOT do (security version):**
+- Does NOT support unauthenticated public access. Removing every auth
+  check is a build-flag-gated dev-only mode (`--insecure-allow-public`)
+  that production builds reject at startup.
+- Does NOT store passwords or bearer-token plaintext anywhere. Only
+  Argon2id hashes are persisted; the in-memory representation is
+  zeroized on drop where possible.
+- Does NOT expose any endpoint that returns a provider credential
+  (consistent with the Provider Vault no-readback rule).
 
 ## API surface (10 components)
 
@@ -279,20 +339,43 @@ worker.dequeue()  →  job(app_id, job_id)
 │           against the candidate container.
 │           fail → docker compose down; mark job failed; goto Step 11
 │
-├── Step 9: ATOMIC SWAP — three coordinated operations executed in this order:
-│           (1) re-render the production-side docker-compose for the app to
-│               pin `image: iptv-hub/<app>:<sha>` on the app's FIXED prod
-│               port (assigned at onboarding, see component #6),
-│           (2) `docker compose up -d --no-deps <app>` with that file,
-│               which replaces the old container with the new one on the
-│               SAME port (nginx is not reloaded — it has always pointed at
-│               that port; brief container-restart downtime is acceptable),
-│           (3) `ln -sfn releases/<sha> live/<app>` so the host-side
-│               "what is live" pointer matches the running image.
-│           If step (2) fails, the symlink (3) is NOT updated and the previous
-│           container is restored via `docker compose up -d` with the previous
-│           release's pinned fragment (read from the OLD live/<app>/
-│           docker-compose.service.yml).
+├── Step 9: ATOMIC SWAP — three coordinated operations in this order. The
+│           orchestrator uses Docker Compose (NOT the raw Docker API) for
+│           every per-app container operation, because each release ships
+│           its own pinned `docker-compose.service.yml` and `docker compose
+│           up -d --no-deps <app>` is the supported way to perform an
+│           in-place container replacement on the same fixed port.
+│           (1) Re-render the production-side compose fragment to pin
+│               `image: iptv-hub/<app>:<sha>` on the app's FIXED prod
+│               port (port is assigned at onboarding, see component #6;
+│               this rewrite changes only the `image:` field and any
+│               volume mounts, never the port).
+│           (2) `docker compose -f /opt/iptv-hub/releases/<app>/<sha>/docker-compose.service.yml
+│                       up -d --no-deps <app>`.
+│               Docker Compose tears down the OLD container by name and
+│               brings up the NEW one on the same port. The replacement
+│               is observable to nginx as a ~1-3 s 502 window followed
+│               by a healthy upstream. nginx config is NOT changed and
+│               nginx is NOT reloaded — the upstream port is fixed.
+│           (3) Atomic symlink flip for OPERATOR VISIBILITY ONLY (nginx
+│               does not read this symlink):
+│                 ln -s /opt/iptv-hub/releases/<app>/<sha> \
+│                       /opt/iptv-hub/live/<app>.tmp
+│                 mv -T /opt/iptv-hub/live/<app>.tmp \
+│                       /opt/iptv-hub/live/<app>
+│               `mv -T` is POSIX-atomic (`rename(2)` syscall); observers
+│               never see the symlink absent. Note we deliberately do
+│               NOT use `ln -sfn` because that performs `unlink` +
+│               `symlink` non-atomically and would expose a window of
+│               missing `live/<app>`.
+│           If step (2) fails, the orchestrator brings the previous
+│           release's container back up by invoking
+│           `docker compose -f /opt/iptv-hub/live/<app>/docker-compose.service.yml
+│                  up -d --no-deps <app>`
+│           (the OLD `live/<app>` symlink still points at the prior
+│           release because the new symlink at `live/<app>.tmp` was not
+│           promoted). Step (3) is skipped on rollback so `live/<app>`
+│           continues to identify the actually-running release.
 │
 ├── Step 10: prune older releases per policy (keep 3)
 │
