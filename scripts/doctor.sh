@@ -35,7 +35,10 @@ check 'npm available' npm --version
 
 check 'cargo workspace parses' bash -c '
   cd "$(dirname "$0")/.."
-  cargo metadata --format-version=1 --offline >/dev/null 2>&1
+  # --no-deps skips transitive dep resolution; on a fresh clone the offline
+  # cache may not have everything, but the manifest itself is what we want to
+  # validate.
+  cargo metadata --format-version=1 --no-deps >/dev/null 2>&1
 '
 
 echo

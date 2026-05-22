@@ -1,0 +1,39 @@
+# IPTV Hub — nuvioweb service fragment.
+#
+# Merged into deploy/docker-compose.apps.yml by deploy/scripts/generate-stack.sh.
+# Host port 9730 is the policy slot for nuvioweb (deploy/PORTS.md row 14).
+# Bind is 127.0.0.1 only — host nginx is the public ingress, see
+# deploy/nginx/iptv-hub-site.conf.template.
+
+services:
+  nuvioweb:
+    image: iptv-hub-nuvioweb:${IPTV_HUB_IMAGE_TAG:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-iptv-hub}_nuvioweb
+    build:
+      context: ./apps/nuvioweb
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - iptv_hub_net
+    ports:
+      - "127.0.0.1:9730:8080"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget --quiet --spider --tries=1 http://127.0.0.1:8080/ || exit 1
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      iptv-hub.app-id: nuvioweb
+      iptv-hub.policy-port: "9730"
+      iptv-hub.upstream: "https://github.com/NuvioMedia/NuvioWeb"
+      iptv-hub.version: "1"

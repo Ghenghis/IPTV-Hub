@@ -5,6 +5,8 @@
 
 use std::path::{Path, PathBuf};
 
+use tauri::Manager as _;
+
 use crate::errors::CoreError;
 
 #[derive(Debug, Clone)]
@@ -39,7 +41,10 @@ impl AppPaths {
         } else {
             data_dir.join("apps-root")
         };
-        Ok(Self { data_dir, apps_root })
+        Ok(Self {
+            data_dir,
+            apps_root,
+        })
     }
 
     pub async fn ensure_exist(&self) -> Result<(), CoreError> {
@@ -54,14 +59,58 @@ impl AppPaths {
             &self.apps_root.join("cache").join("icons"),
             &self.logs_dir(),
         ] {
-            tokio::fs::create_dir_all(p).await.map_err(|e| CoreError::io(p, e))?;
+            tokio::fs::create_dir_all(p)
+                .await
+                .map_err(|e| CoreError::io(p, e))?;
         }
         Ok(())
     }
 
-    pub fn data_dir(&self) -> &Path { &self.data_dir }
-    pub fn apps_root(&self) -> &Path { &self.apps_root }
-    pub fn manifest_path(&self) -> PathBuf { self.data_dir.join("apps.json") }
-    pub fn database_path(&self) -> PathBuf { self.data_dir.join("iptv-hub.db") }
-    pub fn logs_dir(&self) -> PathBuf { self.data_dir.join("logs") }
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
+    }
+    pub fn apps_root(&self) -> &Path {
+        &self.apps_root
+    }
+    pub fn manifest_path(&self) -> PathBuf {
+        self.data_dir.join("apps.json")
+    }
+    pub fn database_path(&self) -> PathBuf {
+        self.data_dir.join("iptv-hub.db")
+    }
+    pub fn logs_dir(&self) -> PathBuf {
+        self.data_dir.join("logs")
+    }
+
+    /// Test-only constructor that takes raw paths.
+    ///
+    /// Integration tests rely on this to drive the [`crate::sources`] implementations
+    /// against fixtures without bootstrapping a full Tauri runtime. Production code
+    /// uses [`AppPaths::resolve`].
+    #[doc(hidden)]
+    pub const fn for_test(data_dir: PathBuf, apps_root: PathBuf) -> Self {
+        Self {
+            data_dir,
+            apps_root,
+        }
+    }
+
+    /// Alias of [`Self::for_test`] kept for the `web` source's integration tests.
+    #[doc(hidden)]
+    #[must_use]
+    pub const fn from_dirs(data_dir: PathBuf, apps_root: PathBuf) -> Self {
+        Self::for_test(data_dir, apps_root)
+    }
+
+    /// Build an [`AppPaths`] rooted at `root` without needing a Tauri AppHandle.
+    /// Used by `tizen` integration tests against tempdir-rooted trees. `data_dir` is
+    /// `<root>` and `apps_root` is `<root>/apps`, mirroring the portable install layout.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn for_tests(root: &Path) -> Self {
+        Self {
+            data_dir: root.to_path_buf(),
+            apps_root: root.join("apps"),
+        }
+    }
 }

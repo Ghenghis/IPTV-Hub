@@ -10,7 +10,7 @@
 //! source-specific knowledge: how to detect updates, how to apply them, and how to
 //! restore from a snapshot.
 
-use std::path::PathBuf;
+use std::path::Path;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -20,9 +20,16 @@ use crate::manifest::types::{AppEntry, SourceType};
 use crate::paths::AppPaths;
 
 pub mod git;
-// Re-exports for the dispatch table below.
-// Other source modules (release, installer, web, tizen) are owned by their respective
-// agents and are added to the dispatch table when they land.
+#[cfg(windows)]
+pub mod installer;
+pub mod release;
+pub mod tizen;
+pub mod web;
+
+// The non-Windows `installer` stand-in lives at the bottom of this file. Per
+// `docs/AGENT_PLAN.md` Agent 07 and CONTRACT §8, the installer source is a Windows-only
+// feature; we surface that via a real `not_supported` error from each trait method so
+// the orchestrator and the UI behave deterministically on non-Windows hosts.
 
 /// What the poller (or a manual `check`) learned about an app.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,19 +80,11 @@ pub enum IncomingItem {
         author: String,
     },
     /// `release-binary` source — typically just one item containing the release notes.
-    ReleaseNote {
-        version: String,
-        markdown: String,
-    },
+    ReleaseNote { version: String, markdown: String },
     /// `installer` source — vendor changelog line, may be sparse.
-    InstallerChange {
-        summary: String,
-    },
+    InstallerChange { summary: String },
     /// `tizen-ipk` source.
-    IpkChange {
-        version: String,
-        notes: String,
-    },
+    IpkChange { version: String, notes: String },
 }
 
 /// A single row in the "what will happen" section. Tags are rendered as pills in the UI.
@@ -144,7 +143,7 @@ pub trait Source: Send + Sync {
     async fn rollback(
         &self,
         app: &AppEntry,
-        snapshot_archive: &PathBuf,
+        snapshot_archive: &Path,
         paths: &AppPaths,
     ) -> Result<(), CoreError>;
 }
@@ -159,16 +158,56 @@ pub trait Source: Send + Sync {
 pub fn dispatch(source_type: SourceType) -> Box<dyn Source> {
     match source_type {
         SourceType::Git => Box::new(git::GitSource::new()),
-        // The following land via their respective agent slices (06, 07, 08, 09):
-        SourceType::ReleaseBinary => unreachable!(
-            "Agent 06 (sources::release) lands the release-binary source. \
-             Until then this match arm is unreachable because the manifest loader \
-             rejects release-binary entries with a clear error."
-        ),
-        SourceType::Installer => unreachable!(
-            "Agent 07 (sources::installer) lands the installer source."
-        ),
-        SourceType::Web => unreachable!("Agent 08 (sources::web) lands the web source."),
-        SourceType::TizenIpk => unreachable!("Agent 09 (sources::tizen) lands the tizen source."),
+        SourceType::ReleaseBinary => Box::new(release::ReleaseSource::new()),
+        SourceType::Web => Box::new(web::WebSource::new()),
+        SourceType::TizenIpk => Box::new(tizen::TizenSource::new()),
+        SourceType::Installer => {
+            #[cfg(windows)]
+            {
+                Box::new(installer::InstallerSource::new())
+            }
+            #[cfg(not(windows))]
+            {
+                Box::new(InstallerUnsupportedOnHost)
+            }
+        }
+    }
+}
+
+/// Non-Windows host stand-in for the installer source. Each method returns a real,
+/// documented `CoreError::NotSupported` value so callers can decide how to surface it
+/// (the UI displays the message inline). This is the contracted behaviour from
+/// `docs/AGENT_PLAN.md` Agent 07.
+#[cfg(not(windows))]
+struct InstallerUnsupportedOnHost;
+
+#[cfg(not(windows))]
+const INSTALLER_HOST_MSG: &str =
+    "installer source is Windows-only (MSI/EXE silent install via the Windows registry)";
+
+#[cfg(not(windows))]
+#[async_trait]
+impl Source for InstallerUnsupportedOnHost {
+    async fn check(&self, _app: &AppEntry, _paths: &AppPaths) -> Result<UpdateState, CoreError> {
+        Err(CoreError::not_supported(INSTALLER_HOST_MSG))
+    }
+    async fn plan(&self, _app: &AppEntry, _paths: &AppPaths) -> Result<UpdatePlan, CoreError> {
+        Err(CoreError::not_supported(INSTALLER_HOST_MSG))
+    }
+    async fn apply(
+        &self,
+        _app: &AppEntry,
+        _plan: UpdatePlan,
+        _ctx: ApplyCtx,
+    ) -> Result<UpdateOutcome, CoreError> {
+        Err(CoreError::not_supported(INSTALLER_HOST_MSG))
+    }
+    async fn rollback(
+        &self,
+        _app: &AppEntry,
+        _snapshot_archive: &Path,
+        _paths: &AppPaths,
+    ) -> Result<(), CoreError> {
+        Err(CoreError::not_supported(INSTALLER_HOST_MSG))
     }
 }

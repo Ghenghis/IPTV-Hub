@@ -47,3 +47,10 @@ desktop.ini
 *.dmg
 *.AppImage
 !schema/examples/*.json
+
+# Installer-source fixture intermediates (build.ps1 cleans these on success but
+# may leave them on a partial run).
+/src-tauri/tests/fixtures/installers/.build/
+
+# Claude Code session data (harness artifact)
+/.claude/

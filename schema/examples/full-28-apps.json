@@ -84,7 +84,7 @@
         "command": "start"
       },
       "source": {
-        "url": "https://github.com/example/Extreme-InfiniTV.git",
+        "url": "https://github.com/infinitel8p/Extreme-InfiniTV.git",
         "branch": "main",
         "fetch_strategy": "fast-forward-only",
         "post_update": ["npm ci"],
@@ -197,7 +197,7 @@
         "command": "start"
       },
       "source": {
-        "url": "https://github.com/example/IPTV-Restream.git",
+        "url": "https://github.com/antebrl/IPTV-Restream.git",
         "branch": "main",
         "fetch_strategy": "fast-forward-only",
         "post_update": ["npm ci"],
@@ -216,7 +216,7 @@
         "command": "iptv-stream.exe"
       },
       "source": {
-        "url": "https://github.com/example/iptv-stream.git",
+        "url": "https://github.com/RickyRLD/iptv-player.git",
         "branch": "main",
         "fetch_strategy": "fast-forward-only"
       }
@@ -271,7 +271,7 @@
       },
       "health": { "kind": "http", "value": "http://localhost:5173", "timeout_ms": 30000 },
       "source": {
-        "url": "https://github.com/example/NuvioWeb.git",
+        "url": "https://github.com/NuvioMedia/NuvioWeb.git",
         "branch": "main",
         "fetch_strategy": "fast-forward-only",
         "package_manager": "npm",
@@ -372,7 +372,7 @@
         "command": "dev"
       },
       "source": {
-        "url": "https://github.com/example/Smart-IPTV-Web.git",
+        "url": "https://github.com/Web-IPTV/iptv.git",
         "branch": "main",
         "fetch_strategy": "fast-forward-only",
         "package_manager": "npm",
@@ -393,7 +393,7 @@
         "command": "start"
       },
       "source": {
-        "url": "https://github.com/example/stalker-ui.git",
+        "url": "https://github.com/kidpoleon/stalkerhek.git",
         "branch": "main",
         "fetch_strategy": "fast-forward-only"
       }
@@ -430,7 +430,7 @@
         "command": "start"
       },
       "source": {
-        "url": "https://github.com/example/TVapp.git",
+        "url": "https://github.com/TheBinaryNinja/tvapp2.git",
         "branch": "main",
         "fetch_strategy": "fast-forward-only"
       }
@@ -447,7 +447,7 @@
         "command": "wizju-player.exe"
       },
       "source": {
-        "url": "https://github.com/example/wizju-iptv-player.git",
+        "url": "https://github.com/j2jstudio/wizju-iptv-player.git",
         "branch": "main",
         "fetch_strategy": "fast-forward-only"
       }
@@ -464,7 +464,7 @@
         "command": "start"
       },
       "source": {
-        "url": "https://github.com/example/xstream-player.git",
+        "url": "https://github.com/jandersonss/xstream-player.git",
         "branch": "main",
         "fetch_strategy": "fast-forward-only",
         "post_update": ["npm ci"],

@@ -55,8 +55,12 @@
   border-radius: var(--r-md);
   transition: background var(--t-fast);
 }
-.btn-primary:hover  { background: var(--accent-hover); }
-.btn-primary:active { background: var(--accent-press); }
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+.btn-primary:active {
+  background: var(--accent-press);
+}
 
 .btn-secondary {
   background: var(--bg-panel-2);
@@ -66,14 +70,19 @@
   border-radius: var(--r-md);
   transition: background var(--t-fast);
 }
-.btn-secondary:hover { background: var(--bg-hover); }
+.btn-secondary:hover {
+  background: var(--bg-hover);
+}
 
 .btn-ghost {
   color: var(--fg-secondary);
   padding: var(--s-1) var(--s-3);
   border-radius: var(--r-md);
 }
-.btn-ghost:hover { color: var(--fg-primary); background: var(--bg-hover); }
+.btn-ghost:hover {
+  color: var(--fg-primary);
+  background: var(--bg-hover);
+}
 
 /* ── Filter bar ──────────────────────────────────────────────────────────── */
 .filter-bar {
@@ -97,9 +106,15 @@
   font-size: var(--fs-13);
   font-weight: var(--fw-medium);
   border: 1px solid transparent;
-  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+  transition:
+    background var(--t-fast),
+    color var(--t-fast),
+    border-color var(--t-fast);
 }
-.chip:hover { background: var(--bg-hover); color: var(--fg-primary); }
+.chip:hover {
+  background: var(--bg-hover);
+  color: var(--fg-primary);
+}
 .chip[aria-pressed="true"] {
   background: var(--bg-selected);
   color: var(--fg-primary);
@@ -127,8 +142,12 @@
 }
 
 @media (max-width: 1100px) {
-  .main { grid-template-columns: 1fr; }
-  .activity-rail { display: none; }
+  .main {
+    grid-template-columns: 1fr;
+  }
+  .activity-rail {
+    display: none;
+  }
 }
 
 /* ── Activity rail ───────────────────────────────────────────────────────── */
@@ -160,15 +179,23 @@
   padding: var(--s-2) var(--s-4);
   font-size: var(--fs-13);
 }
-.activity-entry:hover { background: var(--bg-hover); }
+.activity-entry:hover {
+  background: var(--bg-hover);
+}
 .activity-entry__dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   align-self: center;
 }
-.activity-entry__msg { color: var(--fg-primary); }
-.activity-entry__time { color: var(--fg-muted); font-variant-numeric: tabular-nums; font-size: var(--fs-12); }
+.activity-entry__msg {
+  color: var(--fg-primary);
+}
+.activity-entry__time {
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-12);
+}
 
 /* ── Status bar ──────────────────────────────────────────────────────────── */
 .status-bar {
@@ -181,4 +208,6 @@
   font-size: var(--fs-12);
   color: var(--fg-muted);
 }
-.status-bar__sep { color: var(--border-strong); }
+.status-bar__sep {
+  color: var(--border-strong);
+}

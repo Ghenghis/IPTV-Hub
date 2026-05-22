@@ -1,0 +1,6 @@
+# Frontend-local ignores (project-wide ignores live in ../.gitignore).
+# Playwright run artefacts — kept out of source control because they are
+# regenerated on every test run.
+/test-results/
+/playwright-report/
+/playwright/.cache/

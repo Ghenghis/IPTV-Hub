@@ -2,9 +2,9 @@ name: security
 
 on:
   push:
-    branches: [main]
+    branches: [master, main]
   pull_request:
-    branches: [main]
+    branches: [master, main]
   schedule:
     - cron: '17 6 * * 1'  # weekly Monday 06:17 UTC
 
@@ -22,7 +22,28 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
       - name: Run cargo audit (fail on critical/high)
-        run: cargo audit --deny warnings
+        # CONTRACT §3 gates ONLY "unaddressed critical/high" vulnerabilities.
+        # Without flags, `cargo audit` exits non-zero on vulnerability advisories
+        # (severity-rated CVEs) but returns 0 on informational warnings such as
+        # `unmaintained` / `yanked`. We intentionally do NOT pass `--deny warnings`
+        # because the dep graph contains transitive `unmaintained` notices we
+        # cannot fix from our side:
+        #
+        #   • RUSTSEC-2024-0413 / 0416 / 0417 etc. — gtk-rs GTK3 bindings
+        #     (`atk`, `atk-sys`, `gtk`, `gtk-sys`, `gdk*`, `pango`, `cairo-rs`,
+        #     `webkit2gtk*`, `soup3`, `javascriptcore-rs`). Reached transitively
+        #     via tauri-runtime-wry → wry → gtk on Linux. Upstream tauri 2.x
+        #     ships these; the GTK4 migration is a tauri-side roadmap item.
+        #   • RUSTSEC-2024-0436 — `paste` proc-macro (unmaintained). Pulled in
+        #     by sqlx-sqlite via sqlite3-parser. No drop-in replacement.
+        #
+        # RUSTSEC-2023-0071 (medium 5.9, severity-rated) is the Marvin-attack
+        # timing sidechannel in `rsa 0.9.x`, transitively pulled in via
+        # `sqlx-mysql` — we ship `sqlx` with only the `sqlite` feature and never
+        # construct an `RsaPrivateKey` at runtime, so the vulnerable code path
+        # is unreachable. Documented in SECURITY_AUDIT.md. Ignored explicitly
+        # because it IS a vulnerability advisory (just an addressed one).
+        run: cargo audit --ignore RUSTSEC-2023-0071
 
   npm-audit:
     name: npm audit

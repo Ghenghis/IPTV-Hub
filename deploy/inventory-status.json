@@ -1,0 +1,553 @@
+{
+  "generated": "2026-05-21",
+  "schema_source": "schema/examples/full-28-apps.json",
+  "totals": {
+    "entries": 28,
+    "live_urls": 11,
+    "dead_urls": 17,
+    "live_but_unrelated": 1,
+    "web_deployable_pure": 8,
+    "web_deployable_with_adaptation": 2,
+    "desktop_only": 6,
+    "static_playlist": 2,
+    "tizen_ipk": 1,
+    "windows_installer_only": 4,
+    "discord_bot_only": 0
+  },
+  "apps": [
+    {
+      "n": 1,
+      "id": "authoiptv",
+      "type": "installer",
+      "configured_url": "https://github.com/Auth-IPTV/AuthoIPTV",
+      "live": false,
+      "verdict": "no-installer",
+      "candidate": {
+        "repo": "glitport/AuthoIPTV",
+        "url": "https://github.com/glitport/AuthoIPTV",
+        "stars_approx": 71,
+        "language": "JavaScript (Electron)",
+        "credibility": "exact name match; README declares 'Electron-powered IPTV player'; only desktop installers offered"
+      },
+      "web_deployable": "no-installer"
+    },
+    {
+      "n": 2,
+      "id": "cinexa",
+      "type": "git",
+      "configured_url": "https://github.com/cinexa/cinexa.git",
+      "live": true,
+      "live_but_unrelated": true,
+      "language": "SCSS/HTML/JS",
+      "build": "static (HTML5 UP Multiverse template)",
+      "has_dockerfile": false,
+      "verdict": "no-real-candidate",
+      "notes": "Repo cinexa/CINEXA exists but is a one-page HTML5 UP gallery portfolio template, not an IPTV app. No alternate IPTV repo found under this exact name.",
+      "web_deployable": "no-real-candidate"
+    },
+    {
+      "n": 3,
+      "id": "clubtivi-windows",
+      "type": "git",
+      "configured_url": "https://github.com/clubtivi/clubtivi-windows.git",
+      "live": false,
+      "verdict": "no-desktop",
+      "candidate": {
+        "repo": "clubanderson/clubTivi",
+        "url": "https://github.com/clubanderson/clubTivi",
+        "language": "Dart/Flutter",
+        "credibility": "name match (clubTivi); README: 'Built with Flutter for Android, macOS, Linux, and Windows'; no web/HTTP mode documented"
+      },
+      "web_deployable": "no-desktop"
+    },
+    {
+      "n": 4,
+      "id": "extreme-infinitv",
+      "type": "git",
+      "configured_url": "https://github.com/example/Extreme-InfiniTV.git",
+      "live": false,
+      "verdict": "yes-with-adaptation",
+      "candidate": {
+        "repo": "infinitel8p/Extreme-InfiniTV",
+        "url": "https://github.com/infinitel8p/Extreme-InfiniTV",
+        "language": "TypeScript + Astro/Svelte + Rust (Tauri)",
+        "build": "pnpm",
+        "credibility": "exact name match; README: 'Web preview - Build with pnpm build and serve dist/' (static SPA build) — adaptable but loses native/auto-update features"
+      },
+      "web_deployable": "yes-with-adaptation"
+    },
+    {
+      "n": 5,
+      "id": "free-tv-iptv",
+      "type": "git",
+      "configured_url": "https://github.com/Free-TV/IPTV.git",
+      "live": true,
+      "language": "Python (84%) + Shell",
+      "build": "make_playlist.py",
+      "has_dockerfile": false,
+      "verdict": "no-static",
+      "notes": "Public repo with 16.4k stars. Generates static .m3u8 playlist file; not an HTTP service.",
+      "web_deployable": "no-static"
+    },
+    {
+      "n": 6,
+      "id": "harmonyiptv",
+      "type": "git",
+      "configured_url": "https://github.com/example/HarmonyIPTV.git",
+      "live": false,
+      "verdict": "no-real-candidate",
+      "search_terms": [
+        "HarmonyIPTV github tauri",
+        "Harmony iptv player github tauri react open source"
+      ],
+      "notes": "Only result for 'Harmony IPTV' is harmonyiptv.com — a commercial subscription service, not an open-source repo.",
+      "web_deployable": "no-real-candidate"
+    },
+    {
+      "n": 7,
+      "id": "iptauriv",
+      "type": "git",
+      "configured_url": "https://github.com/example/IPTauriV.git",
+      "live": false,
+      "verdict": "no-desktop",
+      "candidate": {
+        "repo": "wearrrrr/IPTauriV",
+        "url": "https://github.com/wearrrrr/IPTauriV",
+        "language": "TypeScript (75.8%) + Rust",
+        "build": "Tauri",
+        "credibility": "exact name match; README: 'IPTauriV is a cross-platform and lightweight IPTV Player written in Tauri, targeting all desktop platforms'; no web mode"
+      },
+      "web_deployable": "no-desktop"
+    },
+    {
+      "n": 8,
+      "id": "iptv",
+      "type": "git",
+      "configured_url": "https://github.com/iptv-org/iptv.git",
+      "live": true,
+      "language": "TypeScript/JavaScript",
+      "build": "npm",
+      "has_dockerfile": false,
+      "verdict": "no-static",
+      "notes": "Public repo. Curated M3U playlist collection — not an HTTP service.",
+      "web_deployable": "no-static"
+    },
+    {
+      "n": 9,
+      "id": "iptvnator",
+      "type": "git",
+      "configured_url": "https://github.com/4gray/iptvnator.git",
+      "live": true,
+      "language": "TypeScript (77%) + Angular",
+      "build": "pnpm + Nx",
+      "has_dockerfile": true,
+      "verdict": "yes-with-adaptation",
+      "notes": "Electron desktop app, but README explicitly documents 'Self-hosted PWA' Docker deployment: 'The Docker setup builds the Angular PWA and the monorepo web backend into one image.' Dockerfile in docker/ directory.",
+      "web_deployable": "yes-with-adaptation"
+    },
+    {
+      "n": 10,
+      "id": "iptv-restream",
+      "type": "git",
+      "configured_url": "https://github.com/example/IPTV-Restream.git",
+      "live": false,
+      "verdict": "yes-pure-web",
+      "candidate": {
+        "repo": "antebrl/IPTV-Restream",
+        "url": "https://github.com/antebrl/IPTV-Restream",
+        "language": "TypeScript (59%) + JavaScript (39%)",
+        "build": "docker compose",
+        "has_dockerfile": true,
+        "port": 80,
+        "credibility": "exact name match (IPTV-Restream); README: 'A simple IPTV restream and synchronization web application'; docker compose deploys on port 80"
+      },
+      "web_deployable": "yes-pure-web"
+    },
+    {
+      "n": 11,
+      "id": "iptv-stream",
+      "type": "git",
+      "configured_url": "https://github.com/example/iptv-stream.git",
+      "live": false,
+      "verdict": "yes-pure-web",
+      "candidate": {
+        "repo": "RickyRLD/iptv-player",
+        "url": "https://github.com/RickyRLD/iptv-player",
+        "language": "Python (40%) + C# + HTML",
+        "build": "python iptv_player.py",
+        "has_dockerfile": false,
+        "port": 8765,
+        "credibility": "closest by content (catalogue id 'iptv-stream' implies streaming web app); README: 'Local IPTV player with EPG, catchup and HLS streaming. Python web app, native .exe' — streams via http://localhost:8765"
+      },
+      "web_deployable": "yes-pure-web"
+    },
+    {
+      "n": 12,
+      "id": "maxvideoplayer",
+      "type": "git",
+      "configured_url": "https://github.com/example/MaxVideoPlayer.git",
+      "live": false,
+      "verdict": "no-real-candidate",
+      "search_terms": [
+        "MaxVideoPlayer github iptv",
+        "MaxVideoPlayer github windows player exe"
+      ],
+      "notes": "No GitHub repo named MaxVideoPlayer found. Closest miss: henryblue/MxVideoPlayer (mobile/TV, not Windows .exe; spelling differs).",
+      "web_deployable": "no-real-candidate"
+    },
+    {
+      "n": 13,
+      "id": "neptune-tv",
+      "type": "git",
+      "configured_url": "https://github.com/example/neptune-tv.git",
+      "live": false,
+      "verdict": "no-real-candidate",
+      "search_terms": [
+        "neptune-tv github iptv",
+        "neptune-tv github npm node nodejs streaming"
+      ],
+      "notes": "No GitHub repo named neptune-tv tied to IPTV. neptunetv.pro is a commercial IPTV subscription with no GitHub presence.",
+      "web_deployable": "no-real-candidate"
+    },
+    {
+      "n": 14,
+      "id": "nuvioweb",
+      "type": "web",
+      "configured_url": "https://github.com/example/NuvioWeb.git",
+      "live": false,
+      "verdict": "yes-pure-web",
+      "candidate": {
+        "repo": "NuvioMedia/NuvioWeb",
+        "url": "https://github.com/NuvioMedia/NuvioWeb",
+        "language": "JavaScript",
+        "build": "npm build",
+        "has_dockerfile": false,
+        "port": 8080,
+        "credibility": "exact name match; README: 'A modern web version of Nuvio TV powered by the Stremio addon ecosystem. It runs in a browser'; static SPA serveable on any HTTP server"
+      },
+      "web_deployable": "yes-pure-web"
+    },
+    {
+      "n": 15,
+      "id": "open-tv",
+      "type": "git",
+      "configured_url": "https://github.com/Fredolx/open-tv.git",
+      "live": true,
+      "language": "Rust (42%) + TypeScript (33%)",
+      "build": "Tauri",
+      "has_dockerfile": true,
+      "verdict": "no-desktop",
+      "notes": "Public repo. Tauri desktop app (cross-platform). Dockerfile in repo is for Flatpak/build helper, not a web server. README emphasizes desktop distributions only; no documented web mode.",
+      "web_deployable": "no-desktop"
+    },
+    {
+      "n": 16,
+      "id": "orbiscast",
+      "type": "git",
+      "configured_url": "https://github.com/example/orbiscast.git",
+      "live": false,
+      "verdict": "no-desktop",
+      "candidate": {
+        "repo": "zbejas/orbiscast",
+        "url": "https://github.com/zbejas/orbiscast",
+        "language": "TypeScript (99%)",
+        "build": "npm (Node 22+) / docker compose",
+        "credibility": "exact name match; README: 'OrbisCast is a Discord bot that streams IPTV channels' — not a Tauri app despite catalogue's launch.kind, and not a long-running HTTP service"
+      },
+      "web_deployable": "no-desktop"
+    },
+    {
+      "n": 17,
+      "id": "pitv",
+      "type": "git",
+      "configured_url": "https://github.com/example/PiTV.git",
+      "live": false,
+      "verdict": "no-desktop",
+      "candidate": {
+        "repo": "ozankaraali/PiTV",
+        "url": "https://github.com/ozankaraali/PiTV",
+        "language": "JavaScript (96.6%)",
+        "build": "yarn + Webpack (Electron Forge)",
+        "credibility": "exact name match; closest match for 'PiTV.exe' launch; README: 'cross-platform IPTV and STB player client'; Electron Forge desktop app, no documented web mode"
+      },
+      "web_deployable": "no-desktop"
+    },
+    {
+      "n": 18,
+      "id": "react-iptv",
+      "type": "web",
+      "configured_url": "https://github.com/example/react-iptv.git",
+      "live": false,
+      "verdict": "no-tizen-tv",
+      "candidate": {
+        "repo": "anandsimmy/react-iptv",
+        "url": "https://github.com/anandsimmy/react-iptv",
+        "language": "JavaScript (99.2%)",
+        "build": "npm/yarn",
+        "credibility": "exact name match; README: 'React IPTV is an IPTV app for Smart TVs, using React and Tizen' — built for Samsung Tizen, not for a browser at a port"
+      },
+      "web_deployable": "no-tizen-tv"
+    },
+    {
+      "n": 19,
+      "id": "smart-iptv-web",
+      "type": "web",
+      "configured_url": "https://github.com/example/Smart-IPTV-Web.git",
+      "live": false,
+      "verdict": "yes-pure-web",
+      "candidate": {
+        "repo": "Web-IPTV/iptv",
+        "url": "https://github.com/Web-IPTV/iptv",
+        "language": "HTML (87.6%) + JavaScript",
+        "build": "Node.js / python http.server",
+        "has_dockerfile": false,
+        "port": 8080,
+        "credibility": "closest content match (web-based IPTV player); README: 'Web Based IPTV App', serves at http://localhost:8080/web-iptv.html plus EPG server on 3001"
+      },
+      "web_deployable": "yes-pure-web"
+    },
+    {
+      "n": 20,
+      "id": "stalker-ui",
+      "type": "git",
+      "configured_url": "https://github.com/example/stalker-ui.git",
+      "live": false,
+      "verdict": "yes-pure-web",
+      "candidate": {
+        "repo": "kidpoleon/stalkerhek",
+        "url": "https://github.com/kidpoleon/stalkerhek",
+        "language": "Go (99.8%)",
+        "build": "go / docker",
+        "has_dockerfile": true,
+        "port": 4400,
+        "credibility": "closest content match for 'stalker-ui' (Stalker portal management UI); README: 'modern WebUI for hands-off profile management'; Web UI on http://localhost:4400/dashboard"
+      },
+      "web_deployable": "yes-pure-web"
+    },
+    {
+      "n": 21,
+      "id": "stremio",
+      "type": "release-binary",
+      "configured_url": "https://github.com/Stremio/stremio-shell",
+      "live": true,
+      "language": "C++ (35%) + Qt5",
+      "build": "qmake / CMake",
+      "has_dockerfile": true,
+      "verdict": "no-desktop",
+      "notes": "Public repo. stremio-shell is the Qt5 desktop shell; the catalogue points at it as a release-binary source (.exe). Dockerfile is for distro build packaging, not a deployable HTTP service. For a web-deployable Stremio, use Stremio/stremio-web (11.3k stars, port 8080) but that is a different repo than configured.",
+      "web_deployable": "no-desktop"
+    },
+    {
+      "n": 22,
+      "id": "tvapp",
+      "type": "git",
+      "configured_url": "https://github.com/example/TVapp.git",
+      "live": false,
+      "verdict": "yes-pure-web",
+      "candidate": {
+        "repo": "TheBinaryNinja/tvapp2",
+        "url": "https://github.com/TheBinaryNinja/tvapp2",
+        "language": "JavaScript (70.6%)",
+        "build": "Docker + Node.js/npm",
+        "has_dockerfile": true,
+        "port": 4124,
+        "credibility": "name proximity (tvapp -> tvapp2); README: 'self-hosted docker container which allows you to retrieve M3U playlists and EPG guide data' — multi-arch Docker image already provided"
+      },
+      "web_deployable": "yes-pure-web"
+    },
+    {
+      "n": 23,
+      "id": "wizju-iptv-player",
+      "type": "git",
+      "configured_url": "https://github.com/example/wizju-iptv-player.git",
+      "live": false,
+      "verdict": "yes-pure-web",
+      "candidate": {
+        "repo": "j2jstudio/wizju-iptv-player",
+        "url": "https://github.com/j2jstudio/wizju-iptv-player",
+        "language": "TypeScript (60.4%) + Vue (35.3%)",
+        "build": "Vite",
+        "has_dockerfile": false,
+        "port": 5173,
+        "credibility": "exact name match; README: 'Lightweight, modern, browser-based IPTV player'; Vite dev server on port 5173; static build hostable anywhere"
+      },
+      "web_deployable": "yes-pure-web"
+    },
+    {
+      "n": 24,
+      "id": "xstream-player",
+      "type": "git",
+      "configured_url": "https://github.com/example/xstream-player.git",
+      "live": false,
+      "verdict": "yes-pure-web",
+      "candidate": {
+        "repo": "jandersonss/xstream-player",
+        "url": "https://github.com/jandersonss/xstream-player",
+        "language": "TypeScript (98.5%) + Next.js",
+        "build": "npm + Docker",
+        "has_dockerfile": true,
+        "port": 3000,
+        "credibility": "exact name match; README: 'modern, self-hosted web IPTV player built with Next.js & React'; Docker run -p 3000:3000"
+      },
+      "web_deployable": "yes-pure-web"
+    },
+    {
+      "n": 25,
+      "id": "ynotv",
+      "type": "git",
+      "configured_url": "https://github.com/example/ynotv.git",
+      "live": false,
+      "verdict": "no-desktop",
+      "candidate": {
+        "repo": "tbeezy/ynotv",
+        "url": "https://github.com/tbeezy/ynotv",
+        "language": "TypeScript (67.5%) + Rust (12%)",
+        "build": "pnpm + Tauri v2",
+        "credibility": "exact name match; README: 'A feature-rich, open source IPTV player for Windows built on Tauri v2 and mpv'; no web mode"
+      },
+      "web_deployable": "no-desktop"
+    },
+    {
+      "n": 26,
+      "id": "crunchyroll-tizen",
+      "type": "tizen-ipk",
+      "configured_url": "https://github.com/difix/crunchyroll-tizen",
+      "live": false,
+      "verdict": "no-tizen-tv",
+      "candidate": {
+        "repo": "jhassan8/crunchyroll-tizen",
+        "url": "https://github.com/jhassan8/crunchyroll-tizen",
+        "language": "JavaScript (76.9%)",
+        "build": "npm + Tizen Studio",
+        "credibility": "exact content match (the IPK filename in the catalogue 'com.difix.crunchyroll_1.0.0_all.ipk' matches the file shipped in jhassan8/crunchyroll-tizen); difix is the package id, jhassan8 is the actual repo owner"
+      },
+      "web_deployable": "no-tizen-tv"
+    },
+    {
+      "n": 27,
+      "id": "fred-tv",
+      "type": "installer",
+      "configured_url": "https://github.com/Fredolx/Fred.TV",
+      "live": false,
+      "verdict": "no-installer",
+      "candidate": {
+        "repo": "Fredolx/open-tv",
+        "url": "https://github.com/Fredolx/open-tv",
+        "language": "Rust + TypeScript",
+        "build": "Tauri",
+        "credibility": "verified by search: 'The app was renamed to Fred TV due to a trademark dispute'; releases page is the .msi installer source. Same author Fredolx but repo name remained 'open-tv'."
+      },
+      "web_deployable": "no-installer"
+    },
+    {
+      "n": 28,
+      "id": "iptv-desktop",
+      "type": "installer",
+      "configured_url": "https://github.com/example/iptv-desktop/releases/latest/download/iptv-desktop-{{version}}-setup.exe",
+      "live": false,
+      "verdict": "no-installer",
+      "candidate": {
+        "repo": "iptv-app/iptv-desktop",
+        "url": "https://github.com/iptv-app/iptv-desktop",
+        "language": "TypeScript (98.6%) + Electron",
+        "build": "pnpm + Electron",
+        "credibility": "exact name match; README: 'IPTV-ORG Desktop Electron App'; ships Linux/Windows binary installers as the catalogue expects"
+      },
+      "web_deployable": "no-installer"
+    }
+  ],
+  "web_deployable_pure_set": [
+    {
+      "id": "iptv-restream",
+      "repo": "antebrl/IPTV-Restream",
+      "port": 80,
+      "primary_command": "docker compose up -d"
+    },
+    {
+      "id": "iptv-stream",
+      "repo": "RickyRLD/iptv-player",
+      "port": 8765,
+      "primary_command": "python iptv_player.py"
+    },
+    {
+      "id": "nuvioweb",
+      "repo": "NuvioMedia/NuvioWeb",
+      "port": 8080,
+      "primary_command": "npm run build && python3 -m http.server 8080 -d dist"
+    },
+    {
+      "id": "smart-iptv-web",
+      "repo": "Web-IPTV/iptv",
+      "port": 8080,
+      "primary_command": "python3 -m http.server 8080 (plus EPG on 3001)"
+    },
+    {
+      "id": "stalker-ui",
+      "repo": "kidpoleon/stalkerhek",
+      "port": 4400,
+      "primary_command": "docker run (Go binary)"
+    },
+    {
+      "id": "tvapp",
+      "repo": "TheBinaryNinja/tvapp2",
+      "port": 4124,
+      "primary_command": "docker compose up -d"
+    },
+    {
+      "id": "wizju-iptv-player",
+      "repo": "j2jstudio/wizju-iptv-player",
+      "port": 5173,
+      "primary_command": "npm run dev (or static build hosted anywhere)"
+    },
+    {
+      "id": "xstream-player",
+      "repo": "jandersonss/xstream-player",
+      "port": 3000,
+      "primary_command": "docker run -p 3000:3000 jandersonss/xstream-player:latest"
+    }
+  ],
+  "web_deployable_with_adaptation_set": [
+    {
+      "id": "extreme-infinitv",
+      "repo": "infinitel8p/Extreme-InfiniTV",
+      "notes": "pnpm build -> static dist/, served behind nginx; loses Tauri-only features."
+    },
+    {
+      "id": "iptvnator",
+      "repo": "4gray/iptvnator",
+      "notes": "Self-hosted PWA mode documented; Docker image builds Angular PWA + backend."
+    }
+  ],
+  "desktop_only_dead_ends": [
+    "authoiptv (Electron, installer-only)",
+    "clubtivi-windows (Flutter, no web)",
+    "iptauriv (Tauri, no web)",
+    "open-tv (Tauri, no web)",
+    "orbiscast (Discord bot, not HTTP)",
+    "pitv (Electron Forge)",
+    "ynotv (Tauri, Windows-only)",
+    "react-iptv (Samsung Tizen target)",
+    "stremio (Qt5 desktop shell)",
+    "fred-tv (renamed open-tv, MSI installer)",
+    "iptv-desktop (Electron installer)",
+    "crunchyroll-tizen (Samsung IPK)"
+  ],
+  "no_real_candidate": [
+    {
+      "id": "cinexa",
+      "reason": "configured URL exists but is HTML5 UP portfolio template, not IPTV; no IPTV repo named cinexa found"
+    },
+    {
+      "id": "harmonyiptv",
+      "reason": "only Harmony IPTV match is a commercial subscription service (harmonyiptv.com) without an open-source GitHub repo"
+    },
+    {
+      "id": "maxvideoplayer",
+      "reason": "no GitHub repo named MaxVideoPlayer; nearest miss henryblue/MxVideoPlayer is mobile/TV, wrong spelling"
+    },
+    {
+      "id": "neptune-tv",
+      "reason": "neptune-tv has no matching open-source IPTV GitHub repo; neptunetv.pro is a commercial subscription"
+    }
+  ]
+}

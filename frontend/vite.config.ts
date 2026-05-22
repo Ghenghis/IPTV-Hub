@@ -19,6 +19,16 @@ export default defineConfig({
     sourcemap: true,
     outDir: "dist",
     emptyOutDir: true,
+    rollupOptions: {
+      // Two Vite entries — the production app (`index.html`) and the
+      // visual-regression preview page (`preview.html`) consumed by the
+      // Playwright `toHaveScreenshot()` test. Both share the same component
+      // and CSS bundle; Vite emits two separate top-level HTML files.
+      input: {
+        main: resolve(__dirname, "index.html"),
+        preview: resolve(__dirname, "preview.html"),
+      },
+    },
   },
   resolve: {
     alias: {

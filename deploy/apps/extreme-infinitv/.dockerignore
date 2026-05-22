@@ -1,0 +1,28 @@
+# Keep the build context small and exclude paths the web-preview build never
+# touches. Notably src-tauri/ (Rust crate) and tests/ (vitest sources) are
+# excluded so Cargo never tries to compile native code.
+
+upstream/.git
+upstream/.github
+upstream/.gitignore
+upstream/.gitattributes
+upstream/.vscode
+upstream/.idea
+upstream/.DS_Store
+
+# Tauri / native — not part of the web-preview build.
+upstream/src-tauri
+
+# Tests and screenshots — not needed for a production image.
+upstream/tests
+upstream/docs
+
+# Local dev caches — should not be present after a fresh clone but excluded
+# defensively in case the operator builds from a working tree.
+upstream/node_modules
+upstream/dist
+upstream/.astro
+upstream/.cache
+upstream/.svelte-kit
+upstream/.turbo
+upstream/coverage

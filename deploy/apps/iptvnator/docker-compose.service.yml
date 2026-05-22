@@ -1,0 +1,49 @@
+# IPTV Hub — iptvnator service fragment.
+#
+# Spliced into deploy/docker-compose.apps.yml by deploy/scripts/generate-stack.sh.
+# The container EXPOSEs port 80 (upstream-defined); we publish it on the host
+# loopback at 9680 per deploy/PORTS.md row #09 (iptvnator → http 9680).
+#
+# Build context is this directory; Dockerfile fetches the pinned upstream
+# SHA b2909a11863cc46de250d13a0c5180dc49b997c6 internally.
+services:
+  iptvnator:
+    image: iptv-hub/iptvnator:0.22.0-b2909a11
+    build:
+      context: ./apps/iptvnator
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-iptv-hub}_iptvnator
+    restart: unless-stopped
+    networks:
+      - iptv_hub_net
+    ports:
+      # Host-loopback only — host nginx (daveai edge) reverse-proxies this.
+      - "127.0.0.1:9680:80"
+    environment:
+      # PWA backend URL stays under /api so the bundled nginx upstream wiring
+      # in the upstream image keeps working.
+      BACKEND_URL: /api
+      # CLIENT_URL is the origin the browser will reach the PWA on. In a real
+      # VPS deploy this is the public origin; an operator overlay may set it
+      # to https://iptvnator.<DEPLOY_DOMAIN>. Local bring-up keeps the loopback.
+      CLIENT_URL: ${IPTVNATOR_CLIENT_URL:-http://127.0.0.1:9680}
+      # Internal Express port inside the container.
+      PORT: "3000"
+      # Hard-deny private-network proxying by default; the IPTV-Hub VPS is
+      # exposed via Caddy/nginx and must not be a private-network rebinder.
+      IPTVNATOR_PROXY_ALLOW_PRIVATE_NETWORKS: "0"
+    healthcheck:
+      # Upstream healthcheck — wget /api/health via the in-container nginx.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/api/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    labels:
+      iptv-hub.app-id: "iptvnator"
+      iptv-hub.role: "app"
+      iptv-hub.upstream: "https://github.com/4gray/iptvnator"
+      iptv-hub.upstream-sha: "b2909a11863cc46de250d13a0c5180dc49b997c6"
+      iptv-hub.upstream-version: "0.22.0"
+      iptv-hub.policy-port: "9680"
+      iptv-hub.container-port: "80"

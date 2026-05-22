@@ -8,7 +8,9 @@
   padding: 0;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   width: 100%;
 }
@@ -32,7 +34,9 @@ button {
   cursor: pointer;
 }
 
-input, select, textarea {
+input,
+select,
+textarea {
   font: inherit;
   color: inherit;
   background: var(--bg-input);
@@ -41,7 +45,10 @@ input, select, textarea {
   padding: var(--s-2) var(--s-3);
 }
 
-input:focus, select:focus, textarea:focus, button:focus-visible {
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
   outline: none;
   box-shadow: var(--shadow-focus);
 }
@@ -51,9 +58,13 @@ a {
   text-decoration: none;
 }
 
-a:hover { text-decoration: underline; }
+a:hover {
+  text-decoration: underline;
+}
 
-code, pre, .mono {
+code,
+pre,
+.mono {
   font-family: var(--font-mono);
   font-size: var(--fs-13);
 }
@@ -62,9 +73,13 @@ code, pre, .mono {
   width: 10px;
   height: 10px;
 }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 ::-webkit-scrollbar-thumb {
   background: var(--border-subtle);
   border-radius: var(--r-md);
 }
-::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}

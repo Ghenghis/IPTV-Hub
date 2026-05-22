@@ -19,12 +19,17 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(
+    pub const fn new(
         paths: AppPaths,
         config: AppConfig,
         db: SqlitePool,
         manifest: Arc<ManifestStore>,
     ) -> Self {
-        Self { paths, config, db, manifest }
+        Self {
+            paths,
+            config,
+            db,
+            manifest,
+        }
     }
 }

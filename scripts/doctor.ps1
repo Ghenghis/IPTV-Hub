@@ -75,7 +75,10 @@ Test-Check 'C:\IPTV exists' {
 Test-Check 'cargo workspace parses' {
   Push-Location $PSScriptRoot\..
   try {
-    cargo metadata --format-version=1 --offline 2>$null | Out-Null
+    # `--no-deps` skips transitive dep resolution so a missing entry in the
+    # offline cache does not flag a false negative on a fresh clone.
+    # Manifest validity is what this check actually verifies.
+    cargo metadata --format-version=1 --no-deps 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'cargo metadata failed' }
   } finally { Pop-Location }
 } 'check Cargo.toml and src-tauri/Cargo.toml syntax'

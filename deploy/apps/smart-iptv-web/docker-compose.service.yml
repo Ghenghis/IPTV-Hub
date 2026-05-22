@@ -1,0 +1,83 @@
+# IPTV Hub — service fragment for smart-iptv-web.
+#
+# Slot 19 per deploy/PORTS.md: host 9780 (UI primary), host 9781 (EPG ws/aux).
+# Both services bind to 127.0.0.1 only; the host's nginx reverse-proxies them.
+#
+# Spliced into deploy/docker-compose.apps.yml by scripts/generate-stack.sh.
+# Upstream: https://github.com/Web-IPTV/iptv (pinned in Dockerfile UPSTREAM_REF).
+
+services:
+  smart-iptv-web:
+    build:
+      context: ./apps/smart-iptv-web
+      dockerfile: Dockerfile
+      target: ui
+    image: iptv-hub-smart-iptv-web-ui:1.0.0
+    container_name: ${COMPOSE_PROJECT_NAME:-iptv-hub}_smart-iptv-web
+    restart: unless-stopped
+    networks:
+      - iptv_hub_net
+    ports:
+      # Policy port 9780 -> container 8080 (static UI). Loopback-only;
+      # public traffic must arrive via the host nginx.
+      - "127.0.0.1:9780:8080"
+    environment:
+      # No runtime env is required by the static UI. EPG_BASE_URL is consumed
+      # client-side by the player when the user enables EPG in the settings
+      # panel and points it at the sidecar below (default empty = disabled).
+      EPG_BASE_URL: "${SMART_IPTV_WEB_EPG_BASE_URL:-}"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/__iptv_hub_probe"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    labels:
+      iptv-hub.app-id: smart-iptv-web
+      iptv-hub.role: web-ui
+      iptv-hub.policy-port: "9780"
+      iptv-hub.upstream: "https://github.com/Web-IPTV/iptv"
+
+  smart-iptv-web-epg:
+    build:
+      context: ./apps/smart-iptv-web
+      dockerfile: Dockerfile
+      target: epg
+    image: iptv-hub-smart-iptv-web-epg:1.0.0
+    container_name: ${COMPOSE_PROJECT_NAME:-iptv-hub}_smart-iptv-web_epg
+    restart: unless-stopped
+    networks:
+      - iptv_hub_net
+    ports:
+      # Policy port 9781 (ws/aux slot) -> container 3001 (Express EPG server).
+      # Loopback-only; the UI talks to this via SMART_IPTV_WEB_EPG_BASE_URL.
+      - "127.0.0.1:9781:3001"
+    environment:
+      EPG_PORT: "3001"
+      CACHE_DURATION_MINUTES: "${SMART_IPTV_WEB_CACHE_MINUTES:-30}"
+      # EPG_SCRIPT_PATH must point at a real python3 script that emits the
+      # upstream's EPG format (see README.md). Without a real script,
+      # /api/epg/:channelId returns 500 but the rest of the API still works.
+      EPG_SCRIPT_PATH: "${SMART_IPTV_WEB_EPG_SCRIPT_PATH:-/app/epg_fetch.py}"
+      EPG_URL: "${SMART_IPTV_WEB_EPG_URL:-}"
+      M3U_URL: "${SMART_IPTV_WEB_M3U_URL:-}"
+    volumes:
+      # Optional: mount an operator-supplied epg_fetch.py here.
+      #   - /opt/iptv-hub/smart-iptv-web/epg_fetch.py:/app/epg_fetch.py:ro
+      # Cache directory survives container restart.
+      - smart_iptv_web_epg_cache:/app/cache
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3001/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    labels:
+      iptv-hub.app-id: smart-iptv-web
+      iptv-hub.role: epg-sidecar
+      iptv-hub.policy-port: "9781"
+      iptv-hub.upstream: "https://github.com/Web-IPTV/iptv"
+
+volumes:
+  smart_iptv_web_epg_cache:
+    name: ${COMPOSE_PROJECT_NAME:-iptv-hub}_smart_iptv_web_epg_cache

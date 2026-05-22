@@ -1,0 +1,509 @@
+{
+  "schema_version": 1,
+  "apps_root": "C:\\IPTV",
+  "user_data_root": "C:\\IPTV\\user-data",
+  "cache_root": "C:\\IPTV\\cache",
+  "apps": [
+    {
+      "id": "authoiptv",
+      "name": "AuthoIPTV",
+      "type": "installer",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "TH" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "exe-shortcut",
+        "command": "%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\AuthoIPTV.lnk"
+      },
+      "source": {
+        "vendor": "AuthoIPTV",
+        "product_name": "AuthoIPTV",
+        "registry_uninstall_key": "",
+        "download_url": "",
+        "install_args": ["/S"]
+      }
+    },
+    {
+      "id": "cinexa",
+      "name": "cinexa",
+      "type": "git",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "CN" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "cinexa"
+      },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "clubtivi-windows",
+      "name": "clubtivi-windows",
+      "type": "installer",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "CL" },
+      "launch": {
+        "kind": "executable",
+        "cwd": "clubtivi-windows",
+        "command": "clubtivi.exe"
+      }
+    },
+    {
+      "id": "crunchyroll-tizen",
+      "name": "crunchyroll-tizen",
+      "type": "tizen-ipk",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "CR" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "tizen-deploy",
+        "command": "crunchyroll-tizen.ipk"
+      },
+      "source": {
+        "source_kind": "github-release",
+        "repo": "",
+        "asset_pattern": ".*\\.ipk$"
+      }
+    },
+    {
+      "id": "extreme-infinitv",
+      "name": "Extreme-InfiniTV",
+      "type": "git",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "XT" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "Extreme-InfiniTV"
+      },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "fred-tv",
+      "name": "Fred.TV",
+      "type": "installer",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "FR" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "exe-shortcut",
+        "command": "%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Fred.TV.lnk"
+      },
+      "source": {
+        "vendor": "Fred.TV",
+        "product_name": "Fred.TV",
+        "registry_uninstall_key": "",
+        "download_url": "",
+        "install_args": ["/S"]
+      }
+    },
+    {
+      "id": "free-tv-iptv",
+      "name": "free-tv-iptv",
+      "type": "git",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "FR" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "free-tv-iptv"
+      },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "harmonyiptv",
+      "name": "HarmonyIPTV",
+      "type": "git",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "HR" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "HarmonyIPTV"
+      },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "iptauriv",
+      "name": "IPTauriV",
+      "type": "git",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "PT" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "IPTauriV"
+      },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "iptv",
+      "name": "iptv",
+      "type": "git",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "PT" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "iptv"
+      },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "iptv-desktop",
+      "name": "iptv-desktop",
+      "type": "installer",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "PT" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "exe-shortcut",
+        "command": "%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\iptv-desktop.lnk"
+      },
+      "source": {
+        "vendor": "iptv-desktop",
+        "product_name": "iptv-desktop",
+        "registry_uninstall_key": "",
+        "download_url": "",
+        "install_args": ["/S"]
+      }
+    },
+    {
+      "id": "iptv-restream",
+      "name": "IPTV-Restream",
+      "type": "git",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "PT" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "IPTV-Restream"
+      },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "iptv-stream",
+      "name": "iptv-stream",
+      "type": "installer",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "PT" },
+      "launch": {
+        "kind": "executable",
+        "cwd": "iptv-stream",
+        "command": "iptv-stream.exe"
+      }
+    },
+    {
+      "id": "iptvnator",
+      "name": "iptvnator",
+      "type": "git",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "PT" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "iptvnator"
+      },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "maxvideoplayer",
+      "name": "MaxVideoPlayer",
+      "type": "installer",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "MX" },
+      "launch": {
+        "kind": "executable",
+        "cwd": "MaxVideoPlayer",
+        "command": "MaxVideoPlayer.exe"
+      }
+    },
+    {
+      "id": "neptune-tv",
+      "name": "neptune-tv",
+      "type": "git",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "NP" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "neptune-tv"
+      },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "nuvioweb",
+      "name": "NuvioWeb",
+      "type": "web",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "NV" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "npm",
+        "cwd": "NuvioWeb",
+        "command": "dev",
+        "wait_for": { "kind": "http", "value": "http://localhost:5173", "timeout_ms": 30000 }
+      },
+      "health": { "kind": "http", "value": "http://localhost:5173", "timeout_ms": 30000 },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "package_manager": "npm",
+        "install_command": "ci",
+        "start_command": "dev",
+        "port": 5173
+      }
+    },
+    {
+      "id": "open-tv",
+      "name": "open-tv",
+      "type": "git",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "PN" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "open-tv"
+      },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "orbiscast",
+      "name": "orbiscast",
+      "type": "git",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "RB" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "orbiscast"
+      },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "pitv",
+      "name": "PiTV",
+      "type": "installer",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "PT" },
+      "launch": {
+        "kind": "executable",
+        "cwd": "PiTV",
+        "command": "PiTV.exe"
+      }
+    },
+    {
+      "id": "react-iptv",
+      "name": "react-iptv",
+      "type": "web",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "RC" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "npm",
+        "cwd": "react-iptv",
+        "command": "dev",
+        "wait_for": { "kind": "http", "value": "http://localhost:5174", "timeout_ms": 30000 }
+      },
+      "health": { "kind": "http", "value": "http://localhost:5174", "timeout_ms": 30000 },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "package_manager": "npm",
+        "install_command": "ci",
+        "start_command": "dev",
+        "port": 5174
+      }
+    },
+    {
+      "id": "smart-iptv-web",
+      "name": "Smart-IPTV-Web",
+      "type": "web",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "SM" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "npm",
+        "cwd": "Smart-IPTV-Web",
+        "command": "dev",
+        "wait_for": { "kind": "http", "value": "http://localhost:5175", "timeout_ms": 30000 }
+      },
+      "health": { "kind": "http", "value": "http://localhost:5175", "timeout_ms": 30000 },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only",
+        "package_manager": "npm",
+        "install_command": "ci",
+        "start_command": "dev",
+        "port": 5175
+      }
+    },
+    {
+      "id": "stalker-ui",
+      "name": "stalker-ui",
+      "type": "git",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "ST" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "stalker-ui"
+      },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "stremio",
+      "name": "stremio",
+      "type": "installer",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "ST" },
+      "launch": {
+        "kind": "executable",
+        "cwd": "stremio",
+        "command": "stremio.exe"
+      }
+    },
+    {
+      "id": "tvapp",
+      "name": "TVapp",
+      "type": "git",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "TV" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "TVapp"
+      },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "wizju-iptv-player",
+      "name": "wizju-iptv-player",
+      "type": "installer",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "WZ" },
+      "launch": {
+        "kind": "executable",
+        "cwd": "wizju-iptv-player",
+        "command": "wizju-player.exe"
+      }
+    },
+    {
+      "id": "xstream-player",
+      "name": "xstream-player",
+      "type": "git",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "XS" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "xstream-player"
+      },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    },
+    {
+      "id": "ynotv",
+      "name": "ynotv",
+      "type": "git",
+      "favorite": false,
+      "enabled": true,
+      "icon": { "kind": "initials", "value": "YN" },
+      "polling": { "enabled": true, "interval_minutes": 60, "jitter_seconds": 30 },
+      "launch": {
+        "kind": "executable",
+        "cwd": "ynotv"
+      },
+      "source": {
+        "url": "",
+        "branch": "main",
+        "fetch_strategy": "fast-forward-only"
+      }
+    }
+  ]
+}

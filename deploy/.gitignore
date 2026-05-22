@@ -1,0 +1,14 @@
+# Operator-managed secrets — never commit.
+.env
+.env.local
+.env.*.local
+
+# Generated artifacts — rebuilt from ports.json + inventory-status.json on every deploy.
+build/
+docker-compose.apps.yml
+
+# Local docker-compose overrides (per-host tweaks).
+docker-compose.override.yml
+
+# Cloned upstream sources during a build.
+upstream/

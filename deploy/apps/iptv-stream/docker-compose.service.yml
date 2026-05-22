@@ -1,0 +1,54 @@
+# IPTV Hub — iptv-stream service fragment.
+#
+# Merged into deploy/docker-compose.apps.yml by scripts/generate-stack.sh.
+# The generator strips this file's top-level `services:` line and splices the
+# indented service block below into the bundle.
+#
+# Port binding obeys deploy/PORTS.md slot 11:
+#   host 127.0.0.1:9700  →  container :8765
+# The container is never exposed to the public interface; nginx is the sole
+# ingress (see deploy/nginx/iptv-hub-site.conf.template).
+
+services:
+  iptv-stream:
+    image: iptv-hub-iptv-stream:${IPTV_HUB_TAG:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-iptv-hub}_iptv-stream
+    build:
+      context: ./apps/iptv-stream
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - iptv_hub_net
+    ports:
+      - "127.0.0.1:9700:8765"
+    environment:
+      IPTV_BIND_HOST: "0.0.0.0"
+      IPTV_PORT: "8765"
+      IPTV_M3U_FILE: "/app/data/rpl.m3u"
+      IPTV_EPG_URL: "${IPTV_STREAM_EPG_URL:-http://list.plusx.tv/pl10.gz}"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      # Operator-supplied M3U playlist. The image ships an empty file at this
+      # path so the container starts even before the operator mounts a real
+      # playlist; once a real .m3u is bind-mounted here the channel list
+      # populates on the next /api/channels hit (no restart required for the
+      # next request — but a restart is the simplest way to reparse).
+      - ${VPS_INSTALL_ROOT:-/opt/iptv-hub}/user-data/iptv-stream/rpl.m3u:/app/data/rpl.m3u:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'curl --fail --silent --max-time 4 http://127.0.0.1:8765/api/epg/status >/dev/null || exit 1'
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      iptv-hub.app-id: "iptv-stream"
+      iptv-hub.host-port: "9700"
+      iptv-hub.container-port: "8765"
+      iptv-hub.upstream: "https://github.com/RickyRLD/iptv-player"

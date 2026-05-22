@@ -1,0 +1,70 @@
+# IPTV Hub — tvapp service fragment.
+#
+# Spliced into deploy/docker-compose.apps.yml by deploy/scripts/generate-stack.sh.
+# The generator strips this file's top-level `services:` key and indents the rest
+# under the merged services map. Keep the indentation and the leading `services:`
+# header in place so the regex in generate-stack.sh (`/^services:/,$p`) matches.
+#
+# Upstream:  https://github.com/TheBinaryNinja/tvapp2
+# Image:     ghcr.io/thebinaryninja/tvapp2:1.5.9
+# Digest:    sha256:934d578925c0e560dca4e009b0b82d7dfa93ffb56c64ec36ef134ba8d4d335c6
+# Internal:  4124 (HTTP — TVApp2 web/HDHomeRun emulator)
+# Host:      127.0.0.1:9810  (slot 22 per deploy/PORTS.md)
+
+services:
+  tvapp:
+    # Pinned tag + manifest-list sha256. Never use :latest.
+    # Multi-arch list: docker selects linux/amd64 or linux/arm64 at pull time.
+    image: ghcr.io/thebinaryninja/tvapp2:1.5.9@sha256:934d578925c0e560dca4e009b0b82d7dfa93ffb56c64ec36ef134ba8d4d335c6
+    container_name: iptv-hub_tvapp
+    hostname: tvapp
+    restart: unless-stopped
+    networks:
+      - iptv_hub_net
+    # Port policy: deploy/PORTS.md slot 22 (tvapp). Bind loopback only;
+    # host nginx proxies tvapp.<DEPLOY_DOMAIN> -> 127.0.0.1:9810.
+    ports:
+      - "127.0.0.1:9810:4124"
+    environment:
+      # Upstream defaults are sane; we only override what the operator may want
+      # to tune. Keep WEB_IP/WEB_PORT at the upstream defaults so the image's
+      # baked-in EXPOSE + healthcheck path remain valid.
+      TZ: "${TVAPP_TZ:-Etc/UTC}"
+      WEB_IP: "0.0.0.0"
+      WEB_PORT: "4124"
+      STREAM_QUALITY: "${TVAPP_STREAM_QUALITY:-hd}"
+      LOG_LEVEL: "${TVAPP_LOG_LEVEL:-4}"
+      TASK_CRON_SYNC: "${TVAPP_TASK_CRON_SYNC:-0 0 */3 * *}"
+      HEALTH_TIMER: "${TVAPP_HEALTH_TIMER:-600000}"
+    volumes:
+      # Persist generated playlist, EPG, and config across restarts. Bind mounts
+      # (rather than named volumes) keep all per-app state visible under
+      # ${VPS_INSTALL_ROOT:-/opt/iptv-hub}/data/tvapp/ on the VPS, so backups +
+      # log inspection are a plain `tar`/`ls` away — no `docker volume inspect`
+      # dance. The image writes URLs/M3U/XMLTV under /config; the built app
+      # lives in /usr/bin/app (DIR_RUN per upstream Dockerfile).
+      #
+      # Top-level `volumes:` is intentionally omitted: the generator splices
+      # this file's body verbatim under `services:` in deploy/docker-compose.apps.yml,
+      # so any top-level keys here would break the merged YAML.
+      - ${VPS_INSTALL_ROOT:-/opt/iptv-hub}/data/tvapp/config:/config
+      - ${VPS_INSTALL_ROOT:-/opt/iptv-hub}/data/tvapp/app:/usr/bin/app
+    healthcheck:
+      # Upstream ships its own /api/health endpoint; mirror the compose example
+      # they publish so behaviour matches their docs.
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:4124/api/health?silent=true"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    labels:
+      iptv-hub.app-id: "tvapp"
+      iptv-hub.port: "9810"
+      iptv-hub.upstream-repo: "https://github.com/TheBinaryNinja/tvapp2"
+      iptv-hub.upstream-tag: "1.5.9"
+      iptv-hub.image-digest: "sha256:934d578925c0e560dca4e009b0b82d7dfa93ffb56c64ec36ef134ba8d4d335c6"
+

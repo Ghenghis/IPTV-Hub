@@ -1,0 +1,54 @@
+# IPTV Hub — stalker-ui service fragment.
+#
+# Spliced into deploy/docker-compose.apps.yml by deploy/scripts/generate-stack.sh.
+# Port mapping is dictated by deploy/PORTS.md / deploy/ports.json:
+#   host 127.0.0.1:9790  ->  container 4400
+# Upstream: https://github.com/kidpoleon/stalkerhek
+services:
+  stalker-ui:
+    build:
+      context: ./apps/stalker-ui
+      dockerfile: Dockerfile
+    image: iptv-hub-stalker-ui:local
+    container_name: ${COMPOSE_PROJECT_NAME:-iptv-hub}_stalker-ui
+    restart: unless-stopped
+    networks:
+      - iptv_hub_net
+    ports:
+      # Loopback-only — host nginx is the public ingress (see deploy/PORTS.md §6).
+      - "127.0.0.1:9790:4400"
+    environment:
+      # Persistence paths (match Dockerfile ENV; reaffirmed here so an operator
+      # editing this file sees the contract without grepping the image).
+      STALKERHEK_ROOT: /app
+      STALKERHEK_PROFILES_FILE: /data/profiles.json
+      STALKERHEK_AUTH_FILE: /data/auth.json
+      STALKERHEK_FILTERS_FILE: /data/filters.json
+      # Upstream recycles itself every 24h so long-lived portal sessions reset
+      # cleanly; Docker's restart policy brings it back up.
+      STALKERHEK_RESTART_HOURS: "24"
+      # Stalker portal credentials are entered through the WebUI at /dashboard
+      # and persisted in /data/profiles.json — they are NOT supplied via env
+      # vars, because the upstream auth flow signs the responses with values
+      # only the WebUI knows. Setting STALKERHEK_DISABLE_AUTH=1 here would
+      # publish a credential management UI with no auth — do not do that.
+    volumes:
+      # Persisted profile / auth / filter store.
+      - ${VPS_INSTALL_ROOT:-/opt/iptv-hub}/data/stalker-ui:/data
+    healthcheck:
+      # Mirrors the in-image HEALTHCHECK but uses the dashboard route the
+      # operator actually loads, so an auth-layer regression is caught here
+      # too. /dashboard returns 200 when the WebUI is up (auth redirects
+      # to /login still emit 200 from the gateway).
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:4400/dashboard >/dev/null || curl -fsS http://127.0.0.1:4400/health >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    labels:
+      iptv-hub.id: stalker-ui
+      iptv-hub.index: "20"
+      iptv-hub.port.http: "9790"
+      iptv-hub.upstream: "https://github.com/kidpoleon/stalkerhek"
+      iptv-hub.upstream.commit: "0fdc13f8ed33137a54d96420edc387951a54c9f5"
+      iptv-hub.role: app

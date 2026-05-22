@@ -1,4 +1,4 @@
-//! `git` source implementation — real working code, no stubs.
+//! `git` source implementation — real `git2-rs` against real repositories.
 //!
 //! This is the canonical pattern for source implementations. Agents working on
 //! `release`, `installer`, `web`, and `tizen` sources should mirror the structure
@@ -51,14 +51,15 @@ pub enum FetchStrategy {
     Reset,
 }
 
-fn default_fetch_strategy() -> FetchStrategy {
+const fn default_fetch_strategy() -> FetchStrategy {
     FetchStrategy::FastForwardOnly
 }
 
 pub struct GitSource;
 
 impl GitSource {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 
@@ -68,8 +69,12 @@ impl GitSource {
             .source
             .clone()
             .ok_or_else(|| CoreError::config(format!("app '{}' has no source", app.id)))?;
-        let cfg: GitSourceConfig = serde_json::from_value(raw)
-            .map_err(|e| CoreError::config(format!("app '{}' source is not a valid git source: {e}", app.id)))?;
+        let cfg: GitSourceConfig = serde_json::from_value(raw).map_err(|e| {
+            CoreError::config(format!(
+                "app '{}' source is not a valid git source: {e}",
+                app.id
+            ))
+        })?;
         Ok(cfg)
     }
 
@@ -86,6 +91,7 @@ impl Default for GitSource {
 }
 
 #[async_trait]
+#[allow(clippy::too_many_lines)]
 impl Source for GitSource {
     async fn check(&self, app: &AppEntry, paths: &AppPaths) -> Result<UpdateState, CoreError> {
         let cfg = Self::config(app)?;
@@ -146,7 +152,10 @@ impl Source for GitSource {
             for oid in revwalk {
                 let oid = oid.map_err(CoreError::from)?;
                 let commit = repo.find_commit(oid).map_err(CoreError::from)?;
-                let summary = commit.summary().unwrap_or("(no commit message)").to_string();
+                let summary = commit
+                    .summary()
+                    .unwrap_or("(no commit message)")
+                    .to_string();
                 let author = commit.author().name().unwrap_or("unknown").to_string();
                 incoming.push(IncomingItem::Commit {
                     sha: short(&oid),
@@ -238,7 +247,10 @@ impl Source for GitSource {
             if lockfile_changed && !cfg.post_update.is_empty() {
                 steps.push(PlanStep {
                     title: "Reinstall dependencies".into(),
-                    detail: Some(format!("lockfile changed · {}", cfg.post_update.join(" && "))),
+                    detail: Some(format!(
+                        "lockfile changed · {}",
+                        cfg.post_update.join(" && ")
+                    )),
                     tag: PlanTag::TimeEstimate,
                 });
             }
@@ -255,13 +267,19 @@ impl Source for GitSource {
             });
 
             Ok(UpdatePlan {
-                app_id: app_id.clone(),
+                app_id,
                 source_type: SourceType::Git,
                 from_label: short(&local),
                 to_label: short(&remote),
                 from_meta: vec![
-                    KeyValue { key: "branch".into(), value: cfg.branch.clone() },
-                    KeyValue { key: "tag".into(), value: tag_at(&repo, local).unwrap_or_default() },
+                    KeyValue {
+                        key: "branch".into(),
+                        value: cfg.branch,
+                    },
+                    KeyValue {
+                        key: "tag".into(),
+                        value: tag_at(&repo, local).unwrap_or_default(),
+                    },
                 ],
                 to_meta: vec![
                     KeyValue {
@@ -322,7 +340,10 @@ impl Source for GitSource {
             // Best-effort: try to pop. If it conflicts, keep the stash and surface a warning.
             let popped = pop_stash(&repo_dir).unwrap_or(false);
             if !popped {
-                tracing::warn!(app = app.id, "stash kept due to conflict — see `git stash list`");
+                tracing::warn!(
+                    app = app.id,
+                    "stash kept due to conflict — see `git stash list`"
+                );
             }
         }
 
@@ -339,7 +360,7 @@ impl Source for GitSource {
             new_version: None,
             new_sha: Some(short(&new_oid)),
             bytes_downloaded: 0, // git doesn't expose this cheaply; reported as 0 for git sources
-            elapsed_ms: started.elapsed().as_millis() as u64,
+            elapsed_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
             messages: vec![format!("merged {}", short(&new_oid))],
         };
         Ok(outcome)
@@ -348,12 +369,12 @@ impl Source for GitSource {
     async fn rollback(
         &self,
         app: &AppEntry,
-        snapshot_archive: &PathBuf,
+        snapshot_archive: &Path,
         paths: &AppPaths,
     ) -> Result<(), CoreError> {
         // The universal rollback engine (rollback::restore) handles tar.zst extraction.
         // The git source's job in rollback is just to confirm the resulting repo is healthy.
-        let archive = snapshot_archive.clone();
+        let archive = snapshot_archive.to_path_buf();
         let repo_dir = Self::repo_dir(app, paths);
         crate::rollback::restore_archive(&archive, &repo_dir).await?;
 
@@ -373,7 +394,11 @@ impl Source for GitSource {
 
 // ── helpers ──────────────────────────────────────────────────────────────────────
 
-fn open_or_init_bare_clone(repo_dir: &Path, url: &str, branch: &str) -> Result<Repository, CoreError> {
+fn open_or_init_bare_clone(
+    repo_dir: &Path,
+    url: &str,
+    branch: &str,
+) -> Result<Repository, CoreError> {
     if repo_dir.exists() {
         Repository::open(repo_dir).map_err(CoreError::from)
     } else {
@@ -390,14 +415,18 @@ fn open_or_init_bare_clone(repo_dir: &Path, url: &str, branch: &str) -> Result<R
 
 fn head_oid(repo: &Repository) -> Result<git2::Oid, CoreError> {
     let head = repo.head().map_err(CoreError::from)?;
-    let oid = head.target().ok_or_else(|| CoreError::git("HEAD has no target"))?;
+    let oid = head
+        .target()
+        .ok_or_else(|| CoreError::git("HEAD has no target"))?;
     Ok(oid)
 }
 
 fn remote_head_oid(repo: &Repository, branch: &str) -> Result<git2::Oid, CoreError> {
     let refname = format!("refs/remotes/origin/{branch}");
     let r = repo.find_reference(&refname).map_err(CoreError::from)?;
-    let oid = r.target().ok_or_else(|| CoreError::git(format!("{refname} has no target")))?;
+    let oid = r
+        .target()
+        .ok_or_else(|| CoreError::git(format!("{refname} has no target")))?;
     Ok(oid)
 }
 
@@ -435,8 +464,11 @@ fn fetch(repo: &Repository, branch: &str) -> Result<(), CoreError> {
 fn stash_local_changes(repo_dir: &Path) -> Result<bool, CoreError> {
     let repo_dir = repo_dir.to_path_buf();
     let mut repo = Repository::open(&repo_dir).map_err(CoreError::from)?;
-    let statuses = repo.statuses(None).map_err(CoreError::from)?;
-    if statuses.is_empty() {
+    let is_clean = {
+        let statuses = repo.statuses(None).map_err(CoreError::from)?;
+        statuses.is_empty()
+    };
+    if is_clean {
         return Ok(false);
     }
     let sig = git2::Signature::now("IPTV Hub", "iptv-hub@local").map_err(CoreError::from)?;
@@ -467,8 +499,12 @@ fn fetch_and_get_oid(repo_dir: &Path, branch: &str) -> Result<git2::Oid, CoreErr
 
 fn merge_ff_only(repo_dir: &Path, target: git2::Oid) -> Result<git2::Oid, CoreError> {
     let repo = Repository::open(repo_dir).map_err(CoreError::from)?;
-    let annotated: AnnotatedCommit<'_> = repo.find_annotated_commit(target).map_err(CoreError::from)?;
-    let (analysis, _pref) = repo.merge_analysis(&[&annotated]).map_err(CoreError::from)?;
+    let annotated: AnnotatedCommit<'_> = repo
+        .find_annotated_commit(target)
+        .map_err(CoreError::from)?;
+    let (analysis, _pref) = repo
+        .merge_analysis(&[&annotated])
+        .map_err(CoreError::from)?;
 
     if analysis.contains(MergeAnalysis::ANALYSIS_UP_TO_DATE) {
         return Ok(target);
@@ -495,9 +531,7 @@ fn merge_ff_only(repo_dir: &Path, target: git2::Oid) -> Result<git2::Oid, CoreEr
 
 fn reset_hard(repo_dir: &Path, target: git2::Oid) -> Result<git2::Oid, CoreError> {
     let repo = Repository::open(repo_dir).map_err(CoreError::from)?;
-    let obj = repo
-        .find_object(target, None)
-        .map_err(CoreError::from)?;
+    let obj = repo.find_object(target, None).map_err(CoreError::from)?;
     repo.reset(&obj, git2::ResetType::Hard, None)
         .map_err(CoreError::from)?;
     Ok(target)
@@ -509,12 +543,16 @@ async fn run_shell_command(
     ctx: &ApplyCtx,
     app_id: &str,
 ) -> Result<(), CoreError> {
+    use tokio::io::{AsyncBufReadExt as _, BufReader};
+
     // We don't shell out to cmd/powershell — we tokenise here for safety.
     // For complex commands the manifest can use an array form in a future schema version.
     let mut parts = shell_words::split(cmd)
         .map_err(|e| CoreError::config(format!("post_update command parse error: {e}")))?
         .into_iter();
-    let program = parts.next().ok_or_else(|| CoreError::config("empty post_update command"))?;
+    let program = parts
+        .next()
+        .ok_or_else(|| CoreError::config("empty post_update command"))?;
     let args: Vec<String> = parts.collect();
 
     let mut child = Command::new(&program)
@@ -527,7 +565,6 @@ async fn run_shell_command(
         .map_err(|e| CoreError::io(cwd, e))?;
 
     // Stream stdout into the activity bus.
-    use tokio::io::{AsyncBufReadExt as _, BufReader};
     if let Some(stdout) = child.stdout.take() {
         let mut lines = BufReader::new(stdout).lines();
         let tx = ctx.progress.clone();
@@ -551,7 +588,9 @@ async fn run_shell_command(
     if !status.success() {
         return Err(CoreError::post_update_failed(format!(
             "{program} exited with {}",
-            status.code().map_or_else(|| "<signal>".to_string(), |c| c.to_string())
+            status
+                .code()
+                .map_or_else(|| "<signal>".to_string(), |c| c.to_string())
         )));
     }
     Ok(())

@@ -1,0 +1,23 @@
+{
+  "apps_root": "C:\\IPTV",
+  "user_data_root": "C:\\IPTV\\user-data",
+  "cache_root": "C:\\IPTV\\cache",
+  "apps": [
+    {
+      "id": "legacy-app",
+      "name": "Legacy App",
+      "source_type": "git",
+      "favorite": false,
+      "enabled": true,
+      "launch": {
+        "kind": "executable",
+        "command": "legacy.exe",
+        "args": []
+      },
+      "source": {
+        "url": "https://example.com/legacy-app.git",
+        "branch": "main"
+      }
+    }
+  ]
+}

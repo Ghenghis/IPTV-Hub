@@ -1,0 +1,42 @@
+# IPTV Hub — Caddyfile template.
+#
+# This file is the **template** consumed by `scripts/generate-stack.sh`. The
+# generated `Caddyfile` (sibling, .gitignored) is what Caddy actually reads at
+# runtime. Do not edit the generated file by hand — re-run the generator.
+#
+# Placeholder tokens:
+#   ${DEPLOY_DOMAIN}      — from deploy/.env
+#   ${ACME_EMAIL}         — from deploy/.env
+#   ${ACME_CA}            — staging vs production endpoint (computed by generator)
+#   ${GLOBAL_BASIC_AUTH}  — optional basic-auth directive block
+#   ${APP_BLOCKS}         — the generator splices in one site block per real,
+#                           web-deployable app (from deploy/INVENTORY.md +
+#                           deploy/ports.json)
+
+{
+    # Global options.
+    email ${ACME_EMAIL}
+    ${ACME_CA}
+
+    # Disable the public admin endpoint; bind only to loopback inside the
+    # container so the host can health-check it.
+    admin 127.0.0.1:2019
+
+    # Structured access logs — written to /var/log/caddy/access.log inside the
+    # container, which is bind-mounted to the host's $LOG_ROOT/caddy.
+    log {
+        output file /var/log/caddy/access.log
+        format json
+    }
+}
+
+# --- per-app site blocks injected by the generator below this line ---
+${APP_BLOCKS}
+# --- end injected app blocks ---
+
+# Catch-all: anything not matching a known subdomain returns 404 instead of
+# being routed somewhere unexpected.
+*.${DEPLOY_DOMAIN}, ${DEPLOY_DOMAIN} {
+    ${GLOBAL_BASIC_AUTH}
+    respond "IPTV Hub: unknown route" 404
+}

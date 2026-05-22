@@ -1,0 +1,9 @@
+# Build output — generated, not source.
+dist/
+
+# Test artifacts.
+test-results/
+playwright-report/
+
+# Dependencies.
+node_modules/
