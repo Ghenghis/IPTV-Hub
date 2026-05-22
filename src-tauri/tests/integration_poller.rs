@@ -133,10 +133,16 @@ fn clone_into_upstream(bare_dir: &Path, working_dir: &Path) {
         .expect("mkdir parent");
     let mut builder = git2::build::RepoBuilder::new();
     builder.branch("main");
-    let url = format!(
-        "file:///{}",
-        bare_dir.to_str().expect("bare dir utf8").replace('\\', "/")
-    );
+    // libgit2 requires exactly three slashes after `file:` for an absolute path
+    // URI. On Windows the slash-normalised path starts with a drive letter
+    // (`C:/Users/...`) so `file:///{path}` already produces three slashes. On
+    // Unix the path starts with `/tmp/...`, so the naive `file:///{path}`
+    // concatenation produces FOUR slashes (`file:////tmp/...`), which libgit2
+    // rejects as an invalid URI. Stripping any leading `/` before formatting
+    // keeps the URL canonical on both platforms.
+    let path_str = bare_dir.to_str().expect("bare dir utf8").replace('\\', "/");
+    let stripped = path_str.strip_prefix('/').unwrap_or(&path_str);
+    let url = format!("file:///{stripped}");
     builder
         .clone(&url, working_dir)
         .expect("clone bare into upstream");
