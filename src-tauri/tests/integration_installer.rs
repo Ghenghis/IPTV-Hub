@@ -5,7 +5,7 @@
 //! registry hive (HKCU) — this is permitted by CONTRACT §2.2 (the MSIs are themselves
 //! the fixtures; mocking the registry would defeat the test).
 //!
-//! Gated `#[cfg(windows)]`. If WiX Toolset is not on PATH the fixtures cannot be built
+//! Gated `#[cfg(windows)]`. If `WiX` Toolset is not on PATH the fixtures cannot be built
 //! and every test in this file prints a clear skip line and returns Ok(()); there is no
 //! silent pass.
 
@@ -45,6 +45,27 @@ struct FixturePaths {
 }
 
 static FIXTURE_STATUS: OnceLock<FixtureStatus> = OnceLock::new();
+
+/// Every test in this file mutates the single shared HKCU uninstall key
+/// `IPTVHubTestApp`. `cargo test` runs tests in a thread pool by default, so
+/// without serialisation `install_then_detect` (expects 1.0.0) and
+/// `upgrade_detects_new_version` (installs 2.0.0) race for that key and the
+/// loser asserts on the winner's `DisplayVersion`. We can't shard the key
+/// because the per-MSI ProductCode is baked into build.ps1, and we don't
+/// want to take a `serial_test` crate dep just for this file — so a private
+/// process-wide `Mutex` does the job. Each `#[test]` acquires it before
+/// touching the registry and drops it on return.
+static REGISTRY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Acquire [`REGISTRY_LOCK`]. If a prior test panicked while holding the
+/// guard the mutex is poisoned; we deliberately recover via `into_inner()`
+/// because the next test runs `force_uninstall_test_app()` first, which
+/// re-establishes the known-empty baseline regardless of prior state.
+fn registry_guard() -> std::sync::MutexGuard<'static, ()> {
+    REGISTRY_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
 
 fn fixture_dir() -> PathBuf {
     // The test binary's cwd at runtime is the package's directory.
@@ -220,6 +241,7 @@ fn install_via_source(msi_path: &Path, cache_root: &Path) -> Result<UninstallSna
 
 #[test]
 fn install_then_detect() {
+    let _guard = registry_guard();
     let status = ensure_fixtures();
     let FixtureStatus::Ready(paths) = status else {
         match status {
@@ -248,6 +270,7 @@ fn install_then_detect() {
 
 #[test]
 fn upgrade_detects_new_version() {
+    let _guard = registry_guard();
     let status = ensure_fixtures();
     let FixtureStatus::Ready(paths) = status else {
         match status {
@@ -276,6 +299,7 @@ fn upgrade_detects_new_version() {
 
 #[test]
 fn broken_msi_rolls_back() {
+    let _guard = registry_guard();
     let status = ensure_fixtures();
     let FixtureStatus::Ready(paths) = status else {
         match status {
@@ -319,6 +343,7 @@ fn broken_msi_rolls_back() {
 
 #[test]
 fn uninstall_cleans_registry() {
+    let _guard = registry_guard();
     let status = ensure_fixtures();
     let FixtureStatus::Ready(paths) = status else {
         match status {
