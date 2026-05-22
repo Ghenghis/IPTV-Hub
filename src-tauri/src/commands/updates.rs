@@ -82,15 +82,18 @@ async fn log_activity(
     level: &str,
     message: &str,
 ) {
-    let _ = sqlx::query(
-        "INSERT INTO activity_log (at, app_id, action, level, message) \
-         VALUES (datetime('now'), ?, ?, ?, ?)",
+    crate::db::audit_write(
+        "log_update_activity",
+        sqlx::query(
+            "INSERT INTO activity_log (at, app_id, action, level, message) \
+             VALUES (datetime('now'), ?, ?, ?, ?)",
+        )
+        .bind(app_id)
+        .bind(action)
+        .bind(level)
+        .bind(message)
+        .execute(&state.db),
     )
-    .bind(app_id)
-    .bind(action)
-    .bind(level)
-    .bind(message)
-    .execute(&state.db)
     .await;
 }
 
@@ -105,16 +108,19 @@ async fn log_activity_with_details(
     message: &str,
     details_json: &str,
 ) {
-    let _ = sqlx::query(
-        "INSERT INTO activity_log (at, app_id, action, level, message, details_json) \
-         VALUES (datetime('now'), ?, ?, ?, ?, ?)",
+    crate::db::audit_write(
+        "log_update_activity_with_details",
+        sqlx::query(
+            "INSERT INTO activity_log (at, app_id, action, level, message, details_json) \
+             VALUES (datetime('now'), ?, ?, ?, ?, ?)",
+        )
+        .bind(app_id)
+        .bind(action)
+        .bind(level)
+        .bind(message)
+        .bind(details_json)
+        .execute(&state.db),
     )
-    .bind(app_id)
-    .bind(action)
-    .bind(level)
-    .bind(message)
-    .bind(details_json)
-    .execute(&state.db)
     .await;
 }
 
@@ -167,20 +173,23 @@ async fn persist_check_up_to_date(
     current: &str,
     now: &str,
 ) {
-    let _ = sqlx::query(
-        "UPDATE apps \
-         SET status = ?, status_message = NULL, current_sha = ?, \
-             last_poll_at = ?, last_success_at = ?, \
-             consecutive_failures = 0, backoff_until = NULL, \
-             updated_at = datetime('now') \
-         WHERE id = ?",
+    crate::db::audit_write(
+        "persist_check_up_to_date",
+        sqlx::query(
+            "UPDATE apps \
+             SET status = ?, status_message = NULL, current_sha = ?, \
+                 last_poll_at = ?, last_success_at = ?, \
+                 consecutive_failures = 0, backoff_until = NULL, \
+                 updated_at = datetime('now') \
+             WHERE id = ?",
+        )
+        .bind("ok")
+        .bind(current)
+        .bind(now)
+        .bind(now)
+        .bind(app_id)
+        .execute(&state.db),
     )
-    .bind("ok")
-    .bind(current)
-    .bind(now)
-    .bind(now)
-    .bind(app_id)
-    .execute(&state.db)
     .await;
     log_activity(
         state,
@@ -200,21 +209,24 @@ async fn persist_check_update_available(
     summary: &str,
     now: &str,
 ) {
-    let _ = sqlx::query(
-        "UPDATE apps \
-         SET status = ?, status_message = ?, current_sha = ?, \
-             last_poll_at = ?, last_success_at = ?, \
-             consecutive_failures = 0, backoff_until = NULL, \
-             updated_at = datetime('now') \
-         WHERE id = ?",
+    crate::db::audit_write(
+        "persist_check_update_available",
+        sqlx::query(
+            "UPDATE apps \
+             SET status = ?, status_message = ?, current_sha = ?, \
+                 last_poll_at = ?, last_success_at = ?, \
+                 consecutive_failures = 0, backoff_until = NULL, \
+                 updated_at = datetime('now') \
+             WHERE id = ?",
+        )
+        .bind("update_available")
+        .bind(summary)
+        .bind(from)
+        .bind(now)
+        .bind(now)
+        .bind(app_id)
+        .execute(&state.db),
     )
-    .bind("update_available")
-    .bind(summary)
-    .bind(from)
-    .bind(now)
-    .bind(now)
-    .bind(app_id)
-    .execute(&state.db)
     .await;
     log_activity(
         state,
@@ -232,19 +244,22 @@ async fn persist_check_failure(
     message: &str,
     now: &str,
 ) {
-    let _ = sqlx::query(
-        "UPDATE apps \
-         SET status = ?, status_message = ?, last_poll_at = ?, last_failure_at = ?, \
-             consecutive_failures = consecutive_failures + 1, \
-             updated_at = datetime('now') \
-         WHERE id = ?",
+    crate::db::audit_write(
+        "persist_check_failure",
+        sqlx::query(
+            "UPDATE apps \
+             SET status = ?, status_message = ?, last_poll_at = ?, last_failure_at = ?, \
+                 consecutive_failures = consecutive_failures + 1, \
+                 updated_at = datetime('now') \
+             WHERE id = ?",
+        )
+        .bind("error")
+        .bind(message)
+        .bind(now)
+        .bind(now)
+        .bind(app_id)
+        .execute(&state.db),
     )
-    .bind("error")
-    .bind(message)
-    .bind(now)
-    .bind(now)
-    .bind(app_id)
-    .execute(&state.db)
     .await;
     log_activity(state, app_id, "check", "error", message).await;
 }
@@ -373,19 +388,22 @@ async fn persist_apply_success(
     .execute(&state.db)
     .await?;
 
-    let _ = sqlx::query(
-        "INSERT INTO update_history \
-         (app_id, started_at, finished_at, outcome, from_version, to_version, snapshot_id, plan_json) \
-         VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)",
+    crate::db::audit_write(
+        "persist_apply_ok_update_history",
+        sqlx::query(
+            "INSERT INTO update_history \
+             (app_id, started_at, finished_at, outcome, from_version, to_version, snapshot_id, plan_json) \
+             VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)",
+        )
+        .bind(app_id)
+        .bind(started_at)
+        .bind(finished_at)
+        .bind(&plan_meta.from_label)
+        .bind(&plan_meta.to_label)
+        .bind(snapshot.id_for_history())
+        .bind(&plan_meta.plan_json)
+        .execute(&state.db),
     )
-    .bind(app_id)
-    .bind(started_at)
-    .bind(finished_at)
-    .bind(&plan_meta.from_label)
-    .bind(&plan_meta.to_label)
-    .bind(snapshot.id_for_history())
-    .bind(&plan_meta.plan_json)
-    .execute(&state.db)
     .await;
 
     let snapshot_id_json = if snapshot.is_empty() {
@@ -438,19 +456,22 @@ async fn persist_apply_failure(
     finished_at: &str,
 ) {
     drop(snapshot.guard);
-    let _ = sqlx::query(
-        "UPDATE apps \
-         SET status = 'error', status_message = ?, \
-             last_poll_at = ?, last_failure_at = ?, \
-             consecutive_failures = consecutive_failures + 1, \
-             updated_at = datetime('now') \
-         WHERE id = ?",
+    crate::db::audit_write(
+        "persist_apply_error_app_status",
+        sqlx::query(
+            "UPDATE apps \
+             SET status = 'error', status_message = ?, \
+                 last_poll_at = ?, last_failure_at = ?, \
+                 consecutive_failures = consecutive_failures + 1, \
+                 updated_at = datetime('now') \
+             WHERE id = ?",
+        )
+        .bind(message)
+        .bind(finished_at)
+        .bind(finished_at)
+        .bind(app_id)
+        .execute(&state.db),
     )
-    .bind(message)
-    .bind(finished_at)
-    .bind(finished_at)
-    .bind(app_id)
-    .execute(&state.db)
     .await;
 
     let snapshot_id_for_history: Option<&str> = if snapshot.id.is_empty() {
@@ -458,21 +479,24 @@ async fn persist_apply_failure(
     } else {
         Some(&snapshot.id)
     };
-    let _ = sqlx::query(
-        "INSERT INTO update_history \
-         (app_id, started_at, finished_at, outcome, from_version, to_version, snapshot_id, \
-          error_message, plan_json) \
-         VALUES (?, ?, ?, 'error', ?, ?, ?, ?, ?)",
+    crate::db::audit_write(
+        "persist_apply_error_update_history",
+        sqlx::query(
+            "INSERT INTO update_history \
+             (app_id, started_at, finished_at, outcome, from_version, to_version, snapshot_id, \
+              error_message, plan_json) \
+             VALUES (?, ?, ?, 'error', ?, ?, ?, ?, ?)",
+        )
+        .bind(app_id)
+        .bind(started_at)
+        .bind(finished_at)
+        .bind(&plan_meta.from_label)
+        .bind(&plan_meta.to_label)
+        .bind(snapshot_id_for_history)
+        .bind(message)
+        .bind(&plan_meta.plan_json)
+        .execute(&state.db),
     )
-    .bind(app_id)
-    .bind(started_at)
-    .bind(finished_at)
-    .bind(&plan_meta.from_label)
-    .bind(&plan_meta.to_label)
-    .bind(snapshot_id_for_history)
-    .bind(message)
-    .bind(&plan_meta.plan_json)
-    .execute(&state.db)
     .await;
 
     log_activity(state, app_id, "apply", "error", message).await;
@@ -666,19 +690,22 @@ pub async fn rollback(
         }
         Err(e) => {
             let message = e.to_string();
-            let _ = sqlx::query(
-                "UPDATE apps \
-                 SET status = 'error', status_message = ?, \
-                     last_poll_at = ?, last_failure_at = ?, \
-                     consecutive_failures = consecutive_failures + 1, \
-                     updated_at = datetime('now') \
-                 WHERE id = ?",
+            crate::db::audit_write(
+                "rollback_error_app_status",
+                sqlx::query(
+                    "UPDATE apps \
+                     SET status = 'error', status_message = ?, \
+                         last_poll_at = ?, last_failure_at = ?, \
+                         consecutive_failures = consecutive_failures + 1, \
+                         updated_at = datetime('now') \
+                     WHERE id = ?",
+                )
+                .bind(&message)
+                .bind(&now_iso)
+                .bind(&now_iso)
+                .bind(&id)
+                .execute(&state.db),
             )
-            .bind(&message)
-            .bind(&now_iso)
-            .bind(&now_iso)
-            .bind(&id)
-            .execute(&state.db)
             .await;
             log_activity(&state, &id, "rollback", "error", &message).await;
             Err(e)
