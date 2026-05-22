@@ -221,6 +221,31 @@ in this PR** vs **left for follow-up triage** vs **false positive**.
 | `writer.rs:67` TOCTOU rename race | Entire block is inside `acquire_lock` advisory file lock (see §8 ledger). |
 | `launcher.rs:323` ring-buffer off-by-one | Comment-vs-code drift, not a crash; behaviour is bounded to 500 lines. |
 
+### Reconciled in wave-2 investigation (post-PR #18, before PR #20)
+
+After PR #18 landed, a second wave of 6 parallel agents revisited every "left for follow-up triage" item. The result:
+
+| Wave-1 finding | Wave-2 verdict | Detail |
+|---|---|---|
+| `apply_update.messages: Vec<String>` not in TS `UpdateOutcome` | **FALSE POSITIVE** | `messages: string[]` is already at `frontend/src/lib/api.ts:89`. The TypeScript type IS in sync; the wave-1 audit's claim was wrong. Only UX gap remains: `main.ts` line 232-247 calls `api.updates.apply()` but discards the `UpdateOutcome` instead of rendering `outcome.messages` in the modal — scheduled as a future UX ticket, not a contract bug. |
+| Frontend re-render listener accumulation in `title-bar.ts`, `chip-bar.ts`, `app-card.ts` | **FALSE POSITIVE** | All three call `addEventListener` only on the CHILD elements produced by `el.innerHTML = "..."`. When `innerHTML` replaces the subtree, the browser drops its reference to the old children, and the listeners attached to them become unreachable and GC. No accumulation. |
+| Frontend re-render listener accumulation in `settings.ts:288-298` (tab buttons), `seed.ts:447-466` (document.getElementById results) | **FALSE POSITIVE** | Same reasoning — both render functions begin with `root.innerHTML = ...` which wipes the entire subtree including the tab buttons and seed-folder-input. The `root.querySelectorAll('[data-settings-tab]')` and `document.getElementById('seed-folder-input')` lookups that follow find the NEW elements; the old listeners die with the old elements. The wave-1 audit conflated "called on every render" with "leaks listeners," which only holds if listeners are attached to STABLE elements (document, window, this-host). Neither file does that. |
+
+### Resolved in PR #20 (silent SQL)
+
+| Finding | Severity | Resolved by |
+|---|---|---|
+| 10 `let _ = sqlx::query(...)` silent inserts in `commands/launch.rs` + `commands/updates.rs` | HIGH (observability) | commit `8973503` — new `crate::db::audit_write(op, future)` helper preserves the best-effort contract but logs failures at `warn!` with the operation name as a structured field. All 10 sites use the helper. |
+
+### Real items still open (with concrete plans from wave-2)
+
+| Finding | Severity | Plan | Tracked as |
+|---|---|---|---|
+| `iptv-hub://status` event never emitted by backend | MED | Thread `AppHandle` into `AppState`. Emit `StatusEventPayload` after each `apps.status` SQL mutation in `commands/updates.rs` (4 sites) and `poller.rs` (3 sites). The poller emits ONLY on status delta, not on every poll, to avoid spam. ~50 lines. | Task #70 |
+| `iptv-hub://activity` event never emitted by backend | MED | Extend each `log_activity*` helper to re-SELECT the inserted row (composite-key match on `(app_id, action, level, ORDER BY at DESC LIMIT 1)`) and emit `ActivityEntry`. Alternative considered: capture `LAST_INSERT_ROWID()` in the insert query for one-round-trip cost. ~30 lines per helper. | Task #71 |
+| `launcher.rs:433-464` shell injection via ExeShortcut + WebUrl manifest `command` | MED | `cmd /C start "" <unescaped>` interprets `&`, `|`, `;` in the manifest's `command` field. Recommended fix: shell-escape via `"\""` doubling for URLs, OR direct `Command::new(<path>)` for `.exe` shortcuts (which bypasses cmd.exe entirely and is safe by argv-list semantics). Add 3 injection tests to `integration_launcher.rs`. | Task #72 |
+| `installer.rs:720-775` Registry UninstallString trust | MED-defense-in-depth | HKCU is per-user-writable so this is NOT a privilege boundary, but still worth hardening against persistent registry tampering. Recommended hybrid: (a) tracing::warn! the full uninstall string before invocation for audit, (b) verify the executable path exists, (c) special-case msiexec.exe pattern transformations. Do NOT block non-MSI uninstallers (would break ~30-50% of Windows apps). Add unit tests for the `shell_words::split` path. | Task #73-equivalent — to be split |
+
 ### Left for follow-up triage (not in this PR's scope)
 | Finding | Severity | Rationale for deferral |
 |---|---|---|
