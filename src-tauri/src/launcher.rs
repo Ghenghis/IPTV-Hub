@@ -400,6 +400,41 @@ fn focus_window_for(window_title: &str) {
     }
 }
 
+/// Set of characters that have shell meaning to `cmd.exe` and that we
+/// refuse to accept inside a manifest's `command` field for the launch
+/// kinds that route through `cmd /C start "" <target>` (`ExeShortcut` /
+/// `WebUrl`). The list is intentionally conservative — these are the
+/// characters cmd.exe parses outside of a quoted region as command
+/// separators, redirection operators, or command substitution.
+///
+/// We do NOT include `space`, `:`, `=`, `\\`, `/`, `%`, `(`, `)`, `[`,
+/// `]`, `{`, `}`, `,`, `'` — those appear legitimately in `.lnk`
+/// paths, URLs, and Windows shortcut targets.
+const SHELL_METACHARS: &[char] = &['&', '|', ';', '\n', '\r', '<', '>', '`', '$', '!'];
+
+/// Returns `Err` if `target` contains any character that cmd.exe would
+/// interpret as a control operator outside of a quoted region. Called
+/// for `ExeShortcut` and `WebUrl` launch kinds whose Windows path goes
+/// through `cmd /C start ""`. Other launch kinds are immune by argv-list
+/// construction (Rust's `Command::new` + `.arg()` does not invoke a
+/// shell) and skip this check.
+///
+/// This is defense-in-depth, not a privilege boundary: an attacker who
+/// can edit `apps.json` already has arbitrary code execution as the
+/// user (they can edit shell startup files, scheduled tasks, etc.).
+/// What this check actually defends against is the "I imported a
+/// manifest from the internet" attack — IPTV-Hub validates the input
+/// before invoking the shell.
+fn reject_shell_metachars(target: &str, kind: &str) -> Result<(), CoreError> {
+    if let Some(bad) = target.chars().find(|c| SHELL_METACHARS.contains(c)) {
+        return Err(CoreError::config(format!(
+            "{kind} `command` contains shell metacharacter {bad:?}; \
+             refusing to launch. Allowed characters exclude {SHELL_METACHARS:?}.",
+        )));
+    }
+    Ok(())
+}
+
 fn build_command(spec: &LaunchSpec, paths: &AppPaths) -> Result<Command, CoreError> {
     let cwd = spec.cwd.as_deref().map_or_else(
         || paths.apps_root().to_path_buf(),
@@ -436,6 +471,11 @@ fn build_command(spec: &LaunchSpec, paths: &AppPaths) -> Result<Command, CoreErr
                 .as_deref()
                 .ok_or_else(|| CoreError::config("exe-shortcut launch requires `command`"))?;
             let expanded = expand_env(target);
+            // Security: reject shell metachars BEFORE handing the value to
+            // `cmd /C start ""`. Without this, a manifest with
+            // `command = "iptv.lnk & rm -rf C:\\"` would let cmd.exe re-parse
+            // the value and execute the second command after the legit one.
+            reject_shell_metachars(&expanded, "exe-shortcut")?;
             if cfg!(windows) {
                 let mut c = Command::new("cmd");
                 c.arg("/C").arg("start").arg("").arg(&expanded);
@@ -449,6 +489,14 @@ fn build_command(spec: &LaunchSpec, paths: &AppPaths) -> Result<Command, CoreErr
                 .command
                 .as_deref()
                 .ok_or_else(|| CoreError::config("web-url launch requires `command`"))?;
+            // Security: same validation as ExeShortcut. The Windows branch
+            // here also routes through `cmd /C start ""`; the macOS/Linux
+            // branches use direct argv (`open` / `xdg-open`) which are
+            // already injection-safe but we still validate so the rejection
+            // is platform-uniform — a manifest that fails on Windows fails
+            // identically on Linux instead of silently launching with the
+            // metacharacter still in the URL.
+            reject_shell_metachars(url, "web-url")?;
             if cfg!(windows) {
                 let mut c = Command::new("cmd");
                 c.arg("/C").arg("start").arg("").arg(url);
