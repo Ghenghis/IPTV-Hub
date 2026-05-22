@@ -717,12 +717,13 @@ async fn run_installer(
     Ok(())
 }
 
-async fn run_uninstall_string(
-    uninstall_string: &str,
-    extra_args: &[String],
-) -> Result<(), CoreError> {
-    // UninstallString is often `MsiExec.exe /I{GUID}` or `"C:\Path\uninst.exe" args`.
-    // Split with shell_words and append our quiet-mode flags.
+/// Parse a Windows registry `UninstallString` into `(program, args)` and apply
+/// the msiexec-specific transformations (`/I` → `/X`, append `/qn /norestart`).
+///
+/// Split out from [`run_uninstall_string`] so the parsing path can be
+/// unit-tested without spawning a real subprocess. The function performs no
+/// I/O.
+fn parse_uninstall_string(uninstall_string: &str) -> Result<(String, Vec<String>), CoreError> {
     let mut parts = shell_words::split(uninstall_string)
         .map_err(|e| CoreError::config(format!("uninstall-string parse error: {e}")))?
         .into_iter();
@@ -750,6 +751,92 @@ async fn run_uninstall_string(
             args.push("/norestart".to_string());
         }
     }
+
+    Ok((program, args))
+}
+
+/// Returns `true` if `program` matches a recognised uninstaller pattern
+/// (`msiexec.exe` / `unins###.exe` Inno Setup / `*uninst.exe` /
+/// `*uninstall.exe`). When `false`, the caller should still proceed but emit
+/// a `tracing::warn!` so an operator can audit unexpected invocations.
+///
+/// **Defense in depth, not a privilege boundary.** `HKCU` is per-user-writable
+/// so an attacker who can rewrite the registry already has user-level code
+/// execution. What this catches is the "tampered-but-otherwise-trusted-install"
+/// case where stale or hijacked registry data points at an unexpected
+/// executable — surfacing the warning lets an operator notice.
+fn is_known_uninstaller_pattern(program: &str) -> bool {
+    // Strip directory components for the pattern match. On Windows the
+    // separator is `\`; we also handle `/` because shell_words preserves
+    // whatever was in the registry.
+    let basename = program
+        .rsplit(|c| c == '\\' || c == '/')
+        .next()
+        .unwrap_or(program)
+        .to_lowercase();
+    if basename == "msiexec.exe" || basename == "msiexec" {
+        return true;
+    }
+    // Inno Setup uses `unins000.exe`, `unins001.exe`, etc.
+    if basename.starts_with("unins") && basename.ends_with(".exe") {
+        return true;
+    }
+    // NSIS / generic: `uninst.exe`, `uninstall.exe`, `appname-uninstall.exe`.
+    if basename.ends_with("uninst.exe") || basename.ends_with("uninstall.exe") {
+        return true;
+    }
+    false
+}
+
+async fn run_uninstall_string(
+    uninstall_string: &str,
+    extra_args: &[String],
+) -> Result<(), CoreError> {
+    // Audit log: record the raw registry value BEFORE any transformations so an
+    // operator can correlate a later failure with the exact string pulled from
+    // the registry. The UninstallString is metadata (not credentials), so
+    // emitting it at `info!` is safe.
+    tracing::info!(
+        uninstall_string = uninstall_string,
+        "preparing to invoke uninstaller from registry"
+    );
+
+    let (program, mut args) = parse_uninstall_string(uninstall_string)?;
+
+    // Defense-in-depth: warn (don't block) if the program doesn't look like any
+    // known uninstaller pattern. Non-matching patterns may still be legitimate
+    // (custom uninstallers exist), so we proceed — but the operator sees the
+    // warning in the activity log + tracing output and can audit the registry
+    // entry.
+    if !is_known_uninstaller_pattern(&program) {
+        tracing::warn!(
+            program = program.as_str(),
+            "uninstaller does not match a known pattern (msiexec / unins###.exe / \
+             *uninst.exe / *uninstall.exe); proceeding because non-standard \
+             uninstallers exist, but please audit the registry entry"
+        );
+    }
+
+    // Defense-in-depth: refuse to invoke a non-existent path. `shell_words`
+    // parsed it fine, but if `Path::exists()` is false the registry is stale
+    // (uninstaller was deleted by hand, prior install was partial). Running
+    // `Command::new` would produce a misleading "No such file or directory"
+    // error after a successful registry lookup; failing fast with the actual
+    // cause is more debuggable.
+    //
+    // We skip this check when `program` resolves through `PATH` rather than a
+    // literal filesystem path. Heuristic: only run the existence check when
+    // the program contains a path separator. `msiexec.exe` typically lives in
+    // `%SystemRoot%\System32\` but appears in the registry without a
+    // directory prefix.
+    if (program.contains('\\') || program.contains('/')) && !std::path::Path::new(&program).exists()
+    {
+        return Err(CoreError::config(format!(
+            "uninstaller executable not found on disk: {program} — \
+             registry may reference a stale or hand-deleted install"
+        )));
+    }
+
     args.extend(extra_args.iter().cloned());
 
     let output = Command::new(&program)
@@ -1039,4 +1126,74 @@ pub fn __test_install_and_snapshot(
         )));
     }
     Ok(prior)
+}
+
+#[cfg(test)]
+mod uninstall_string_tests {
+    //! Unit tests for the registry `UninstallString` parsing + classification.
+    //! These are isolated fixtures: they exercise the pure-function path that
+    //! interprets the registry value, not the real subprocess. The end-to-end
+    //! install/uninstall path is exercised by `tests/integration_installer.rs`
+    //! with real WiX-built MSIs.
+    use super::*;
+
+    #[test]
+    fn parses_msiexec_install_form_and_rewrites_to_uninstall() {
+        let s = "MsiExec.exe /I{12345678-AAAA-BBBB-CCCC-1234567890AB}";
+        let (program, args) = parse_uninstall_string(s).expect("parse ok");
+        assert_eq!(program, "MsiExec.exe");
+        assert!(
+            args.iter().any(|a| a.starts_with("/X")),
+            "expected /I -> /X rewrite, got args = {args:?}"
+        );
+        assert!(args.iter().any(|a| a.eq_ignore_ascii_case("/qn")));
+        assert!(args.iter().any(|a| a.eq_ignore_ascii_case("/norestart")));
+    }
+
+    #[test]
+    fn parses_quoted_uninstaller_path_with_spaces() {
+        // Raw string literal avoids Rust escape-sequence handling on `\\`. The
+        // input mimics what shell_words sees after the Windows registry hands
+        // us the raw UninstallString value.
+        let s = r#""C:\Program Files\My App\unins000.exe" /SILENT"#;
+        let (program, args) = parse_uninstall_string(s).expect("parse ok");
+        assert_eq!(program, r"C:\Program Files\My App\unins000.exe");
+        assert_eq!(args, vec!["/SILENT".to_string()]);
+    }
+
+    #[test]
+    fn rejects_empty_uninstall_string() {
+        let err = parse_uninstall_string("").expect_err("empty input must error");
+        assert!(format!("{err}").contains("empty uninstall string"));
+    }
+
+    #[test]
+    fn recognises_msiexec_pattern() {
+        assert!(is_known_uninstaller_pattern("MsiExec.exe"));
+        assert!(is_known_uninstaller_pattern(
+            r"C:\Windows\System32\msiexec.exe"
+        ));
+    }
+
+    #[test]
+    fn recognises_inno_setup_pattern() {
+        assert!(is_known_uninstaller_pattern(
+            r"C:\Program Files\X\unins000.exe"
+        ));
+        assert!(is_known_uninstaller_pattern("unins001.exe"));
+    }
+
+    #[test]
+    fn recognises_nsis_pattern() {
+        assert!(is_known_uninstaller_pattern(r"C:\X\uninst.exe"));
+        assert!(is_known_uninstaller_pattern(r"C:\X\appname-uninstall.exe"));
+    }
+
+    #[test]
+    fn rejects_random_executable_as_unknown_pattern() {
+        assert!(!is_known_uninstaller_pattern("notepad.exe"));
+        assert!(!is_known_uninstaller_pattern(
+            r"C:\Windows\System32\cmd.exe"
+        ));
+    }
 }
