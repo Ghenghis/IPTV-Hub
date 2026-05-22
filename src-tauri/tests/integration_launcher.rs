@@ -254,3 +254,93 @@ async fn output_tail_bounded() {
         last
     );
 }
+
+/// Build an `AppEntry` configured for `LaunchKind::ExeShortcut` (or `WebUrl`)
+/// with the given target string. Bypasses `make_app` because we need the
+/// non-`Executable` kinds, which route through `cmd /C start ""` on Windows.
+fn make_shortcut_app(id: &str, kind: LaunchKind, target: &str) -> AppEntry {
+    AppEntry {
+        id: id.to_string(),
+        name: id.to_string(),
+        source_type: SourceType::Web,
+        favorite: false,
+        enabled: true,
+        icon: None,
+        polling: None,
+        launch: LaunchSpec {
+            kind,
+            cwd: None,
+            command: Some(target.to_string()),
+            args: Vec::new(),
+            env: HashMap::new(),
+            wait_for: Some(WaitFor::None),
+        },
+        health: None,
+        source: None,
+        user_data: None,
+    }
+}
+
+/// Wave-2 security audit (PR-pending): `LaunchKind::ExeShortcut` and
+/// `LaunchKind::WebUrl` previously fed their manifest `command` field straight
+/// into `cmd /C start "" <target>` on Windows. If the value contained an `&`,
+/// `|`, `;`, etc., `cmd.exe` would re-parse the metacharacter as a command
+/// separator and execute whatever followed. The fix at
+/// `launcher.rs::build_command` now rejects manifests containing any of
+/// ``& | ; \n \r < > ` $ !`` for those two kinds. This test exercises the
+/// rejection path with three concrete injection payloads — one per common
+/// operator — and asserts that `LaunchRegistry::launch` returns the
+/// `CoreError::Config` variant carrying the expected diagnostic.
+#[tokio::test]
+async fn rejects_shell_metachars_in_exe_shortcut() {
+    let temp = TempDir::new().expect("tempdir");
+    let paths = build_paths(&temp);
+    let reg = LaunchRegistry::new();
+
+    // Three payloads, one per major operator class. Each is something a
+    // hostile manifest could plausibly try to look legitimate-ish.
+    let payloads = [
+        "C:\\path\\to\\app.lnk & calc.exe",
+        "C:\\path\\to\\app.lnk | calc.exe",
+        "C:\\path\\to\\app.lnk; calc.exe",
+    ];
+
+    for payload in payloads {
+        let app = make_shortcut_app("exe-injection", LaunchKind::ExeShortcut, payload);
+        let err = reg
+            .launch(&app, &paths)
+            .await
+            .expect_err("hostile manifest must be rejected");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("shell metacharacter") && msg.contains("exe-shortcut"),
+            "expected metachar-rejection error for `{payload}`, got: {msg}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn rejects_shell_metachars_in_web_url() {
+    let temp = TempDir::new().expect("tempdir");
+    let paths = build_paths(&temp);
+    let reg = LaunchRegistry::new();
+
+    let payloads = [
+        "https://example.com & calc.exe",
+        "https://example.com | calc.exe",
+        "https://example.com\nstart cmd",
+    ];
+
+    for payload in payloads {
+        let app = make_shortcut_app("url-injection", LaunchKind::WebUrl, payload);
+        let err = reg
+            .launch(&app, &paths)
+            .await
+            .expect_err("hostile URL must be rejected");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("shell metacharacter") && msg.contains("web-url"),
+            "expected metachar-rejection error for `{payload}`, got: {msg}"
+        );
+    }
+}
