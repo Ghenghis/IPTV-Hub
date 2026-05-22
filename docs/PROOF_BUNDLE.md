@@ -9,14 +9,27 @@ completion mandate. Every claim below cites a command, file, or CI run.
 
 ---
 
-## 1. `rg` proof showing no DaveTV leftovers
+## 1. Branding policy check (IPTV-Hub product strings + DaveTV context check)
+
+**Policy** (corrected 2026-05-22, see [`docs/BRANDING_AUDIT.md`](BRANDING_AUDIT.md)):
+- Product shell, login, installer, app title → `IPTV-Hub` / `IPTV Hub`.
+- The phrase "DaveTV" is **allowed** when it refers to the DaveTV web-app
+  ecosystem / catalogue / source family (e.g., "DaveTV web apps").
+- **Forbidden**: any login / title / product-shell string that would make the
+  app itself look like it is named DaveTV.
+- The required audit result is **not** "zero DaveTV"; it is "**every DaveTV
+  reference is context-correct**".
 
 Wave-1 audit agent ran a comprehensive case-insensitive scan across the entire
 working tree for `davetv|dave-tv|dave_tv|Dave TV|dave.tv` excluding
 `node_modules/`, `target/`, `dist/`, `.git/`.
 
-**Result:** `0` matches in any source, doc, schema, workflow, package metadata,
-or filename. Detail by category:
+**Result:** All product-identity surfaces (Tauri config, Cargo metadata,
+package.json, index.html `<title>`, README H1, installer ProductName, default
+title-bar app-name) are `IPTV Hub` / `iptv-hub` — **no forbidden DaveTV usage**.
+The repo also contains no context-correct DaveTV ecosystem references; this is
+a permitted gap, not a violation, and is documented as a future-enhancement
+opportunity in `docs/BRANDING_AUDIT.md`. Detail by category:
 
 | Surface | Value | Source |
 |---|---|---|
