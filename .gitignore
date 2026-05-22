@@ -54,3 +54,6 @@ desktop.ini
 
 # Claude Code session data (harness artifact)
 /.claude/
+
+# Proof-bundle artifacts (transient, do not commit)
+artifacts/
