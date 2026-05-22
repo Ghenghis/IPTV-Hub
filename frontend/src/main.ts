@@ -74,11 +74,16 @@ function applyFilter(apps: AppView[]): AppView[] {
   });
 }
 
+// SECURITY: NEVER interpolate `state.search` / `state.filter` (or any other
+// user-controllable string) into this template — they would land in an HTML
+// attribute context and a value like `"><script>...` would close the
+// attribute and inject markup. Both values are bound below via
+// `setAttribute()`, which treats them as text and is safe by construction.
 function shell(): string {
   return `
     <div class="app-shell">
-      <iptv-title-bar id="title-bar" search="${state.search}" app-name="IPTV Hub"></iptv-title-bar>
-      <iptv-chip-bar id="chip-bar" active="${state.filter}"></iptv-chip-bar>
+      <iptv-title-bar id="title-bar" app-name="IPTV Hub"></iptv-title-bar>
+      <iptv-chip-bar id="chip-bar"></iptv-chip-bar>
 
       <main class="main">
         <section class="app-grid" id="app-grid" aria-live="polite"></section>
@@ -122,8 +127,16 @@ function renderCards(): void {
 }
 
 function refreshAuxiliaryComponents(): void {
+  // SECURITY: pass `state.search` / `state.filter` through `setAttribute()`
+  // rather than HTML interpolation; the DOM treats attribute values as text
+  // and cannot inject markup even if the values contain `"`, `<`, or `>`.
+  const titleBar = document.getElementById("title-bar");
+  if (titleBar) titleBar.setAttribute("search", state.search);
   const chipBar = document.getElementById("chip-bar") as IptvChipBarElement | null;
-  if (chipBar) chipBar.apps = state.apps;
+  if (chipBar) {
+    chipBar.setAttribute("active", state.filter);
+    chipBar.apps = state.apps;
+  }
   const statusBar = document.getElementById("status-bar") as StatusBarElement | null;
   if (statusBar) statusBar.apps = state.apps;
 }
