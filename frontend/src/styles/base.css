@@ -1,5 +1,22 @@
 /* Base layout — matches the mockup layout exactly. */
 
+/*
+ * E2E screenshot determinism: when the document root carries the
+ * `data-e2e-snapshot` attribute (added only by the Playwright proof-of-concept
+ * spec), every animation and transition is forced to its final state so
+ * screenshots are byte-stable across runs. The attribute is NEVER set in
+ * production — `frontend/src/main.ts` does not write it, and the only producer
+ * is the Playwright spec's `freezeAnimations()` helper.
+ */
+:root[data-e2e-snapshot] *,
+:root[data-e2e-snapshot] *::before,
+:root[data-e2e-snapshot] *::after {
+  animation-duration: 0ms !important;
+  animation-delay: 0ms !important;
+  transition-duration: 0ms !important;
+  transition-delay: 0ms !important;
+}
+
 .app-shell {
   display: grid;
   grid-template-rows:
