@@ -1,9 +1,9 @@
 # VPS Orchestrator — design
 
-> **Status: design doc, not yet implemented.** The corresponding code lands
-> across multiple sequenced follow-up PRs (Phase 1 through Phase 8 at the foot
-> of this doc). Doc is committed first so the architecture, storage policy,
-> and lifecycle states are reviewable before any code lands.
+> **Status: design doc with P1 storage and P2 repo primitives implemented.**
+> P3-P8 remain sequenced follow-up PRs (see the foot of this doc). The doc
+> stays ahead of the code so architecture, storage policy, and lifecycle states
+> remain reviewable as each primitive lands.
 >
 > **Why this doc exists:** the operator clarified on 2026-05-22 that IPTV-Hub
 > is more than a desktop launcher — it must also become a **VPS-hosted web
@@ -43,12 +43,13 @@
 | **DaveTV web apps** | The 25–28 catalogued web players run by the orchestrator (or referenced by the desktop launcher) | "DaveTV web-app catalogue" |
 
 The desktop and VPS deployments share:
-- the same `apps.json` schema (with VPS-specific fields added in Phase 2);
+- the same `apps.json` schema (with VPS-specific fields added in later
+  worker/API phases, after the P2 repo primitive);
 - the same `Provider Vault` design (see [`PROVIDER_VAULT.md`](PROVIDER_VAULT.md));
 - the same per-app adapter contract (env-var, localStorage seed, URL query, generated M3U);
 - the same activity-log and update-history conventions.
 
-What's different on VPS: orchestration is **server-side** instead of native. The "launcher" doesn't spawn a `cmd /C` child process; it routes nginx upstream to the right `127.0.0.1:port` container, and "update" means `git pull` + `docker build` + healthcheck swap rather than running an MSI.
+What's different on VPS: orchestration is **server-side** instead of native. The "launcher" doesn't spawn a `cmd /C` child process; it routes nginx upstream to the right `127.0.0.1:port` container, and "update" means git fetch/force-sync + `docker build` + healthcheck swap rather than running an MSI.
 
 ## Hard storage policy
 
@@ -107,7 +108,7 @@ This also defines the prune rule precisely: a release directory can be deleted O
 
 Concrete rules:
 
-1. **Never reclone.** A repo's `.git` lives at `/opt/iptv-hub/repos/<app>` forever. Updates are `git fetch --prune && git reset --hard origin/<branch>` against that working tree.
+1. **Never reclone.** A repo's `.git` lives at `/opt/iptv-hub/repos/<app>` forever. Updates are `git fetch` followed by a hard reset of the working tree to `origin/<branch>`; tracked files are force-synced (operator-edited tracked files are overwritten because `repos/<app>` is orchestrator-owned). If the manifest's source URL has changed, the orchestrator re-points `origin` before fetching so a moved upstream is followed, not silently ignored. Tag-prune semantics and untracked/ignored cleanup are explicitly out of P2 scope and arrive with the worker queue.
 2. **Never delete an in-use release.** `releases/<app>/<sha>/` is removed only when (a) `live/<app>` no longer points at it AND (b) the prune policy says enough versions back.
 3. **Atomic swap of the `live/<app>` symlink.** The orchestrator must NOT use `ln -sfn`, because `ln -sfn` performs `unlink` + `symlink` non-atomically: there is a brief window during which `live/<app>` does not exist, and a concurrent `cat live/<app>/build.log` would fail. Instead, the orchestrator creates a *new* symlink at `live/<app>.tmp` pointing at the new release directory using absolute paths, then issues a single `rename(2)` syscall to replace `live/<app>`:
 
@@ -209,7 +210,7 @@ a valid session is presented. No default credentials exist in the build.
 | 1 | **IPTV-Hub Web UI** | Dashboard that lists every app card; shows live state (HEALTHY/BUILDING/UPDATE_AVAILABLE/FAILED); click = launch or queue update | `frontend/` (re-uses the existing Web Component shell behind a Vite-built `vps.html` entry) |
 | 2 | **Orchestrator API** | HTTP endpoints: `GET /apps`, `GET /apps/:id`, `POST /apps/:id/launch`, `POST /apps/:id/update`, `GET /apps/:id/logs`, `POST /apps/:id/rollback` | New `src-tauri/src/bin/iptv-hub-orchestrator.rs` (axum or rocket), shipped as a separate binary alongside the Tauri desktop one. **Same Rust workspace**; same `iptv_hub_core` lib. |
 | 3 | **Update worker queue** | Tokio task pool bounded by `locks/global.sem`; dequeues per-app update jobs, takes the per-app lock, runs build + smoke + swap | Same orchestrator binary |
-| 4 | **Per-app repo manager** | Owns `repos/<app>`. `fetch_or_clone`, `current_sha`, `checkout_sha`, `apply_pending_update`. Re-uses `iptv_hub_core::sources::git` where possible. | New `src-tauri/src/orchestrator/repo.rs` |
+| 4 | **Per-app repo manager** | Owns `repos/<app>`. P2 ships `fetch_or_clone` and `current_sha` over `git2`, with the later worker/swap phases responsible for checkout-by-sha and apply-pending-update orchestration. | New `src-tauri/src/orchestrator/repo.rs` |
 | 5 | **Per-app container manager** | Owns Docker images + containers for each live release. `build_image(app, sha) -> ImageTag` (produces `iptv-hub/<app>:<sha>`), `compose_up(release_dir)` (renders the pinned `docker-compose.service.yml` in the release dir and runs `docker compose up -d --no-deps`), `health_probe`, `stop`, `rm`. The host `releases/<app>/<sha>/` dir holds release metadata only (build log, compose fragment, healthcheck output); the runtime code lives in the image tag, not in the host directory. Re-uses `deploy/apps/<app>/Dockerfile` already in repo as the build context. | New `src-tauri/src/orchestrator/container.rs` |
 | 6 | **Nginx fragment integration** | **Each app has a fixed loopback port** (assigned at onboarding from the 9600-9899 range, recorded in `deploy/INVENTORY.md`). The nginx fragment for that app is written **once at onboarding** and is NOT modified per release — the `docker compose up -d --no-deps <app>` in the swap replaces the old container with the new one **on the same fixed port**, so nginx never needs reloading. (Brief ~1-3 s downtime during container restart is acceptable for IPTV apps and avoids the complexity of a true zero-downtime blue-green switch.) The orchestrator only touches nginx fragments when an app is first onboarded or removed from the catalogue. Re-uses `deploy/nginx/` already in repo. | Existing files, new `src-tauri/src/orchestrator/nginx.rs` |
 | 7 | **Healthcheck registry** | For each running container: HTTP probe / TCP probe (per app's declared `health.kind`), rolling-window pass-count to gate the swap. Re-uses existing `manifest.app.health` schema. | New `src-tauri/src/orchestrator/health.rs` |
@@ -300,7 +301,7 @@ POST /apps/iptv-restream/update
 │           continue to Step B
 │
 ├── Step B: disk preflight  (cheap, no destructive action)
-│   │       df free >= max(2 × est_size, 30 GiB)?
+│   │       df free >= max(2 × est_size, 40 GiB)?
 │   │       NO  → return 507 { reason: "disk-low", free_bytes, required_bytes }
 │   │       YES → continue
 │
@@ -332,8 +333,10 @@ worker.dequeue()  →  job(app_id, job_id)
 ├── Step 3: UPDATE update_jobs SET status='running', started_at=now() WHERE id=?
 │           emit "iptv-hub://status" { app_id, status: "BUILDING" }
 │
-├── Step 4: fetch upstream into repos/<app>
-│           git fetch --prune origin
+├── Step 4: repo::fetch_or_clone upstream into repos/<app>
+│           (P2 primitive) fetch origin, re-point origin URL if the manifest
+│           source moved, hard-reset working tree to origin/<branch>, return
+│           the resolved sha
 │
 ├── Step 5: compute new sha; allocate releases/<app>/<sha>/
 │           and write build context snapshot + initial metadata
@@ -461,7 +464,7 @@ The operator confirmed (2026-05-22) these are the required E2E pass criteria:
 | Phase | Scope | Branch | Acceptance |
 |---|---|---|---|
 | **P1** | Storage layout + per-app lock + disk preflight, in Rust + a CLI smoke binary `iptv-hub-orchestrator probe` | `feat/orchestrator-storage` | Unit tests for path resolution, lock acquisition, disk-low rejection; CI green |
-| **P2** | `orchestrator/repo.rs` re-uses `git2`; clone-once-then-fetch; sha resolution | `feat/orchestrator-repo` | Integration test that clones a tiny fixture repo, fetches a new commit, returns new sha |
+| **P2** | `orchestrator/repo.rs` re-uses `git2`; clone-once-then-fetch; sha resolution | `feat/orchestrator-repo` | Integration tests cover clone/fetch, origin URL re-pointing on changed source, missing-branch and missing-repo errors, path-traversal rejection (via P1 `validate_app_id`), and network-free `current_sha` |
 | **P3** | `orchestrator/container.rs` + `orchestrator/health.rs` against the existing per-app `Dockerfile`s | `feat/orchestrator-container` | Integration test that builds the smallest catalogue app, probes its healthcheck, stops it cleanly |
 | **P4** | Atomic swap (`live/<app>` symlink) + nginx fragment wiring | `feat/orchestrator-swap` | Integration test that runs P1 → P2 → P3 in sequence and verifies the symlink flips only after smoke passes |
 | **P5** | Orchestrator HTTP API (axum) — `GET /apps`, `POST /apps/:id/{launch,update}`, `GET /apps/:id/logs` | `feat/orchestrator-api` | HTTP-level test with `reqwest` against a real `iptv-hub-orchestrator` binary running on `127.0.0.1` |
@@ -489,8 +492,9 @@ target/release/iptv-hub-orchestrator probe --root /tmp/orch-test
 #     can be created and locked
 
 # P2 repo smoke:
-target/release/iptv-hub-orchestrator repo update --app tvapp
-#   - prints: fetched 12 commits; new_sha=abc123...
+cargo test -p iptv-hub orchestrator::repo::tests -- --nocapture
+#   - verifies clone-once-then-fetch, branch handling, force-sync cleanup,
+#     path hardening, and current_sha without a network call
 
 # P5 API smoke:
 curl -s http://127.0.0.1:9700/apps | jq

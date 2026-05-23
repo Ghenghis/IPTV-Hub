@@ -1,10 +1,10 @@
-//! VPS orchestrator — P1 storage layer.
+//! VPS orchestrator — storage and repo primitives.
 //!
-//! P1 deliberately ships only the storage primitives: typed paths, per-app
-//! advisory locks, and the disk preflight. It does NOT include repo cloning,
-//! Docker build invocation, the HTTP API, the auth layer, the UI, or
-//! Provider Vault integration — each lands in its own subsequent PR per
-//! `docs/VPS_IMPLEMENTATION_PLAN.md`.
+//! The first orchestrator phases ship the local primitives the later worker
+//! queue builds on: typed paths, per-app advisory locks, the disk preflight,
+//! and per-app git repository sync. Docker build invocation, the HTTP API, the
+//! auth layer, the UI, and Provider Vault integration still land in subsequent
+//! PRs per `docs/VPS_IMPLEMENTATION_PLAN.md`.
 //!
 //! The public surface mirrors that plan:
 //!
@@ -12,6 +12,8 @@
 //! - [`AppLock`] holds the per-app advisory lock the update worker will
 //!   eventually take around build → smoke → swap.
 //! - [`disk::preflight`] returns the §6 disk-low decision.
+//! - [`repo::fetch_or_clone`] owns clone-once-then-fetch sync under
+//!   `repos/<app>/`.
 //! - [`probe`] is the smoke-test driver wired up to the
 //!   `iptv-hub-orchestrator probe` CLI — it creates the tree, acquires +
 //!   releases the lock for each requested app, runs the preflight, and
@@ -20,10 +22,12 @@
 pub mod disk;
 pub mod lock;
 pub mod paths;
+pub mod repo;
 
 pub use disk::{preflight, DiskError, DiskPreflight, FLOOR_BYTES};
 pub use lock::{AppLock, LockError};
 pub use paths::{validate_app_id, AppIdError, PathError, Paths, ShaError};
+pub use repo::{current_sha, fetch_or_clone, RepoError, RepoOutcome, RepoSource};
 
 use std::path::PathBuf;
 
