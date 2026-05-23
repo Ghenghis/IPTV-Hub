@@ -81,6 +81,9 @@ pub enum RepoError {
     )]
     NotAGitRepo { path: PathBuf },
 
+    #[error("repo path `{path}` does not exist — no prior clone for this app")]
+    RepoMissing { path: PathBuf },
+
     #[error("remote branch `origin/{branch}` not found after fetch for app `{app}`")]
     BranchMissing { app: String, branch: String },
 
@@ -171,6 +174,17 @@ fn clone_fresh(
 }
 
 fn open_or_reject(repo_path: &Path, app: &str) -> Result<Repository, RepoError> {
+    // Distinguish "no clone yet" from "directory exists but is not a git
+    // repo" so callers (and operators reading errors) can act on the right
+    // recovery path. Per Gemini code review on PR #30: NotAGitRepo must
+    // ONLY fire when the directory exists but lacks `.git/`; a missing
+    // `repos/<app>/` is its own error so a caller knows to fall back to a
+    // first-time clone rather than reporting operator-data conflict.
+    if !repo_path.exists() {
+        return Err(RepoError::RepoMissing {
+            path: repo_path.to_path_buf(),
+        });
+    }
     if !repo_path.join(".git").exists() {
         return Err(RepoError::NotAGitRepo {
             path: repo_path.to_path_buf(),
@@ -189,29 +203,51 @@ fn fetch_branch(
     repo_path: &Path,
     source: &RepoSource<'_>,
 ) -> Result<(), RepoError> {
+    // Re-point `origin` if the caller passed a different URL than the one
+    // recorded in the existing clone. Per Gemini code review on PR #30:
+    // silently fetching the old origin when the manifest source URL has
+    // moved would leave operators stranded on a stale upstream. We update
+    // the URL first, then re-open the remote so the fetch below uses the
+    // new endpoint.
+    let needs_url_update = {
+        let existing = repo
+            .find_remote("origin")
+            .map_err(|err| git_err(app, repo_path, err))?;
+        existing.url().is_none_or(|current| current != source.url)
+    };
+    if needs_url_update {
+        repo.remote_set_url("origin", source.url)
+            .map_err(|err| git_err(app, repo_path, err))?;
+    }
+
     let mut remote = repo
         .find_remote("origin")
-        .map_err(|source| RepoError::Git {
-            app: app.to_owned(),
-            path: repo_path.to_path_buf(),
-            source,
-        })?;
+        .map_err(|err| git_err(app, repo_path, err))?;
 
     let mut fetch_opts = FetchOptions::new();
     fetch_opts.download_tags(AutotagOption::None);
-    // Refspec mirrors the design doc: `git fetch --prune origin <branch>`.
+    // Refspec mirrors the design doc's "fetch + hard reset to
+    // origin/<branch>" rule — the `+` makes the local-tracking ref a
+    // forced update so a remote rewrite still lands cleanly.
     let refspec = format!(
         "+refs/heads/{branch}:refs/remotes/origin/{branch}",
         branch = source.branch
     );
     remote
         .fetch(&[refspec.as_str()], Some(&mut fetch_opts), None)
-        .map_err(|source| RepoError::Git {
-            app: app.to_owned(),
-            path: repo_path.to_path_buf(),
-            source,
-        })?;
+        .map_err(|err| git_err(app, repo_path, err))?;
     Ok(())
+}
+
+/// Short-hand for the `RepoError::Git { app, path, source }` constructor that
+/// every git2 call site needs. Keeps `fetch_branch` (with two extra git2 calls
+/// for URL re-pointing) readable.
+fn git_err(app: &str, repo_path: &Path, source: git2::Error) -> RepoError {
+    RepoError::Git {
+        app: app.to_owned(),
+        path: repo_path.to_path_buf(),
+        source,
+    }
 }
 
 fn reset_to_origin_branch(
@@ -445,6 +481,66 @@ mod tests {
     }
 
     #[test]
+    fn fetch_or_clone_honors_changed_source_url() {
+        // Regression for Gemini code review on PR #30 (HIGH): if the operator
+        // ever changes a manifest's source URL, subsequent calls must follow
+        // the *new* upstream rather than silently fetching the old origin.
+        let dir = tempdir().unwrap();
+        let bare_a = dir.path().join("upstream-a.git");
+        let bare_b = dir.path().join("upstream-b.git");
+        let sha_a = build_bare_remote_with_one_commit(&bare_a, "main");
+        // Both helpers use a fixed signature and identical initial content,
+        // so two fresh bares would produce the same root commit sha. Advance
+        // B by one commit so its tip is provably different from A's.
+        build_bare_remote_with_one_commit(&bare_b, "main");
+        let sha_b = append_commit_to_bare(&bare_b, "main", "remote B advances");
+        assert_ne!(sha_a, sha_b, "test bares must produce distinct shas");
+
+        let paths = Paths::new(dir.path().join("orch"));
+        paths.ensure_tree().unwrap();
+        let url_a = local_url(&bare_a);
+        let url_b = local_url(&bare_b);
+
+        // First call points at remote A.
+        let first = fetch_or_clone(
+            &paths,
+            "wizju-iptv-player",
+            &RepoSource {
+                url: &url_a,
+                branch: "main",
+            },
+        )
+        .unwrap();
+        assert!(first.was_cloned);
+        assert_eq!(first.head_sha, sha_a);
+
+        // Second call passes a different URL — orchestrator must update
+        // `origin` and pull from remote B, not silently keep fetching A.
+        let second = fetch_or_clone(
+            &paths,
+            "wizju-iptv-player",
+            &RepoSource {
+                url: &url_b,
+                branch: "main",
+            },
+        )
+        .unwrap();
+        assert!(
+            !second.was_cloned,
+            "second call still re-uses the on-disk clone"
+        );
+        assert_eq!(
+            second.head_sha, sha_b,
+            "head must follow the new source URL, not the original"
+        );
+
+        // The stored origin URL must reflect remote B now.
+        let on_disk = git2::Repository::open(&second.path).unwrap();
+        let origin = on_disk.find_remote("origin").unwrap();
+        assert_eq!(origin.url(), Some(url_b.as_str()));
+    }
+
+    #[test]
     fn current_sha_returns_head_without_network() {
         let dir = tempdir().unwrap();
         let bare = dir.path().join("upstream.git");
@@ -466,6 +562,28 @@ mod tests {
 
         let local = current_sha(&paths, "wizju-iptv-player").unwrap();
         assert_eq!(local, initial_sha);
+    }
+
+    #[test]
+    fn current_sha_missing_repo_returns_repo_missing() {
+        // Regression for Gemini code review on PR #30 (MEDIUM): when the
+        // operator asks for the sha of an app that has never been cloned,
+        // we must surface a clear "no prior clone" signal rather than the
+        // confusing "exists but not a git repo" NotAGitRepo. The latter is
+        // reserved for the case where `repos/<app>/` exists with operator
+        // data in it — see `existing_non_git_dir_refused` for that path.
+        let dir = tempdir().unwrap();
+        let paths = Paths::new(dir.path().join("orch"));
+        paths.ensure_tree().unwrap();
+
+        let err = current_sha(&paths, "wizju-iptv-player").unwrap_err();
+        match err {
+            RepoError::RepoMissing { path } => {
+                assert_eq!(path, paths.repo("wizju-iptv-player").unwrap());
+                assert!(!path.exists(), "missing path must really be absent");
+            }
+            other => panic!("expected RepoError::RepoMissing, got {other:?}"),
+        }
     }
 
     #[test]
