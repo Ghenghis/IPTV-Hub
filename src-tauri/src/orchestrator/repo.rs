@@ -116,7 +116,7 @@ pub fn fetch_or_clone(
 
     let was_cloned;
     let repo;
-    if repo_path.exists() {
+    if try_exists(&repo_path)? {
         repo = open_or_reject(&repo_path, app)?;
         fetch_branch(&repo, app, &repo_path, source)?;
         was_cloned = false;
@@ -180,12 +180,17 @@ fn open_or_reject(repo_path: &Path, app: &str) -> Result<Repository, RepoError> 
     // ONLY fire when the directory exists but lacks `.git/`; a missing
     // `repos/<app>/` is its own error so a caller knows to fall back to a
     // first-time clone rather than reporting operator-data conflict.
-    if !repo_path.exists() {
+    //
+    // Per CodeRabbit code review on PR #30: use `try_exists()` so a real
+    // filesystem error (EACCES, ELOOP, etc.) bubbles up as `RepoError::Io`
+    // rather than being silently coerced to `false` by `Path::exists()`
+    // and mis-routed into RepoMissing / NotAGitRepo.
+    if !try_exists(repo_path)? {
         return Err(RepoError::RepoMissing {
             path: repo_path.to_path_buf(),
         });
     }
-    if !repo_path.join(".git").exists() {
+    if !try_exists(&repo_path.join(".git"))? {
         return Err(RepoError::NotAGitRepo {
             path: repo_path.to_path_buf(),
         });
@@ -193,6 +198,17 @@ fn open_or_reject(repo_path: &Path, app: &str) -> Result<Repository, RepoError> 
     Repository::open(repo_path).map_err(|source| RepoError::Git {
         app: app.to_owned(),
         path: repo_path.to_path_buf(),
+        source,
+    })
+}
+
+/// `Path::try_exists` wrapper that converts real filesystem errors into
+/// [`RepoError::Io`]. Used at every routing check so a permission /
+/// symlink-loop / IO failure cannot be misread as "path is absent" and
+/// silently flip the orchestrator into the wrong code path.
+fn try_exists(path: &Path) -> Result<bool, RepoError> {
+    path.try_exists().map_err(|source| RepoError::Io {
+        path: path.to_path_buf(),
         source,
     })
 }
