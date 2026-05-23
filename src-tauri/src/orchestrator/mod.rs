@@ -20,10 +20,12 @@
 pub mod disk;
 pub mod lock;
 pub mod paths;
+pub mod repo;
 
 pub use disk::{preflight, DiskError, DiskPreflight, FLOOR_BYTES};
 pub use lock::{AppLock, LockError};
 pub use paths::{validate_app_id, AppIdError, PathError, Paths, ShaError};
+pub use repo::{current_sha, fetch_or_clone, RepoError, RepoOutcome, RepoSource};
 
 use std::path::PathBuf;
 
