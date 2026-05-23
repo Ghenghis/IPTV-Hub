@@ -114,7 +114,7 @@ pub fn fetch_or_clone(
     let was_cloned;
     let repo;
     if repo_path.exists() {
-        repo = open_or_reject(&repo_path)?;
+        repo = open_or_reject(&repo_path, app)?;
         fetch_branch(&repo, app, &repo_path, source)?;
         was_cloned = false;
     } else {
@@ -140,8 +140,8 @@ pub fn fetch_or_clone(
 pub fn current_sha(paths: &Paths, app: &str) -> Result<String, RepoError> {
     validate_app_id(app)?;
     let repo_path = paths.repo(app)?;
-    let repo = open_or_reject(&repo_path)?;
-    head_sha_of(&repo, &repo_path)
+    let repo = open_or_reject(&repo_path, app)?;
+    head_sha_of(&repo, &repo_path, app)
 }
 
 fn ensure_repos_dir(paths: &Paths) -> Result<(), RepoError> {
@@ -170,16 +170,14 @@ fn clone_fresh(
         })
 }
 
-fn open_or_reject(repo_path: &Path) -> Result<Repository, RepoError> {
+fn open_or_reject(repo_path: &Path, app: &str) -> Result<Repository, RepoError> {
     if !repo_path.join(".git").exists() {
         return Err(RepoError::NotAGitRepo {
             path: repo_path.to_path_buf(),
         });
     }
     Repository::open(repo_path).map_err(|source| RepoError::Git {
-        // We do not yet know the app id here — the caller's path context is
-        // already in the error.
-        app: String::new(),
+        app: app.to_owned(),
         path: repo_path.to_path_buf(),
         source,
     })
@@ -258,12 +256,12 @@ fn reset_to_origin_branch(
             source,
         })?;
 
-    head_sha_of(repo, repo_path)
+    head_sha_of(repo, repo_path, app)
 }
 
-fn head_sha_of(repo: &Repository, repo_path: &Path) -> Result<String, RepoError> {
+fn head_sha_of(repo: &Repository, repo_path: &Path, app: &str) -> Result<String, RepoError> {
     let head = repo.head().map_err(|source| RepoError::Git {
-        app: String::new(),
+        app: app.to_owned(),
         path: repo_path.to_path_buf(),
         source,
     })?;
