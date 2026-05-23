@@ -11,6 +11,7 @@ pub mod db;
 pub mod errors;
 pub mod launcher;
 pub mod manifest;
+pub mod orchestrator;
 pub mod paths;
 pub mod poller;
 pub mod rollback;
