@@ -114,7 +114,11 @@ pub fn validate_sha(sha: &str) -> Result<(), ShaError> {
     if sha.is_empty() {
         return Err(ShaError::Empty);
     }
-    if sha.contains('/') || sha.contains('\\') || sha.contains("..") {
+    // The substring check on `..` covers `../foo`, `..`, `foo..bar`, etc.,
+    // but the single-dot case slips past it: a sha of `.` would resolve
+    // `releases/<app>/.` to `releases/<app>/` itself, letting a caller write
+    // outside the per-release directory. Reject the literal `.` explicitly.
+    if sha == "." || sha.contains('/') || sha.contains('\\') || sha.contains("..") {
         return Err(ShaError::Unsafe);
     }
     Ok(())
@@ -368,6 +372,24 @@ mod tests {
         assert_eq!(validate_sha("../etc"), Err(ShaError::Unsafe));
         assert_eq!(validate_sha("a/b"), Err(ShaError::Unsafe));
         assert_eq!(validate_sha("a\\b"), Err(ShaError::Unsafe));
+        // Single-dot sha resolves to the parent app's release dir
+        // (`releases/<app>/.` ≡ `releases/<app>/`). The `contains("..")`
+        // guard does not catch it, so it gets its own explicit clause —
+        // this assertion is the regression test for the Gemini review on
+        // PR #29.
+        assert_eq!(validate_sha("."), Err(ShaError::Unsafe));
+    }
+
+    #[test]
+    fn validate_sha_rejects_single_dot_specifically() {
+        // Standalone regression assertion: `.` alone must fail. Kept
+        // separate from the broader traversal test so a future refactor
+        // that loosens validation cannot accidentally drop this case
+        // without an obvious test-name-level signal.
+        match validate_sha(".") {
+            Err(ShaError::Unsafe) => {}
+            other => panic!("expected Err(ShaError::Unsafe) for `.`, got {other:?}"),
+        }
     }
 
     #[test]
