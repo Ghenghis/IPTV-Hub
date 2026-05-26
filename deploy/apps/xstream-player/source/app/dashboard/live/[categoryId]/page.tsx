@@ -22,6 +22,7 @@ import { useData } from '../../../context/DataContext';
 import SortControls, { SortOption } from '@/components/SortControls';
 import { useSortPreference } from '@/app/hooks/useSortPreference';
 import { useInfiniteScroll } from '@/app/hooks/useInfiniteScroll';
+import { safeImagePath } from '@/app/lib/catalogFilters';
 
 export default function LiveStreams() {
     const { credentials } = useAuth();
@@ -75,7 +76,10 @@ export default function LiveStreams() {
 
                 const data = await res.json();
                 if (Array.isArray(data)) {
-                    setStreams(data);
+                    setStreams(data.map((stream) => ({
+                        ...stream,
+                        stream_icon: safeImagePath(stream.stream_icon) || '',
+                    })));
                 } else {
                     setStreams([]);
                 }

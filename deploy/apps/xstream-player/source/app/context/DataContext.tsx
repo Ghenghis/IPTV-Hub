@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext';
 import * as db from '../lib/db';
 import { getDeviceProfile } from '../lib/deviceProfile';
 import { streamSyncStreams } from '../lib/streamSync';
+import { safeImagePath } from '../lib/catalogFilters';
 
 interface DataContextType {
     isSyncing: boolean;
@@ -28,12 +29,18 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
  * This eliminates storing the full raw JSON blob (~70% storage reduction).
  */
 function mapItemToSlimStream(item: any, type: 'live' | 'movie' | 'series'): db.CachedStream {
+    const icon = safeImagePath(item.stream_icon || item.cover);
+    const cover = safeImagePath(item.cover || item.stream_icon);
+    const backdropPath = Array.isArray(item.backdrop_path)
+        ? item.backdrop_path.map((value: string) => safeImagePath(value) || value).filter(Boolean)
+        : item.backdrop_path;
+
     return {
         id: String(item.stream_id || item.series_id),
         category_id: String(item.category_id),
         name: item.name || '',
         type,
-        icon: item.stream_icon || item.cover || undefined,
+        icon,
         rating: item.rating || undefined,
         added: item.added || undefined,
         // Do NOT normalize here — defer to lazy normalization
@@ -42,14 +49,14 @@ function mapItemToSlimStream(item: any, type: 'live' | 'movie' | 'series'): db.C
         container_extension: item.container_extension || undefined,
         epg_channel_id: item.epg_channel_id || undefined,
         stream_type: item.stream_type || undefined,
-        cover: item.cover || undefined,
+        cover,
         plot: item.plot || undefined,
         cast: item.cast || undefined,
         director: item.director || undefined,
         genre: item.genre || undefined,
         release_date: item.releaseDate || item.release_date || undefined,
         rating_5based: item.rating_5based || undefined,
-        backdrop_path: item.backdrop_path || undefined,
+        backdrop_path: backdropPath || undefined,
         last_modified: item.last_modified || undefined,
     };
 }

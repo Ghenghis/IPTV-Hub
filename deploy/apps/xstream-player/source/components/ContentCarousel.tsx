@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Play, ChevronRight } from 'lucide-react';
 import { LucideIcon } from 'lucide-react';
+import { safeImagePath } from '@/app/lib/catalogFilters';
 
 interface CarouselItem {
     id: string | number;
@@ -60,7 +61,7 @@ export default function ContentCarousel({
                             className="group relative flex-shrink-0 w-[200px] aspect-[2/3] rounded-xl overflow-hidden border border-white/10 hover:border-red-600 transition-all focus:outline-none focus:ring-4 focus:ring-red-600 focus:scale-105"
                         >
                             <img
-                                src={item.image}
+                                src={safeImagePath(item.image) || item.image}
                                 alt={item.name}
                                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                             />

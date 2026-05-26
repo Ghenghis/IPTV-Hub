@@ -52,6 +52,7 @@ const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
 
 export const getTMDbImageUrl = (path: string | null): string => {
     if (!path) return 'https://via.placeholder.com/300x450?text=No+Poster';
+    if (/^https?:\/\//i.test(path) || path.startsWith('/api/')) return path;
     return `${TMDB_IMAGE_BASE}${path}`;
 };
 

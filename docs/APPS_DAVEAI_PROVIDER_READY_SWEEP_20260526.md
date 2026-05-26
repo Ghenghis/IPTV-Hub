@@ -1,6 +1,6 @@
 # apps.daveai.tech Provider-Ready Visual Sweep — 2026-05-26
 
-Status: `13/13 passed` (`2026-05-26T22:30:32.398Z`)
+Status: `13/13 passed` (`2026-05-26T22:50:07.452Z`)
 
 ## Scope
 
@@ -91,16 +91,34 @@ Each app had to satisfy:
   - playback proof loaded USA AMC for both Apollo and XtremeHD through
     same-origin `/api/provider-vault/stream` plus segment proxy URLs;
   - proof: `docs/IPTV_PLAYER_ZERO_FREE_PROVIDER_FIX_20260526.md`.
+- Re-verified and polished xstream-player after user review:
+  - English login/dashboard surface remains intact (`Welcome`, provider buttons,
+    manual Xtream fallback);
+  - Apollo Group TV and XtremeHD both load through provider-vault with client
+    auth storing only `providerId`, not raw host/user/password;
+  - both providers expose live/VOD/series categories (`334`/`54`/`87`) and
+    catalog totals (`14035` live, `55719` movies, `32199` series);
+  - live playback for both providers reaches `video.readyState=4` through
+    `/api/provider-vault/stream` and `/api/provider-vault/segment`;
+  - provider artwork now uses same-origin `/api/provider-vault/image?src=...`
+    so Chrome no longer blocks mixed-content HTTP poster images;
+  - proof:
+    `deploy/apps/xstream-player/PROOF-20260526.md`.
 
 ## Latest Sweep Notes
 
-The latest sweep was rerun after the IPTV Player Zero and IPTVnator repairs.
-It passed all `13` launcher apps with:
+The latest sweep was rerun after the IPTV Player Zero, IPTVnator, and
+xstream-player repairs. It passed all `13` launcher apps with:
 
 - `0` login-page regressions;
 - `0` client-side exception/application-error screens;
 - `0` provider credential-shaped text leaks;
 - `0` Playwright `pageerror` events.
+
+It was rerun again after the xstream-player artwork/proof polish and still
+passed all `13` launcher apps with `0` login regressions, `0` client-side
+exception/application-error screens, `0` provider credential-shaped text leaks,
+`0` Playwright `pageerror` events, and `0` captured console errors.
 
 ## Console Notes
 

@@ -24,6 +24,7 @@ interface Series {
 import { useData } from '../../../context/DataContext';
 import SortControls, { SortOption } from '@/components/SortControls';
 import { useSortPreference } from '@/app/hooks/useSortPreference';
+import { safeImagePath } from '@/app/lib/catalogFilters';
 
 export default function SeriesList() {
     const { credentials } = useAuth();
@@ -80,7 +81,13 @@ export default function SeriesList() {
 
                 const data = await res.json();
                 if (Array.isArray(data)) {
-                    setSeriesList(data);
+                    setSeriesList(data.map((series) => ({
+                        ...series,
+                        cover: safeImagePath(series.cover || series.stream_icon) || '',
+                        backdrop_path: Array.isArray(series.backdrop_path)
+                            ? series.backdrop_path.map((value: string) => safeImagePath(value) || value)
+                            : series.backdrop_path,
+                    })));
                 } else {
                     setSeriesList([]);
                 }

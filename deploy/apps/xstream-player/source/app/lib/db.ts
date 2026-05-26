@@ -1,7 +1,7 @@
 import { openDB, IDBPDatabase } from 'idb';
 
 const DB_NAME = 'xstream_player_db';
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 
 export interface CachedCategory {
     category_id: string;
@@ -79,15 +79,21 @@ export const initDB = async (): Promise<IDBPDatabase> => {
                     }
                 }
 
-                // Clear old data when upgrading to v9 so direct-image and
+                // Clear old data when upgrading so direct-image and
                 // mixed-language catalog entries are replaced by safe data.
-                if (oldVersion < 9) {
+                if (oldVersion < 10) {
                     streamStore.clear();
                     if (db.objectStoreNames.contains('categories')) {
                         transaction.objectStore('categories').clear();
                     }
                     if (db.objectStoreNames.contains('sync_metadata')) {
                         transaction.objectStore('sync_metadata').clear();
+                    }
+                    if (db.objectStoreNames.contains('details')) {
+                        transaction.objectStore('details').clear();
+                    }
+                    if (db.objectStoreNames.contains('carousel_cache')) {
+                        transaction.objectStore('carousel_cache').clear();
                     }
                 }
             }

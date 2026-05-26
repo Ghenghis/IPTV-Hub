@@ -21,6 +21,7 @@ import SortControls, { SortOption } from '@/components/SortControls';
 import { useSortPreference } from '@/app/hooks/useSortPreference';
 import { useInfiniteScroll } from '@/app/hooks/useInfiniteScroll';
 import { useMemo } from 'react';
+import { safeImagePath } from '@/app/lib/catalogFilters';
 
 export default function MovieList() {
     const { credentials } = useAuth();
@@ -73,7 +74,10 @@ export default function MovieList() {
 
                 const data = await res.json();
                 if (Array.isArray(data)) {
-                    setMovies(data);
+                    setMovies(data.map((movie) => ({
+                        ...movie,
+                        stream_icon: safeImagePath(movie.stream_icon || movie.cover) || '',
+                    })));
                 } else {
                     setMovies([]);
                 }

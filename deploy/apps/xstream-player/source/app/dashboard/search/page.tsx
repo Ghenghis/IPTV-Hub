@@ -18,6 +18,7 @@ interface SearchResult {
 
 import { useData } from '../../context/DataContext';
 import { useInfiniteScroll } from '@/app/hooks/useInfiniteScroll';
+import { safeImagePath } from '@/app/lib/catalogFilters';
 import Loader from '@/components/Loader';
 
 export default function SearchPage() {
@@ -129,7 +130,7 @@ export default function SearchPage() {
                     id: item.stream_id || item.series_id,
                     name: item.name,
                     type,
-                    image: item.stream_icon || item.cover,
+                    image: safeImagePath(item.stream_icon || item.cover),
                     rating: item.rating
                 }));
         };

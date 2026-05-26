@@ -304,8 +304,6 @@ export default function HeroSection({ type = 'all' }: HeroSectionProps) {
             if (selected.length > 0) {
                 setHeroItems(selected);
                 saveCarouselCache(dateKey, selected);
-            } else {
-                console.warn('HeroSection: No items could be selected even after fallback.');
             }
 
         } catch (error) {

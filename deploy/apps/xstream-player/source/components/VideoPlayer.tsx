@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
+import { safeImagePath } from '@/app/lib/catalogFilters';
 import { Maximize, Minimize, Play, Pause, Volume2, VolumeX, AlertTriangle, ArrowLeft, Loader2, Subtitles } from 'lucide-react';
 import { useNavigationOverride } from '@/app/context/NavigationContext';
 
@@ -753,7 +754,7 @@ export default function VideoPlayer({
             <video
                 ref={videoRef}
                 className="w-full h-full object-contain cursor-pointer"
-                poster={poster}
+                poster={safeImagePath(poster) || poster}
                 playsInline
                 preload="auto"
                 // crossOrigin="anonymous" // NEVER use this
