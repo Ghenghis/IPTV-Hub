@@ -1,0 +1,18 @@
+<router-outlet></router-outlet>
+<app-download-manager *ngIf="showDownloadManager()"></app-download-manager>
+
+<div class="provider-player-backdrop" *ngIf="currentPlayback">
+  <section class="provider-player" role="dialog" aria-label="DaveTV provider-vault player">
+    <header>
+      <div>
+        <div class="provider-kicker">{{ currentPlayback.providerName }}</div>
+        <h2>{{ currentPlayback.title }}</h2>
+      </div>
+      <button type="button" (click)="closePlayback()" aria-label="Close player">Close</button>
+    </header>
+    <video #vaultVideo></video>
+    <footer>
+      Safe DaveTV provider-vault stream. Larger HLS buffers are enabled for steadier playback.
+    </footer>
+  </section>
+</div>
