@@ -32,6 +32,23 @@ declares two targets so both images share the upstream `fetch` stage:
 Host port mapping follows `deploy/PORTS.md` §3 (catalogue index 19,
 slot base 9780; ws/aux slot +1 = 9781). Both ports bind to `127.0.0.1` only.
 
+## DaveTV hosted override
+
+The live DaveTV service at `smart-iptv-web.daveai.tech` currently runs a
+Next.js provider-vault build, not the original static upstream container
+described above. The hosted override files that must be preserved when
+rebuilding that live service are tracked here:
+
+```text
+overrides/components/player/VideoPlayer.tsx
+overrides/components/dashboard/SettingsView.tsx
+```
+
+These override files make the existing buffer controls real for hosted playback:
+300-second default HLS/MPEG-TS buffering, 256 MB default buffer memory, low
+latency off by default, and provider-vault playback without browser-side
+credentials. See `PROOF-20260526.md` for the live Apollo/XtremeHD proof.
+
 ### EPG port — explicit
 
 The EPG service listens on container port **3001** and is published to host

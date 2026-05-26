@@ -1,6 +1,6 @@
 # apps.daveai.tech Provider-Ready Visual Sweep — 2026-05-26
 
-Status: `13/13 passed` (`2026-05-26T22:50:07.452Z`)
+Status: `13/13 passed` (`2026-05-26T23:07:44.847Z`)
 
 ## Scope
 
@@ -104,6 +104,18 @@ Each app had to satisfy:
     so Chrome no longer blocks mixed-content HTTP poster images;
   - proof:
     `deploy/apps/xstream-player/PROOF-20260526.md`.
+- Re-verified and polished Smart IPTV Web after user review:
+  - Apollo Group TV and XtremeHD both load through provider-vault with client
+    storage containing only `providerId`, not raw provider host/user/password;
+  - both providers load `1200` live, `500` movies, and `500` series rows;
+  - live playback selected USA AMC for both providers and reached
+    `video.readyState=4` through same-origin `/api/provider-vault/stream` plus
+    segment proxy requests;
+  - player buffering controls now drive the actual HLS/MPEG-TS engines:
+    `300s` default buffer target, `256MB` default buffer size, low-latency mode
+    off for smoother long-buffer playback, and MPEG-TS stash buffering enabled;
+  - proof:
+    `deploy/apps/smart-iptv-web/PROOF-20260526.md`.
 
 ## Latest Sweep Notes
 
