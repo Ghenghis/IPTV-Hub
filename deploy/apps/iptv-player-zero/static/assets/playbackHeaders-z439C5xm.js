@@ -1,0 +1,1 @@
+const n="VLC/3.0.20 LibVLC/3.0.20",t="IPTV-Player-Zero";function a(e){const r=String(e??"").trim();return r||null}function o(e){const r=a(e);return r?r===n?"vlc":r===t?"ipz":"custom":"none"}export{t as I,n as V,a as n,o as p};

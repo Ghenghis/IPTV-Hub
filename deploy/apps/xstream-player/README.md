@@ -1,114 +1,123 @@
-# xstream-player (IPTV Hub deploy)
+# xstream-player (DaveAI source build)
 
-A modern, self-hosted web IPTV player built with Next.js and React. Features
-Xstream Codes support, cross-device sync, TMDB integration, OpenSubtitles
-integration, and an ad-free premium experience.
+A DaveAI-maintained build of the upstream Next.js IPTV player, packaged for
+`apps.daveai.tech`. This app is used for Xtream Codes-compatible providers such
+as XtremeHD and Apollo Group TV.
 
 - **Upstream repo:** https://github.com/jandersonss/xstream-player
-- **Upstream image:** https://hub.docker.com/r/jandersonss/xstream-player
+- **Source base:** upstream `v1.5.1`
 - **Catalogue id:** `xstream-player` (index 24)
-- **Host port:** `127.0.0.1:9830` (per `deploy/PORTS.md` §3)
-- **Container port:** `3000` (Next.js standalone server)
-- **Routing target:** `xstream-player.<DEPLOY_DOMAIN>` -> `127.0.0.1:9830`
+- **Host port:** `127.0.0.1:9830` in IPTV-Hub Docker deploys
+- **Live VPS service:** `davetv-xstream-player.service` on `127.0.0.1:3101`
+- **Public route:** `xstream-player.daveai.tech` behind the DaveTV auth gate
 
-## Image pin
+## DaveAI changes
 
-This deployment uses the upstream-published image, pinned by tag **and**
-sha256 digest. The IPTV-Hub deploy contract (`CONTRACT.md` §2.5) forbids
-`:latest` and other floating tags.
+The app is no longer deployed as a direct third-party image pin. DaveAI builds
+from the checked-in `source/` tree so provider compatibility and playback
+polish can be versioned and reviewed.
 
-```
-jandersonss/xstream-player:1.5.1
-  @sha256:a3ef8567318d69130b71b440ffc49c568f114d338f5fb13782b4c68935dcc88f
-```
+Current DaveAI deltas:
 
-| Field          | Value                                                              |
-| -------------- | ------------------------------------------------------------------ |
-| Tag            | `1.5.1`                                                            |
-| Digest         | `sha256:a3ef8567318d69130b71b440ffc49c568f114d338f5fb13782b4c68935dcc88f` |
-| Published      | 2026-05-13                                                         |
-| Compressed size| 71,910,806 bytes (~71.9 MB)                                        |
-| Resolved from  | `GET https://hub.docker.com/v2/repositories/jandersonss/xstream-player/tags/1.5.1` |
+- English-first interface for login, dashboard, navigation, empty states,
+  settings, series, movies, live TV, and player controls.
+- Provider-vault support for managed provider credentials.
+- Apollo/XtremeHD-friendly Xtream Codes flow retained from the live VPS build.
+- Larger HLS buffering profile for VOD playback:
+  - VOD target buffer: 300 seconds.
+  - Live target buffer: 90 seconds.
+  - VOD startup wait: 20 seconds or first useful buffer, whichever comes first.
+  - Larger VOD memory budget: 512 MB by default.
+- Conservative ABR ramp-up to reduce movie stalls on bursty IPTV providers.
+- Next.js standalone Docker image built from local source.
 
-## Environment variables
+## Runtime environment
 
-The upstream image bakes sensible defaults; you do not need to override any of
-them for a standard deploy. Listed here for completeness (all set in the
-upstream Dockerfile, re-stated in `docker-compose.service.yml`):
+| Variable                  | Default        | Notes                                      |
+| ------------------------- | -------------- | ------------------------------------------ |
+| `NODE_ENV`                | `production`   | Next.js production mode.                   |
+| `NEXT_TELEMETRY_DISABLED` | `1`            | Disables Next.js anonymous telemetry.      |
+| `PORT`                    | `3000`         | Container-internal HTTP port.              |
+| `HOSTNAME`                | `0.0.0.0`      | Container bind address.                    |
+| `IPTV_PRIVATE_DIR`        | `/app/private` | Read-only private provider-vault material. |
 
-| Variable                  | Default        | Notes                                  |
-| ------------------------- | -------------- | -------------------------------------- |
-| `NODE_ENV`                | `production`   | Next.js production mode.               |
-| `NEXT_TELEMETRY_DISABLED` | `1`            | Disables Next.js anonymous telemetry.  |
-| `PORT`                    | `3000`         | Container-internal HTTP port.          |
-| `HOSTNAME`                | `0.0.0.0`      | Bind all interfaces inside container.  |
+Playback tuning can be overridden at build/runtime when needed:
 
-No application-specific runtime env vars are required by the upstream image.
-IPTV provider credentials (Xstream Codes) are entered through the web UI on
-first run and persisted to `/app/data/config.json` inside the volume.
+| Variable                         | Default |
+| -------------------------------- | ------- |
+| `NEXT_PUBLIC_XSTREAM_VOD_BUFFER_SECONDS` | `300`   |
+| `NEXT_PUBLIC_XSTREAM_LIVE_BUFFER_SECONDS` | `90`    |
+| `NEXT_PUBLIC_XSTREAM_VOD_START_BUFFER_SECONDS` | `20` |
+| `NEXT_PUBLIC_XSTREAM_LIVE_START_BUFFER_SECONDS` | `6` |
+| `NEXT_PUBLIC_XSTREAM_VOD_MAX_BUFFER_MB` | `512`   |
+| `NEXT_PUBLIC_XSTREAM_LIVE_MAX_BUFFER_MB` | `192`  |
 
 ## Persistent data
 
-- **Volume:** `xstream_player_data` (named volume; resolves to
-  `${COMPOSE_PROJECT_NAME:-iptv-hub}_xstream_player_data`).
-- **Mount point:** `/app/data` inside the container.
-- **Contents:** `config.json` with the user's IPTV provider credentials and
-  client preferences. **Unencrypted** — back this volume up alongside the
-  other IPTV-Hub state.
+- **Volume:** `xstream_player_data`
+- **Mount point:** `/app/data`
+- **Contents:** IPTV credentials and local preferences.
 
-A named Docker volume (rather than a host bind mount) avoids the uid-1001
-permission problem the upstream README documents — Docker initialises the
-volume with the container user's ownership on first mount.
+The provider-vault private directory is mounted separately as read-only:
 
-## Update path
+- **Volume:** `xstream_player_private`
+- **Mount point:** `/app/private:ro`
 
-1. Look up the newest tag and digest:
+Treat both volumes as sensitive. Provider credentials must not be committed.
 
-   ```sh
-   curl -s https://hub.docker.com/v2/repositories/jandersonss/xstream-player/tags?page_size=25 \
-     | jq -r '.results[] | "\(.name)\t\(.digest)\t\(.last_updated)"'
-   ```
+## Local build and smoke test
 
-   Or open https://hub.docker.com/r/jandersonss/xstream-player/tags in a browser.
-
-2. Pick the most recent **semver** tag (avoid `latest`, `1.5` floating, etc.).
-3. Update three places in this directory:
-   - `Dockerfile` — the `FROM` line.
-   - `docker-compose.service.yml` — the `image:` line **and** the
-     `iptv-hub.image-digest` label.
-   - `README.md` — the "Image pin" table above.
-4. Re-run `deploy/scripts/generate-stack.sh` and the IPTV-Hub deploy harness.
-5. Commit with a message like `chore(xstream-player): bump to <tag> (<digest-short>)`.
-
-## Local verification
+From the repo root:
 
 ```sh
-# From the repo root, after the per-app fragment is in place:
-docker pull jandersonss/xstream-player@sha256:a3ef8567318d69130b71b440ffc49c568f114d338f5fb13782b4c68935dcc88f
+docker build -t daveai/xstream-player:1.5.1-daveai.1 ./deploy/apps/xstream-player
 
-# Smoke run (host port 9830 -> container 3000):
 docker run --rm -d \
   --name iptv-hub-xstream-player-smoke \
   -p 127.0.0.1:9830:3000 \
   -v iptv_hub_xstream_player_smoke:/app/data \
-  jandersonss/xstream-player@sha256:a3ef8567318d69130b71b440ffc49c568f114d338f5fb13782b4c68935dcc88f
+  daveai/xstream-player:1.5.1-daveai.1
 
 curl -sf http://127.0.0.1:9830/ -o /dev/null && echo OK || echo FAIL
 docker stop iptv-hub-xstream-player-smoke
 docker volume rm iptv_hub_xstream_player_smoke
 ```
 
-`docker pull` should report the same digest line that is pinned above. If it
-does not, the upstream tag has been re-pushed under the same name — investigate
-before bumping (`CONTRACT.md` §2.5 forbids accepting a silently-changed tag).
+Expected first-screen English text:
+
+- `Welcome`
+- `Enter your IPTV credentials to start streaming`
+- `SERVER URL`
+- `USERNAME`
+- `PASSWORD`
+- `Connect`
+- `Compatible with the Xtream Codes API`
+
+## VPS deploy notes
+
+The current production VPS service is source-based at:
+
+```text
+/opt/davetv/services/xstream-player
+```
+
+After source updates on the VPS:
+
+```sh
+cd /opt/davetv/services/xstream-player
+NODE_ENV=production npm run build
+systemctl restart davetv-xstream-player.service
+curl -sf http://127.0.0.1:3101/ -o /dev/null && echo OK
+```
+
+The production service currently sits behind the DaveTV auth gate. External
+unauthenticated probes should redirect to login; direct localhost probes on the
+VPS should return the rendered app.
 
 ## Security notes
 
-- The image is third-party and signed only by Docker Hub's standard manifest
-  digest. The sha256 pin above is the project's trust anchor.
-- `config.json` stores IPTV provider credentials in plaintext on disk
-  (upstream behaviour, not changeable from outside). The volume must be
-  treated as a secret store: back it up encrypted; do not commit dumps.
-- The container binds to `127.0.0.1` on the host. Public exposure happens
-  only via the host's nginx with TLS (see `deploy/docker-compose.yml`
-  preamble).
+- Provider credentials are sensitive and must remain outside git.
+- The container binds only to loopback in the composed deploy.
+- Public exposure must happen through nginx/TLS and the DaveTV auth gate.
+- Keep the source tree free of `.next`, `node_modules`, private provider data,
+  and local `.env` files.

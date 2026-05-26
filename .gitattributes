@@ -1,0 +1,16 @@
+# Keep deployed static web bundles byte-stable across Windows checkouts.
+/.gitattributes text eol=lf
+deploy/apps/iptv-player-zero/static/** -text -diff
+deploy/apps/iptv-player-zero/*.md text eol=lf
+deploy/apps/iptv-player-zero/*.json text eol=lf
+deploy/apps/iptv-player-zero/Dockerfile text eol=lf
+deploy/apps/iptv-player-zero/provider-proxy/*.ts text eol=lf
+deploy/apps/xstream-player/*.md text eol=lf
+deploy/apps/xstream-player/*.yml text eol=lf
+deploy/apps/xstream-player/Dockerfile text eol=lf
+deploy/apps/xstream-player/source/** text eol=lf
+deploy/apps/xstream-player/source/**/*.ico -text -diff
+deploy/apps/xstream-player/source/**/*.png -text -diff
+deploy/apps/xstream-player/source/**/*.jpg -text -diff
+deploy/apps/xstream-player/source/**/*.jpeg -text -diff
+deploy/apps/xstream-player/source/**/*.webp -text -diff

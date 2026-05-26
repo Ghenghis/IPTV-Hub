@@ -10,9 +10,11 @@
 
 services:
   xstream-player:
-    # Upstream-published image, pinned to tag 1.5.1 plus sha256 digest.
-    # See deploy/apps/xstream-player/Dockerfile and README.md for digest lookup.
-    image: jandersonss/xstream-player:1.5.1@sha256:a3ef8567318d69130b71b440ffc49c568f114d338f5fb13782b4c68935dcc88f
+    # DaveAI-maintained build from vendored upstream source plus provider-vault,
+    # English UI, and stronger HLS buffering defaults.
+    build:
+      context: ./apps/xstream-player
+    image: daveai/xstream-player:1.5.1-daveai.1
     container_name: ${COMPOSE_PROJECT_NAME:-iptv-hub}_xstream-player
     restart: unless-stopped
     networks:
@@ -30,12 +32,14 @@ services:
       NEXT_TELEMETRY_DISABLED: "1"
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
+      IPTV_PRIVATE_DIR: /app/private
     volumes:
       # Persistent config (Xstream Codes credentials, user prefs).
       # Upstream stores config.json under /app/data; without this volume the
       # config is lost on every container restart. Named volume avoids the
       # uid-1001 chown pitfall the upstream README warns about for bind mounts.
       - xstream_player_data:/app/data
+      - xstream_player_private:/app/private:ro
     healthcheck:
       # Next.js standalone server answers HTTP on / once boot completes.
       # wget is present in the upstream node:20-alpine base image.
@@ -48,8 +52,10 @@ services:
       iptv-hub.app-id: xstream-player
       iptv-hub.slot: "9830"
       iptv-hub.upstream: "https://github.com/jandersonss/xstream-player"
-      iptv-hub.image-digest: "sha256:a3ef8567318d69130b71b440ffc49c568f114d338f5fb13782b4c68935dcc88f"
+      iptv-hub.image-digest: "local-build"
 
 volumes:
   xstream_player_data:
     name: ${COMPOSE_PROJECT_NAME:-iptv-hub}_xstream_player_data
+  xstream_player_private:
+    name: ${COMPOSE_PROJECT_NAME:-iptv-hub}_xstream_player_private

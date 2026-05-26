@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  CRITICAL FALLBACKS FOR WEBOS 4 (CHROME 60)
+  Garante que o fundo seja preto mesmo se o processamento falhar.
+*/
+:root {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --primary: #e50914;
+  --secondary: #262626;
+  --accent: #404040;
+  --text-muted: #a3a3a3;
+  --card-bg: #171717;
+  --glass-bg: rgba(23, 23, 23, 0.8);
+  --font-main: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #0a0a0a !important;
+  color: #ededed !important;
+  font-family: var(--font-main);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body {
+  height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* TV Focus Styles */
+[data-focusable="true"]:focus {
+  outline: 4px solid #e50914 !important;
+  outline-offset: 4px !important;
+  transform: scale(1.05) !important;
+  z-index: 50 !important;
+  box-shadow: 0 0 20px rgba(229, 9, 20, 0.8) !important;
+}
+
+/* Scrollbar para navegadores antigos baseados em WebKit (Chrome 60) */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #262626;
+  border-radius: 4px;
+}
+
+/* Subtitle Styling */
+video::cue {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+  color: #ffffff !important;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 1) !important;
+  font-family: var(--font-main) !important;
+  font-size: var(--subtitle-font-size, 1.2rem) !important;
+  line-height: 0 !important;
+  /* Raises the subtitle by increasing the line box height */
+}
+
+/* Chrome/Webkit specific position adjustment if supported */
+video::-webkit-media-text-track-display {
+  padding-bottom: 5% !important;
+}

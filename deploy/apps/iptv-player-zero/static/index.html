@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/iptv-player-zero/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IPTV Player Zero</title>
+  <style>
+    html,
+    body,
+    #root {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top left, rgba(90, 130, 255, 0.16), transparent 36%),
+        radial-gradient(circle at bottom right, rgba(65, 190, 220, 0.14), transparent 42%),
+        linear-gradient(180deg, #171b23 0%, #0f1218 100%);
+      color: #eef2f7;
+      font-family:
+        "Segoe UI",
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        sans-serif;
+    }
+
+    .ipz-preboot {
+      position: relative;
+      display: flex;
+      height: 100%;
+      width: 100%;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .ipz-preboot::before,
+    .ipz-preboot::after {
+      content: "";
+      position: absolute;
+      border-radius: 999px;
+      filter: blur(56px);
+      opacity: 0.9;
+      pointer-events: none;
+    }
+
+    .ipz-preboot::before {
+      left: -120px;
+      top: -120px;
+      height: 360px;
+      width: 360px;
+      background: rgba(121, 92, 255, 0.16);
+    }
+
+    .ipz-preboot::after {
+      right: -140px;
+      bottom: -140px;
+      height: 420px;
+      width: 420px;
+      background: rgba(62, 181, 240, 0.14);
+    }
+
+    .ipz-preboot__card {
+      position: relative;
+      z-index: 1;
+      width: min(440px, calc(100vw - 48px));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 28px;
+      background: rgba(18, 21, 29, 0.76);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+      backdrop-filter: blur(18px);
+      padding: 28px 28px 24px;
+    }
+
+    .ipz-preboot__content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .ipz-preboot__logo {
+      display: block;
+      height: 48px;
+      width: auto;
+      -o-object-fit: contain;
+      object-fit: contain;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      user-select: none;
+    }
+
+    .ipz-preboot__label {
+      margin-top: 18px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: #f5f7fb;
+    }
+
+    .ipz-preboot__subtitle {
+      margin-top: 6px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: rgba(225, 231, 240, 0.68);
+    }
+
+    .ipz-preboot__progress {
+      margin-top: 22px;
+      width: 100%;
+    }
+
+    .ipz-preboot__progress-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: rgba(214, 221, 232, 0.54);
+    }
+
+    .ipz-preboot__track {
+      margin-top: 10px;
+      height: 8px;
+      width: 100%;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .ipz-preboot__bar {
+      height: 100%;
+      width: 28%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #77a7ff 0%, #56d2f1 100%);
+      transform-origin: left center;
+      animation: ipz-preboot-load 1.35s ease-in-out infinite alternate;
+    }
+
+    @keyframes ipz-preboot-load {
+      from {
+        transform: scaleX(0.75);
+        opacity: 0.82;
+      }
+
+      to {
+        transform: scaleX(1.22);
+        opacity: 1;
+      }
+    }
+  </style>
+  <link rel="stylesheet" crossorigin href="/iptv-player-zero/assets/index-BxoMcOzr.css">
+  <style>
+    @media (max-width: 700px) {
+      html,
+      body,
+      #root {
+        width: 100vw;
+        overflow: hidden;
+      }
+
+      .ipz-app-shell,
+      .ipz-app-shell > div,
+      .ipz-app-shell .ipz-topbar,
+      .ipz-app-shell .relative.min-h-0.flex-1 {
+        width: 100vw !important;
+        min-width: 0 !important;
+        max-width: 100vw !important;
+      }
+
+      .ipz-app-shell .ipz-topbar {
+        padding: 8px !important;
+      }
+
+      .ipz-app-shell .ipz-topbar > .grid {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        gap: 8px !important;
+      }
+
+      .ipz-app-shell .ipz-topbar > .grid > div:first-child {
+        display: none !important;
+      }
+
+      .ipz-app-shell .ipz-topbar > .grid > div {
+        width: auto !important;
+        max-width: calc(100vw - 16px) !important;
+      }
+
+      .ipz-app-shell .ipz-topbar button {
+        max-width: calc(100vw - 24px) !important;
+      }
+
+      .ipz-app-shell [class*="max-w-2xl"] {
+        max-width: calc(100vw - 24px) !important;
+        padding: 12px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+      }
+
+      .ipz-app-shell [class*="rounded-3xl"] {
+        border-radius: 20px !important;
+        padding: 16px !important;
+      }
+
+      .ipz-app-shell [class*="sm:grid-cols-3"] {
+        grid-template-columns: 1fr !important;
+      }
+
+      .ipz-app-shell [class*="fixed"][class*="z-[901]"] {
+        left: 12px !important;
+        right: 12px !important;
+        width: auto !important;
+        max-width: calc(100vw - 24px) !important;
+        transform: none !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root">
+    <div class="ipz-preboot" role="status" aria-live="polite" aria-label="Loading IPTV Player Zero">
+      <div class="ipz-preboot__card">
+        <div class="ipz-preboot__content">
+          <img src="/iptv-player-zero/iptv-player-zero-logo-10-padding.png" alt="" class="ipz-preboot__logo" draggable="false" />
+          <div class="ipz-preboot__label">Loading</div>
+          <div class="ipz-preboot__subtitle">Starting IPTV Player Zero</div>
+          <div class="ipz-preboot__progress" aria-hidden="true">
+            <div class="ipz-preboot__progress-head">
+              <span>Starting</span>
+              <span>Please wait</span>
+            </div>
+            <div class="ipz-preboot__track">
+              <div class="ipz-preboot__bar"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- hls.js for HLS stream playback in browser -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
+
+  <!-- Shim layer: MUST load before React bundle -->
+  <script src="/iptv-player-zero/js/store.js"></script>
+  <script src="/iptv-player-zero/js/m3u-parser.js"></script>
+  <script src="/iptv-player-zero/js/xmltv-parser.js"></script>
+  <script src="/iptv-player-zero/js/xtream-client.js"></script>
+  <script src="/iptv-player-zero/js/player-shim.js"></script>
+  <script src="/iptv-player-zero/js/samsung-remote.js"></script>
+  <script src="/iptv-player-zero/js/tauri-shim.js"></script>
+
+  <!-- Eagerly open IndexedDB on first launch. Provider credentials are user-entered only. -->
+  <script>
+    (function () {
+      if (typeof window.Store === 'undefined' || !window.Store.openDb) return;
+      window.__IPZ_DB_READY__ = window.Store.openDb().then(function () {
+        localStorage.setItem('_ipz_db_ready', '1');
+      });
+    })();
+  </script>
+
+  <!-- React app bundle -->
+  <script type="module" crossorigin src="/iptv-player-zero/assets/index-DUfsF0mF.js"></script>
+</body>
+
+</html>
