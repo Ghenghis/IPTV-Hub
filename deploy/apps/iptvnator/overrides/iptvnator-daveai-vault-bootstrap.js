@@ -8,7 +8,7 @@
 (function (window, document) {
   'use strict';
 
-  var BUILD_ID = '20260526-v4';
+  var BUILD_ID = '20260526-v5';
   var DB_NAME = 'iptvnator';
   var STORE_NAME = 'playlists';
   var SETTINGS_KEY = 'settings';
@@ -310,11 +310,22 @@
 
   function legacyXtreamProvider(row) {
     if (!row || typeof row !== 'object') return null;
+    if (isDaveAiVaultPlaylist(row)) return null;
     return (
       providerFromText(row.title) ||
       providerFromText(row.name) ||
       providerFromText(row.filename) ||
       providerFromText(row.serverUrl)
+    );
+  }
+
+  function isDaveAiVaultPlaylist(row) {
+    var id = String((row && (row._id || row.id)) || '');
+    var source = String((row && row.source) || '');
+    return (
+      id.indexOf('daveai-provider-vault-') === 0 ||
+      source === 'daveai-provider-vault' ||
+      Boolean(row && row.providerId && row.daveaiBuildId)
     );
   }
 
@@ -673,8 +684,10 @@
     var target = playlistRoute(provider.id);
     try {
       window.sessionStorage.setItem(PENDING_ROUTE_KEY, target);
-      if (window.location.pathname !== target && window.history && window.history.replaceState) {
-        window.history.replaceState(null, document.title, target);
+      window.sessionStorage.setItem('iptvnator_provider_vault_preempted_xtream', BUILD_ID);
+      if (window.location.pathname !== target) {
+        window.location.replace(target);
+        return provider;
       }
     } catch (ignored) {}
     return provider;

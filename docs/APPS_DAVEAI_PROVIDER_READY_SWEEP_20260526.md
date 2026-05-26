@@ -1,6 +1,6 @@
 # apps.daveai.tech Provider-Ready Visual Sweep — 2026-05-26
 
-Status: `13/13 passed` (`2026-05-26T23:07:44.847Z`)
+Status: `13/13 passed` (`2026-05-26T23:31:43.752Z`)
 
 ## Scope
 
@@ -80,6 +80,18 @@ Each app had to satisfy:
     so playback has zero console errors;
   - XtremeHD playback proof loaded `2600 channels` and played the first stream
     with no console or page errors.
+- Repaired IPTVnator again after user review:
+  - bumped the DaveAI bootstrap to `20260526-v5` so stale browsers fetch the
+    newest provider-vault handoff;
+  - hardened stale `/workspace/xtreams/...` routes so XtremeHD direct portal
+    pages redirect to the safe vault playlist before Angular renders
+    `Portal unavailable`;
+  - guarded legacy IndexedDB cleanup so DaveAI vault playlists are never
+    deleted as old direct Xtream profiles;
+  - verified Apollo Group TV and XtremeHD playback with
+    `video.readyState=4`, same-origin `/api/provider-vault/stream` responses,
+    no console/page errors, and no credential-shaped browser text;
+  - proof: `deploy/apps/iptvnator/PROOF-20260526.md`.
 - Repaired IPTV Player Zero after user review:
   - hosted DaveTV build now runs as free/pro unlocked with lifetime features
     active and no payment/Stripe/trial copy;
@@ -131,6 +143,9 @@ It was rerun again after the xstream-player artwork/proof polish and still
 passed all `13` launcher apps with `0` login regressions, `0` client-side
 exception/application-error screens, `0` provider credential-shaped text leaks,
 `0` Playwright `pageerror` events, and `0` captured console errors.
+
+It was rerun again after the IPTVnator v5 stale-XtremeHD repair and passed all
+`13` launcher apps with the same zero-regression result.
 
 ## Console Notes
 

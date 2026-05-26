@@ -70,6 +70,11 @@ without typing credentials into IPTVnator. It does not modify the upstream
 Angular bundle and can be removed by deleting the injected script tag plus the
 override file.
 
+Current hosted bootstrap: `20260526-v5`. This version force-refreshes stale
+Xtream deep links into the safe DaveAI playlist route and prevents the legacy
+cleanup pass from deleting DaveAI vault playlists. Live proof is recorded in
+`PROOF-20260526.md`.
+
 ## Build & run (local)
 
 ```sh

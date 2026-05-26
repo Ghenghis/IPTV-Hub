@@ -43,6 +43,33 @@ Verifier result:
 - Stale IndexedDB direct Xtream row is removed.
 - New seed marker is `20260526-v4`.
 
+## Follow-up v5 Repair
+
+After user review, a browser with stale direct Xtream workspace state could
+still land on `/workspace/xtreams/.../vod` and show `Portal unavailable`.
+The live bootstrap was bumped to `20260526-v5` and now performs a hard handoff
+from stale Xtream routes to the DaveAI provider-vault playlist route before
+Angular renders the old portal workspace.
+
+The v5 cleanup also excludes rows whose id/source/build marker identify them as
+DaveAI provider-vault playlists, so `Apollo Group TV - DaveAI Vault` and
+`XtremeHD - DaveAI Vault` are never deleted as legacy direct Xtream profiles.
+
+Latest v5 proof:
+
+- artifact directory:
+  `C:\Users\Admin\Downloads\VPS\_visual_artifacts\iptvnator-provider-proof-20260526`;
+- stale XtremeHD URL redirects to
+  `/workspace/playlists/daveai-provider-vault-xtremehd/all`;
+- `BUILD_ID` and seed marker are `20260526-v5`;
+- XtremeHD and Apollo Group TV both have `2600` provider-vault rows;
+- XtremeHD and Apollo Group TV playback both reached `video.readyState=4`;
+- two same-origin `/api/provider-vault/stream` responses returned `200`;
+- no `Portal unavailable`, no console/page errors, and no credential-shaped
+  browser text.
+
+The full DaveTV launcher sweep was rerun after v5 and passed `13/13` apps.
+
 Latest proof set:
 
 - `iptvnator-repro-summary.json`: `ok=true`, `consoleErrorCount=0`, `pageErrorCount=0`.
