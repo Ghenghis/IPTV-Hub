@@ -21,8 +21,13 @@ Current DaveAI deltas:
 
 - English-first interface for login, dashboard, navigation, empty states,
   settings, series, movies, live TV, and player controls.
-- Provider-vault support for managed provider credentials.
+- Provider-vault support for managed provider credentials. When Apollo Group TV
+  and XtremeHD are configured in the private vault, the login screen shows
+  one-click provider buttons and keeps raw credentials server-side.
 - Apollo/XtremeHD-friendly Xtream Codes flow retained from the live VPS build.
+  Live TV, movie, and series playback use tokenized provider-vault stream URLs
+  for managed provider sessions, with manual Xtream login still available as a
+  fallback.
 - Larger HLS buffering profile for VOD playback:
   - VOD target buffer: 300 seconds.
   - Live target buffer: 90 seconds.

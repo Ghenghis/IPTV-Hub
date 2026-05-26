@@ -5,6 +5,13 @@ import { useAuth } from './context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { Play, Server, User, Lock, AlertCircle } from 'lucide-react';
 
+interface VaultProvider {
+  id: 'apollo' | 'xtremehd';
+  name: string;
+  configured: boolean;
+  supports: string[];
+}
+
 export default function LoginPage() {
   const { login, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
@@ -14,12 +21,29 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [providers, setProviders] = useState<VaultProvider[]>([]);
+  const [providerSubmitting, setProviderSubmitting] = useState<string | null>(null);
 
   useEffect(() => {
     if (isAuthenticated) {
       router.push('/dashboard');
     }
   }, [isAuthenticated, router]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/provider-vault/providers', { cache: 'no-store' })
+      .then((res) => res.ok ? res.json() : { providers: [] })
+      .then((data) => {
+        if (!cancelled) setProviders(Array.isArray(data.providers) ? data.providers : []);
+      })
+      .catch(() => {
+        if (!cancelled) setProviders([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +64,21 @@ export default function LoginPage() {
       setIsSubmitting(false);
     }
   };
+
+  const handleProviderLogin = async (provider: VaultProvider) => {
+    setError('');
+    setProviderSubmitting(provider.id);
+
+    try {
+      await login('', '', '', provider.id);
+    } catch (err: any) {
+      setError(err.message || `${provider.name} is not available. Check provider vault setup.`);
+    } finally {
+      setProviderSubmitting(null);
+    }
+  };
+
+  const configuredProviders = providers.filter((provider) => provider.configured);
 
   if (isLoading) {
     return (
@@ -73,6 +112,33 @@ export default function LoginPage() {
           <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-200 text-sm animate-in fade-in slide-in-from-top-2">
             <AlertCircle size={18} className="flex-shrink-0" />
             {error}
+          </div>
+        )}
+
+        {configuredProviders.length > 0 && (
+          <div className="mb-8 grid gap-3">
+            {configuredProviders.map((provider) => (
+              <button
+                key={provider.id}
+                type="button"
+                onClick={() => handleProviderLogin(provider)}
+                disabled={Boolean(providerSubmitting)}
+                data-focusable="true"
+                className="w-full py-3.5 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-bold transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                {providerSubmitting === provider.id ? (
+                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                ) : (
+                  <Play size={18} fill="currentColor" />
+                )}
+                Use {provider.name}
+              </button>
+            ))}
+            <div className="flex items-center gap-3 text-xs uppercase tracking-widest text-gray-600">
+              <span className="h-px flex-1 bg-white/10"></span>
+              Manual login
+              <span className="h-px flex-1 bg-white/10"></span>
+            </div>
           </div>
         )}
 

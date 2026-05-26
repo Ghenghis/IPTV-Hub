@@ -15,12 +15,19 @@ export default function WatchLivePage() {
     useEffect(() => {
         if (!credentials || !streamId) return;
 
-        if (!credentials.providerId) {
+        if (credentials.providerId) {
+            const url = `/api/provider-vault/stream?provider=${encodeURIComponent(credentials.providerId)}&kind=live&id=${encodeURIComponent(streamId)}&ext=m3u8`;
+            setStreamUrl(url);
+            return;
+        }
+
+        if (!credentials.hostUrl || !credentials.username || !credentials.password) {
             setStreamUrl(null);
             return;
         }
 
-        const url = `/api/provider-vault/stream?provider=${encodeURIComponent(credentials.providerId)}&kind=live&id=${encodeURIComponent(streamId)}&ext=m3u8`;
+        const baseUrl = credentials.hostUrl.replace(/\/$/, '');
+        const url = `${baseUrl}/${credentials.username}/${credentials.password}/${encodeURIComponent(streamId)}`;
         setStreamUrl(url);
     }, [credentials, streamId]);
 

@@ -82,14 +82,14 @@ export default function TMDbSettingsModal({ isOpen, onClose }: TMDbSettingsModal
                             rel="noopener noreferrer"
                             className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
                         >
-                            Obter chave de API
+                            Get API key
                             <ExternalLink size={14} />
                         </a>
                     </div>
 
                     <div className="space-y-2">
                         <label htmlFor="apiKey" className="block text-sm font-medium text-gray-300">
-                            Chave de API (v3)
+                            API key (v3)
                         </label>
                         <input
                             id="apiKey"
@@ -97,7 +97,7 @@ export default function TMDbSettingsModal({ isOpen, onClose }: TMDbSettingsModal
                             value={apiKey}
                             onChange={(e) => setApiKey(e.target.value)}
                             disabled={isLoading}
-                            placeholder="Digite sua chave de API do TMDb"
+                            placeholder="Enter your TMDb API key"
                             className="w-full px-4 py-3 bg-[#0f0f0f] border border-[#333] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent disabled:opacity-50 transition-all"
                         />
                     </div>
@@ -124,7 +124,7 @@ export default function TMDbSettingsModal({ isOpen, onClose }: TMDbSettingsModal
                         disabled={isLoading}
                         className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 border border-[#333] rounded-lg text-white font-medium transition-colors disabled:opacity-50"
                     >
-                        Cancelar
+                        Cancel
                     </button>
                     <button
                         onClick={handleSave}
@@ -134,10 +134,10 @@ export default function TMDbSettingsModal({ isOpen, onClose }: TMDbSettingsModal
                         {isLoading ? (
                             <>
                                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                Testando...
+                                Testing...
                             </>
                         ) : (
-                            'Salvar'
+                            'Save'
                         )}
                     </button>
                 </div>

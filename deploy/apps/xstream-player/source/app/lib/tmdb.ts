@@ -51,7 +51,7 @@ export interface CarouselConfig {
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
 
 export const getTMDbImageUrl = (path: string | null): string => {
-    if (!path) return 'https://via.placeholder.com/300x450?text=Sem+Poster';
+    if (!path) return 'https://via.placeholder.com/300x450?text=No+Poster';
     return `${TMDB_IMAGE_BASE}${path}`;
 };
 
@@ -119,7 +119,7 @@ export const generateDailyCarousels = (
         },
         {
             id: 'trending',
-            title: 'Em Alta Hoje',
+            title: 'Trending Today',
             type: 'trending'
         }
     ];

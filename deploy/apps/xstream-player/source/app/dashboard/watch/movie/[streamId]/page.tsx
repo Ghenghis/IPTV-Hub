@@ -200,9 +200,13 @@ export default function WatchMoviePage() {
     }
 
     if (isPlaying) {
-        const { hostUrl, username, password } = credentials!;
         const extension = movie.movie_data.container_extension;
-        const streamUrl = `${hostUrl}/movie/${username}/${password}/${streamId}.${extension}`;
+        let streamUrl = '';
+        if (credentials?.providerId) {
+            streamUrl = `/api/provider-vault/stream?provider=${encodeURIComponent(credentials.providerId)}&kind=movie&id=${encodeURIComponent(streamId)}&ext=${encodeURIComponent(extension)}`;
+        } else if (credentials?.hostUrl && credentials.username && credentials.password) {
+            streamUrl = `${credentials.hostUrl.replace(/\/$/, '')}/movie/${credentials.username}/${credentials.password}/${streamId}.${extension}`;
+        }
 
         return (
             <div className="fixed inset-0 bg-black z-50 flex flex-col">
@@ -251,7 +255,7 @@ export default function WatchMoviePage() {
                             src={movie.info.movie_image}
                             alt={movie.info.name}
                             className="w-full h-auto"
-                            onError={(e) => e.currentTarget.src = 'https://via.placeholder.com/300x450?text=Sem+Poster'}
+                            onError={(e) => e.currentTarget.src = 'https://via.placeholder.com/300x450?text=No+Poster'}
                         />
                     </div>
 
@@ -283,7 +287,7 @@ export default function WatchMoviePage() {
 
                         <div className="space-y-2 text-gray-400">
                             <p><strong className="text-white">Genre:</strong> {movie.info.genre}</p>
-                            <p><strong className="text-white">Diretor:</strong> {movie.info.director}</p>
+                            <p><strong className="text-white">Director:</strong> {movie.info.director}</p>
                         </div>
                         <div className='flex items-center gap-4'>
                             <button

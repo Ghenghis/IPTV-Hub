@@ -256,9 +256,13 @@ export default function WatchSeriesPage() {
     }
 
     if (selectedEpisode) {
-        const { hostUrl, username, password } = credentials!;
         const extension = selectedEpisode.container_extension;
-        const streamUrl = `${hostUrl}/series/${username}/${password}/${selectedEpisode.id}.${extension}`;
+        let streamUrl = '';
+        if (credentials?.providerId) {
+            streamUrl = `/api/provider-vault/stream?provider=${encodeURIComponent(credentials.providerId)}&kind=series&id=${encodeURIComponent(selectedEpisode.id)}&ext=${encodeURIComponent(extension)}`;
+        } else if (credentials?.hostUrl && credentials.username && credentials.password) {
+            streamUrl = `${credentials.hostUrl.replace(/\/$/, '')}/series/${credentials.username}/${credentials.password}/${selectedEpisode.id}.${extension}`;
+        }
 
         // Navigation logic
         const allEpisodes: Episode[] = [];
@@ -343,7 +347,7 @@ export default function WatchSeriesPage() {
                             src={series.info.cover}
                             alt={series.info.name}
                             className="w-full h-auto"
-                            onError={(e) => e.currentTarget.src = 'https://via.placeholder.com/300x450?text=Sem+Capa'}
+                            onError={(e) => e.currentTarget.src = 'https://via.placeholder.com/300x450?text=No+Cover'}
                         />
                     </div>
 
@@ -398,7 +402,7 @@ export default function WatchSeriesPage() {
 
                         <div className="space-y-2 text-gray-400">
                             <p><strong className="text-white">Genre:</strong> {series.info.genre}</p>
-                            <p><strong className="text-white">Elenco:</strong> {series.info.cast}</p>
+                            <p><strong className="text-white">Cast:</strong> {series.info.cast}</p>
                         </div>
                     </div>
                 </div>

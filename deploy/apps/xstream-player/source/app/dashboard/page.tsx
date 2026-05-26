@@ -75,7 +75,7 @@ export default function Dashboard() {
             .map(item => ({
                 id: item.streamId,
                 name: item.name,
-                image: item.image || 'https://via.placeholder.com/300x169?text=Sem+Capa',
+                image: item.image || 'https://via.placeholder.com/300x169?text=No+Cover',
                 progress: item.progress,
                 duration: item.duration,
                 href: item.type === 'movie'
@@ -295,7 +295,7 @@ export default function Dashboard() {
         return {
             id: stream.id,
             name: stream.name,
-            image: stream.tmdbData?.poster || stream.icon || 'https://via.placeholder.com/300x450?text=Sem+Poster',
+            image: stream.tmdbData?.poster || stream.icon || 'https://via.placeholder.com/300x450?text=No+Poster',
             rating: stream.tmdbData?.rating || stream.rating,
             year: stream.tmdbData?.year,
             href: stream.type === 'movie'

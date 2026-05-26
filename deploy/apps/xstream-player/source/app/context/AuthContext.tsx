@@ -26,13 +26,13 @@ interface AuthState {
     user: UserInfo | null;
     server: ServerInfo | null;
     credentials: {
-        username: string;
-        password: string;
-        hostUrl: string;
+        username?: string;
+        password?: string;
+        hostUrl?: string;
         providerId?: string;
     } | null;
     isAuthenticated: boolean;
-    login: (serverUrl: string, user: string, pass: string) => Promise<void>;
+    login: (serverUrl: string, user: string, pass: string, providerId?: string) => Promise<void>;
     logout: () => void;
     isLoading: boolean;
 }
@@ -90,7 +90,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         initAuth();
     }, []);
 
-    const login = async (hostUrl: string, username: string, password: string) => {
+    const login = async (hostUrl: string, username: string, password: string, providerId?: string) => {
         setIsLoading(true);
         try {
             const res = await fetch('/api/auth/login', {
@@ -98,7 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ hostUrl, username, password }),
+                body: JSON.stringify(providerId ? { providerId } : { hostUrl, username, password }),
             });
 
             const data = await res.json();
@@ -111,7 +111,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const serverInfo = data.server_info;
 
             const authData = {
-                credentials: { hostUrl, username, password },
+                credentials: data.credentials || { hostUrl, username, password },
                 user: userInfo,
                 server: serverInfo
             };

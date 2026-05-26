@@ -106,6 +106,10 @@ export default function LiveStreams() {
 
     const getStreamUrl = (streamId: string | number) => {
         if (!credentials) return '';
+        if (credentials.providerId) {
+            return `/api/provider-vault/stream?provider=${encodeURIComponent(credentials.providerId)}&kind=live&id=${encodeURIComponent(String(streamId))}&ext=m3u8`;
+        }
+        if (!credentials.hostUrl || !credentials.username || !credentials.password) return '';
         const baseUrl = credentials.hostUrl.replace(/\/$/, '');
         return `${baseUrl}/${credentials.username}/${credentials.password}/${streamId}`;
     };

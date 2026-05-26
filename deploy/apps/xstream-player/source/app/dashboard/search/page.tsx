@@ -75,8 +75,7 @@ export default function SearchPage() {
                 }
 
                 // Fallback to API if cache empty
-                const { username, password, hostUrl } = credentials;
-                const requestBody = { username, password, hostUrl };
+                const requestBody = credentials;
 
                 const [liveRes, moviesRes, seriesRes] = await Promise.all([
                     fetch('/api/proxy', {
@@ -161,7 +160,7 @@ export default function SearchPage() {
                         type="text"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Digite para pesquisar..."
+                        placeholder="Type to search..."
                         data-focusable="true"
                         tabIndex={0}
                         className="block w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-4 focus:ring-red-600 focus:bg-white/10 transition-all text-lg"
@@ -177,7 +176,7 @@ export default function SearchPage() {
                 {/* Tabs */}
                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                     {[
-                        { id: 'all', label: 'Tudo', icon: Search },
+                        { id: 'all', label: 'All', icon: Search },
                         { id: 'live', label: 'Live TV', icon: Tv },
                         { id: 'movie', label: 'Movies', icon: Film },
                         { id: 'series', label: 'Series', icon: Layers },
@@ -213,7 +212,7 @@ export default function SearchPage() {
                 ) : query.length < 2 ? (
                     <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50">
                         <Search className="w-24 h-24 mb-4" />
-                        <p className="text-xl font-medium">Comece a digitar para pesquisar</p>
+                        <p className="text-xl font-medium">Start typing to search</p>
                     </div>
                 ) : results.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-gray-500">

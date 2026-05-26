@@ -90,7 +90,7 @@ export default function SubtitleSettingsModal({ isOpen, onClose }: SubtitleSetti
                             rel="noopener noreferrer"
                             className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
                         >
-                            Obter chave de API
+                            Get API key
                             <ExternalLink size={14} />
                         </a>
                     </div>
@@ -103,7 +103,7 @@ export default function SubtitleSettingsModal({ isOpen, onClose }: SubtitleSetti
 
                     <div className="space-y-2">
                         <label htmlFor="subtitleApiKey" className="block text-sm font-medium text-gray-300">
-                            Chave de API (OpenSubtitles)
+                            API key (OpenSubtitles)
                         </label>
                         <input
                             id="subtitleApiKey"
@@ -111,7 +111,7 @@ export default function SubtitleSettingsModal({ isOpen, onClose }: SubtitleSetti
                             value={apiKey}
                             onChange={(e) => setApiKey(e.target.value)}
                             disabled={isLoading}
-                            placeholder="Digite sua chave de API do OpenSubtitles"
+                            placeholder="Enter your OpenSubtitles API key"
                             className="w-full px-4 py-3 bg-[#0f0f0f] border border-[#333] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent disabled:opacity-50 transition-all"
                         />
                     </div>
@@ -138,7 +138,7 @@ export default function SubtitleSettingsModal({ isOpen, onClose }: SubtitleSetti
                             onClick={handleClear}
                             disabled={isLoading}
                             className="px-4 py-3 bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 rounded-lg text-red-400 font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
-                            title="Remover chave"
+                            title="Remove key"
                         >
                             <Trash2 size={18} />
                         </button>
@@ -148,7 +148,7 @@ export default function SubtitleSettingsModal({ isOpen, onClose }: SubtitleSetti
                         disabled={isLoading}
                         className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 border border-[#333] rounded-lg text-white font-medium transition-colors disabled:opacity-50"
                     >
-                        Cancelar
+                        Cancel
                     </button>
                     <button
                         onClick={handleSave}
@@ -158,10 +158,10 @@ export default function SubtitleSettingsModal({ isOpen, onClose }: SubtitleSetti
                         {isLoading ? (
                             <>
                                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                Testando...
+                                Testing...
                             </>
                         ) : (
-                            'Salvar'
+                            'Save'
                         )}
                     </button>
                 </div>
