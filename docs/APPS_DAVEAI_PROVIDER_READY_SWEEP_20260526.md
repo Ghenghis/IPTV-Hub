@@ -75,6 +75,17 @@ Each app had to satisfy:
     playlists;
   - XtremeHD playback proof loaded `2600 channels` and played the first stream
     with no console or page errors.
+- Repaired IPTV Player Zero after user review:
+  - hosted DaveTV build now runs as free/pro unlocked with lifetime features
+    active and no payment/Stripe/trial copy;
+  - Apollo Group TV and XtremeHD provider buttons load through
+    provider-vault, each with `2200` catalog rows (`1200` live, `500` movies,
+    `500` series);
+  - fixed hosted web Tauri/store gaps and defensive data guards that caused
+    `.map`/iteration crashes while provider catalogs loaded;
+  - playback proof loaded USA AMC for both Apollo and XtremeHD through
+    same-origin `/api/provider-vault/stream` plus segment proxy URLs;
+  - proof: `docs/IPTV_PLAYER_ZERO_FREE_PROVIDER_FIX_20260526.md`.
 
 ## Console Notes
 

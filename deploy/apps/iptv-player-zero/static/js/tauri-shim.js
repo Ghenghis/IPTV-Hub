@@ -12,6 +12,43 @@
     window.dispatchEvent(new CustomEvent('tauri:' + event, { detail: payload }));
   }
 
+  var eventPluginNextId = 1;
+  var eventPluginListeners = {};
+
+  function callPluginEventHandler(handlerId, event, eventId, payload) {
+    var cb = window[handlerId];
+    if (typeof cb === 'function') {
+      cb({ event: event, id: eventId, payload: payload });
+    }
+  }
+
+  function registerPluginEventListener(payload) {
+    payload = payload || {};
+    var event = String(payload.event || '');
+    var handlerId = payload.handler;
+    var eventId = eventPluginNextId++;
+    var listener = function (e) {
+      callPluginEventHandler(handlerId, event, eventId, e && e.detail);
+    };
+    eventPluginListeners[eventId] = { event: event, listener: listener };
+    window.addEventListener('tauri:' + event, listener);
+    return eventId;
+  }
+
+  function unregisterPluginEventListener(eventId) {
+    eventId = Number(eventId);
+    var row = eventPluginListeners[eventId];
+    if (!row) return null;
+    window.removeEventListener('tauri:' + row.event, row.listener);
+    delete eventPluginListeners[eventId];
+    return null;
+  }
+
+  window.__TAURI_EVENT_PLUGIN_INTERNALS__ = window.__TAURI_EVENT_PLUGIN_INTERNALS__ || {};
+  window.__TAURI_EVENT_PLUGIN_INTERNALS__.unregisterListener = function (_event, eventId) {
+    unregisterPluginEventListener(eventId);
+  };
+
   // ── App window / OS detection ─────────────────────────────────────────────
   var isMac = /Mac/.test(navigator.userAgent);
   var isWindows = /Win/.test(navigator.userAgent);
@@ -26,13 +63,62 @@
   // ── Safe array/object wrappers — prevent .map() on null crashes ──────────
   function safeArr(p) { return p instanceof Promise ? p.then(function(v){ return Array.isArray(v) ? v : []; }) : (Array.isArray(p) ? Promise.resolve(p) : Promise.resolve([])); }
   function safeObj(p) { return p instanceof Promise ? p.then(function(v){ return (v != null && typeof v === 'object') ? v : {}; }) : Promise.resolve((p != null && typeof p === 'object') ? p : {}); }
-  function freeLicenseStatus() {
+  function hostedFullLicenseStatus() {
     return {
-      status: 'inactive', plan: 'free',
-      expiry: null, trial_days: 0,
-      lifetimeUnlocked: false, premiumActive: false,
-      purchaseRequired: true, isTrial: false,
-      source: 'web_shim_no_license',
+      status: 'active',
+      plan: 'lifetime',
+      license_type: 'lifetime',
+      tier: 'pro',
+      expiry: null,
+      trial_days: 0,
+      lifetimeUnlocked: true,
+      premiumActive: true,
+      purchaseRequired: false,
+      isTrial: false,
+      source: 'daveai_hosted_full_free',
+      features: {
+        unlimited_playlists: true,
+        full_tv_guide: true,
+        recording: true,
+        downloads: true,
+        reminders: true,
+        vod: true,
+        favorites: true,
+      },
+    };
+  }
+
+  function licenseResponseBody() {
+    return {
+      ok: true,
+      active: true,
+      device_id: getDeviceId(),
+      deviceId: getDeviceId(),
+      status: hostedFullLicenseStatus(),
+      license: hostedFullLicenseStatus(),
+      token: null,
+      source: 'daveai_hosted_full_free',
+    };
+  }
+
+  if (!window.__IPZ_DAVEAI_LICENSE_FETCH_PATCHED__) {
+    window.__IPZ_DAVEAI_LICENSE_FETCH_PATCHED__ = true;
+    var originalFetch = window.fetch ? window.fetch.bind(window) : null;
+    window.fetch = function (input, init) {
+      var url = typeof input === 'string' ? input : (input && input.url) || '';
+      if (/^https:\/\/(www\.)?(iptvplayerzero\.com|ipzcore\.com)\/api\/licenses\//i.test(url)) {
+        return Promise.resolve(new Response(JSON.stringify(licenseResponseBody()), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }));
+      }
+      if (/^https:\/\/(www\.)?(iptvplayerzero\.com|ipzcore\.com)\/api\/updater\//i.test(url)) {
+        return Promise.resolve(new Response(JSON.stringify({ available: false, should_update: false, version: '1.7.99' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }));
+      }
+      return originalFetch ? originalFetch(input, init) : Promise.reject(new Error('fetch unavailable'));
     };
   }
 
@@ -44,6 +130,59 @@
       localStorage.setItem(key, id);
     }
     return id;
+  }
+
+  function getPlaylistId(payload) {
+    return String((payload && (payload.playlist_id || payload.playlistId || payload.id)) || '').trim();
+  }
+
+  function defaultPlaylistPrefs() {
+    return {
+      epg_sources: [],
+      epg_url: null,
+      epg_fuzzy_matching: true,
+      epg_url_from_playlist: null,
+      xtream_provider_epg_enabled: true,
+      epg_manual_channel_ids: [],
+      epg_manual_mappings: [],
+      epg_update_interval_hours: 24,
+      epg_time_offset_minutes: 0,
+      catchup_time_offset_minutes: 0,
+      epg_prefer_channel_logos: false,
+      playlist_update_interval_hours: 24,
+      hls_user_agent: null,
+      hls_referer: null,
+      hls_origin: null,
+      xtream_live_stream_preference: 'hls',
+      channel_name_prefixes_to_remove: [],
+      channel_name_suffixes_to_remove: [],
+      hidden_live_groups: [],
+      hidden_live_channel_ids: [],
+      hidden_movie_category_ids: [],
+      hidden_series_category_ids: [],
+      live_category_sort: 'name',
+      movie_category_sort: 'name',
+      series_category_sort: 'name',
+      live_category_custom_order: [],
+      movie_category_custom_order: [],
+      series_category_custom_order: [],
+      trakt_manual_mappings: [],
+    };
+  }
+
+  function channelStats(channels) {
+    channels = Array.isArray(channels) ? channels : [];
+    return {
+      status: 'ready',
+      ok: true,
+      stage: 'complete',
+      channel_count: channels.length,
+      live_count: channels.filter(function (c) { return c.type === 'live' || c.stream_type === 'live'; }).length,
+      movie_count: channels.filter(function (c) { return c.type === 'movie' || c.stream_type === 'movie'; }).length,
+      series_count: channels.filter(function (c) { return c.type === 'series' || c.stream_type === 'series'; }).length,
+      updated_at: Date.now(),
+      source: 'daveai-provider-vault',
+    };
   }
 
   // ── Wait for Store to be ready (max 5s) ────────────────────────────────────
@@ -71,13 +210,13 @@
     // Guard: if Store still not ready, return safe defaults per command type
     var _Store = window.Store;
     if (!_Store) {
-      var _arrCmds = ['get_playlists','get_playlist_summaries','get_channels','get_epg_programs_window','get_watched_movies','get_vod_downloads','get_recordings','list_recordings','get_cast_devices','get_subtitle_tracks','trakt_get_watched','trakt_get_ratings','trakt_sync','get_scheduled_recordings','list_scheduled_recordings','get_upcoming_sports','get_sports_leagues','get_quality_levels','get_player_quality_levels'];
+      var _arrCmds = ['get_playlists','get_playlist_summaries','get_channels','get_epg_programs_window','get_watched_movies','get_continue_watching','get_watched_episodes','get_favorite_channel_order','get_vod_downloads','get_recordings','list_recordings','get_cast_devices','get_subtitle_tracks','trakt_get_watched','trakt_get_ratings','trakt_sync','get_scheduled_recordings','list_scheduled_recordings','get_upcoming_sports','get_sports_leagues','get_quality_levels','get_player_quality_levels'];
       return _arrCmds.indexOf(cmd) >= 0 ? [] : {};
     }
 
     switch (cmd) {
 
-      // ── Licensing — browser shim reports free mode; purchases stay upstream.
+      // ── Licensing — DaveAI hosted build is full/free; payment UI is disabled.
       case 'load_recovery_token':
       case 'validate_license':
       case 'check_license':
@@ -86,13 +225,13 @@
       case 'restore_license':
       case 'sideload_get_cached_license_status':
       case 'sideload_get_license_status':
-        return freeLicenseStatus();
+        return hostedFullLicenseStatus();
 
       case 'sideload_get_checkout_availability':
-        return { available: false, checkout_url: null, source: 'web_shim_no_checkout' };
+        return { available: false, checkout_url: null, source: 'daveai_hosted_full_free' };
 
       case 'local_trial_get_snapshot':
-        return { active: false, expired: false, days_remaining: 0, source: 'web_shim_no_trial' };
+        return { active: false, expired: false, days_remaining: null, source: 'daveai_hosted_full_free' };
 
       case 'sideload_get_or_create_device_id':
         return { id: getDeviceId(), device_id: getDeviceId(), platform: 'web' };
@@ -100,6 +239,26 @@
       // ── App info ───────────────────────────────────────────────────────────
       case 'get_app_version':
         return { version: '1.7.99' };
+
+      case 'plugin:app|version':
+        return '1.7.99';
+
+      case 'delta_check_update':
+      case 'plugin:updater|check':
+        return {
+          status: 'up_to_date',
+          available: false,
+          should_update: false,
+          current_version: '1.7.99',
+          version: '1.7.99',
+          update: null,
+          source: 'daveai_hosted_full_free',
+        };
+
+      case 'plugin:updater|download_and_install':
+      case 'plugin:updater|install':
+      case 'install_update':
+        return { ok: false, skipped: true, reason: 'hosted_browser_build' };
 
       case 'get_platform_info':
         return {
@@ -137,13 +296,46 @@
       case 'plugin:window|is_minimized':
         return false;
 
-      case 'plugin:event|listen':
+      case 'plugin:window|is_visible':
+        return false;
+
+      case 'plugin:window|outer_position':
+      case 'plugin:window|inner_position':
+        return { x: 0, y: 0 };
+
+      case 'plugin:window|outer_size':
+      case 'plugin:window|inner_size':
+        return { width: window.innerWidth || 1280, height: window.innerHeight || 720 };
+
+      case 'plugin:window|scale_factor':
+        return window.devicePixelRatio || 1;
+
       case 'plugin:webview|create_webview_window':
       case 'plugin:window|set_always_on_top':
       case 'plugin:window|hide':
+      case 'plugin:window|show':
+      case 'plugin:window|set_position':
+      case 'plugin:window|set_size':
       case 'plugin:window|set_shadow':
       case 'attach_overlay_to_main_window_win32':
+      case 'set_preview_bounds':
+      case 'set_mpv_window_visible':
+      case 'multiview_set_visible':
         return null;
+
+      case 'plugin:event|listen':
+        return registerPluginEventListener(payload);
+
+      case 'plugin:event|unlisten':
+        return unregisterPluginEventListener(payload.eventId || payload.id);
+
+      case 'plugin:event|emit':
+      case 'plugin:event|emit_to':
+        emitTauriEvent(payload.event, payload.payload);
+        return null;
+
+      case 'hls_proxy_get_base_url':
+        return { base_url: '', source: 'provider-vault-urls' };
 
       // ── Settings ───────────────────────────────────────────────────────────
       case 'get_settings':
@@ -235,15 +427,37 @@
       }
 
       // ── Channels ───────────────────────────────────────────────────────────
+      case 'load_channels':
+        return safeArr(Store.getChannels(getPlaylistId(payload)));
+
       case 'get_channels':
-        return safeArr(Store.getChannels(payload.playlist_id));
+        return safeArr(Store.getChannels(getPlaylistId(payload)));
 
       case 'save_channels':
-        return Store.saveChannels(payload.playlist_id, payload.channels);
+        return Store.saveChannels(getPlaylistId(payload), payload.channels);
+
+      case 'get_playlist_prefs':
+        return defaultPlaylistPrefs();
+
+      case 'save_playlist_prefs':
+      case 'set_playlist_prefs':
+        return defaultPlaylistPrefs();
+
+      case 'get_playlist_status': {
+        var statusChannels = await Store.getChannels(getPlaylistId(payload));
+        return channelStats(statusChannels);
+      }
 
       // ── EPG ────────────────────────────────────────────────────────────────
       case 'get_epg_programs_window':
         return safeArr(Store.getEpgProgramsWindow(payload));
+
+      case 'refresh_epg':
+      case 'restore_epg_for_playlist':
+        return { ok: true, channel_count: 0, program_count: 0, source: 'web_no_epg' };
+
+      case 'get_epg_coverage':
+        return { total_channels: 0, mapped_channels: 0, coverage_pct: 0, source: 'web_no_epg' };
 
       case 'import_epg_from_url': {
         var result = await XmlTvParser.fetchAndParse(payload.url);
@@ -266,6 +480,14 @@
       }
 
       // ── Live playback ──────────────────────────────────────────────────────
+      case 'play_url':
+        return PlayerShim.play(payload.url || payload.stream_url, {
+          type: payload.mode || payload.type || 'live',
+          live: (payload.mode || payload.type) !== 'vod',
+          userAgent: payload.user_agent || payload.userAgent,
+          referer: payload.referer || payload.referrer,
+        });
+
       case 'play_live_channel': {
         var liveUrl = payload.url || payload.stream_url;
         if (!liveUrl && XtreamClient.getAuth(payload.playlist_id) && (payload.stream_id || payload.channel_id)) {
@@ -282,22 +504,44 @@
       }
 
       case 'stop_player':
+      case 'stop':
+      case 'vod_stop':
         return PlayerShim.stop();
 
       case 'toggle_pause_player':
+      case 'pause':
+        return PlayerShim.togglePause();
+
+      case 'resume':
+      case 'vod_resume':
         return PlayerShim.togglePause();
 
       case 'seek_player':
+      case 'seek':
         return PlayerShim.seek(payload.time);
 
       case 'set_player_volume':
-        return PlayerShim.setVolume(payload.volume);
+      case 'set_volume':
+      case 'vod_set_volume':
+        return PlayerShim.setVolume(Number(payload.volume) > 1 ? Number(payload.volume) / 100 : payload.volume);
 
       case 'set_player_mute':
+      case 'set_mute':
+      case 'vod_set_mute':
         return PlayerShim.setMute(payload.muted);
 
       case 'get_player_state':
+      case 'get_state':
+      case 'vod_get_stats':
         return PlayerShim.getPlayerState();
+
+      case 'get_socks5_proxy_settings':
+        return { enabled: false, host: '', port: null, username: '', password: '' };
+
+      case 'set_mpv_user_agent':
+      case 'set_mpv_http_headers':
+      case 'set_mpv_playback_owner':
+        return null;
 
       case 'set_player_quality':
         return PlayerShim.setQualityLevel(payload.level !== undefined ? payload.level : -1);
@@ -381,8 +625,21 @@
       case 'get_watched_movies':
         return safeArr(Store.getWatchedMovies(payload.playlist_id));
 
+      case 'get_continue_watching':
+        return safeArr(Store.getContinueWatching ? Store.getContinueWatching(payload.playlist_id) : []);
+
+      case 'get_watched_episodes':
+        return safeArr(Store.getWatchedEpisodes ? Store.getWatchedEpisodes(payload.playlist_id) : []);
+
+      case 'get_favorite_channel_order':
+        return { channel_ids: [], movie_ids: [], series_ids: [] };
+
       case 'get_recently_watched':
       case 'get_favorites':
+        return [];
+
+      case 'mark_recently_watched':
+      case 'record_playlist_diagnostic':
         return [];
 
       case 'mark_movie_watched':
@@ -455,6 +712,8 @@
 
       case 'set_multiview_streams':
       case 'toggle_multiview':
+      case 'multiview_close_all':
+      case 'multiview_close':
         return {};
 
       // ── Google Cast (no-op) ────────────────────────────────────────────────
@@ -618,13 +877,72 @@
 
   // ── Emit initial licensing_channel status event ──────────────────────────
   function bootLicenseStatus() {
-    emitTauriEvent('licensing_channel', freeLicenseStatus());
+    emitTauriEvent('licensing_channel', hostedFullLicenseStatus());
+  }
+
+  function textOf(node) {
+    return String(node && node.textContent || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function removeClosest(node, selectors) {
+    for (var i = 0; i < selectors.length; i++) {
+      var target = node.closest && node.closest(selectors[i]);
+      if (target && target.parentNode) {
+        target.parentNode.removeChild(target);
+        return true;
+      }
+    }
+    if (node.parentNode) {
+      node.parentNode.removeChild(node);
+      return true;
+    }
+    return false;
+  }
+
+  function polishHostedFullFreeUi() {
+    var paidPattern = /\b(upgrade to pro|upgrade|lifetime unlock|\$12\.99|stripe|purchase|forgot password|refresh license|72-hour pro trial|free mode|low price)\b/i;
+    var replacePattern = /3h\s*\(free\)/ig;
+    var nodes = Array.prototype.slice.call(document.querySelectorAll('button,a,section,div,span,p'));
+    nodes.forEach(function (node) {
+      var text = textOf(node);
+      if (!text) return;
+      if (replacePattern.test(text) && node.childElementCount === 0) {
+        node.textContent = text.replace(replacePattern, 'Full guide');
+        return;
+      }
+      if (!paidPattern.test(text)) return;
+
+      var ownText = text.length < 180;
+      var isAction = /^(upgrade to pro|upgrade|refresh license|forgot password|\$12\.99|low price)$/i.test(text);
+      var isPaymentSection = /\b(lifetime unlock|stripe|purchase|72-hour pro trial|free mode)\b/i.test(text);
+      if (isAction || (isPaymentSection && ownText)) {
+        removeClosest(node, ['[role="dialog"] section', 'section', '.rounded-2xl', '.rounded-xl', 'button', 'a']);
+      }
+    });
+  }
+
+  function installHostedFullFreeUiPolish() {
+    var run = function () {
+      try { polishHostedFullFreeUi(); } catch (e) {}
+    };
+    run();
+    setTimeout(run, 500);
+    setTimeout(run, 1500);
+    setTimeout(run, 3500);
+    if (typeof MutationObserver !== 'undefined') {
+      new MutationObserver(function () { run(); }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    }
   }
 
   bootLicenseStatus();
   setTimeout(bootLicenseStatus, 500);
   setTimeout(bootLicenseStatus, 1500);
   setTimeout(bootLicenseStatus, 3000);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', installHostedFullFreeUiPolish, { once: true });
+  } else {
+    installHostedFullFreeUiPolish();
+  }
 
   console.log('[tauri-shim] IPTV Player Zero 1.7.99 web shim loaded');
 

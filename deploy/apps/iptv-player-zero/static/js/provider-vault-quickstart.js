@@ -51,6 +51,54 @@
     });
   }
 
+  function readJson(key, fallback) {
+    try {
+      var raw = window.localStorage && window.localStorage.getItem(key);
+      if (!raw) return fallback;
+      var parsed = JSON.parse(raw);
+      return parsed == null ? fallback : parsed;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function writeJson(key, value) {
+    try {
+      if (window.localStorage) window.localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {}
+  }
+
+  function markPlaylistEnabled(playlistId) {
+    var enabledKeys = [
+      'ipz_playlist_enabled_by_id',
+      'ipz_playlist_enabled_by_id_premium',
+    ];
+    enabledKeys.forEach(function (key) {
+      var map = readJson(key, {});
+      if (!map || typeof map !== 'object' || Array.isArray(map)) map = {};
+      map[playlistId] = true;
+      writeJson(key, map);
+    });
+
+    var orderKeys = [
+      'ipz_playlist_display_order_ids',
+      'ipz_playlist_display_order_ids_premium',
+    ];
+    orderKeys.forEach(function (key) {
+      var ids = readJson(key, []);
+      if (!Array.isArray(ids)) ids = [];
+      ids = ids.filter(function (id) { return id !== playlistId; });
+      ids.unshift(playlistId);
+      writeJson(key, ids);
+    });
+
+    try {
+      window.localStorage.setItem('ipz_default_playlist_id', playlistId);
+      window.localStorage.setItem('ipz_provider_quickstart_last_playlist_id', playlistId);
+      window.localStorage.setItem('ipz_provider_quickstart_hidden', '1');
+    } catch (e) {}
+  }
+
   function configuredProviders() {
     if (window.localStorage && window.localStorage.getItem('ipz_provider_quickstart_demo') === '1') {
       return Promise.resolve(PROVIDERS.map(function (provider) {
@@ -78,6 +126,10 @@
 
   function normalizeChannel(providerId, playlistId, item, type, index) {
     var name = text(item && item.name, type + ' ' + (index + 1));
+    var groupTitle = text(
+      item && item.group && (item.group.title || item.group.name || item.group),
+      type === 'live' ? 'Live TV' : type === 'movie' ? 'Movies' : 'Series'
+    );
     var idSeed = [
       playlistId,
       type,
@@ -93,8 +145,9 @@
       url: text(item && item.url),
       type: type,
       stream_type: type === 'live' ? 'live' : type === 'movie' ? 'movie' : 'series',
-      category_id: safeId(item && item.group && item.group.title) || type,
-      group: item && item.group ? item.group : { title: type === 'live' ? 'Live TV' : type === 'movie' ? 'Movies' : 'Series' },
+      category_id: safeId(groupTitle) || type,
+      group: groupTitle,
+      group_title: groupTitle,
       tvg: item && item.tvg ? item.tvg : { name: name, logo: '' },
       http: item && item.http ? item.http : {},
       stream_icon: item && item.tvg ? item.tvg.logo : '',
@@ -139,6 +192,8 @@
           updated_at: Date.now(),
         }).then(function () {
           return window.Store.saveChannels(playlistId, channels);
+        }).then(function () {
+          markPlaylistEnabled(playlistId);
         }).then(function () {
           setStatus('Imported ' + channels.length.toLocaleString() + ' safe entries for ' + provider.name + '. Reloading...');
           setTimeout(function () { window.location.reload(); }, 900);

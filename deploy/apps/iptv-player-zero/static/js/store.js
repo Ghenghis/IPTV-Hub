@@ -93,8 +93,10 @@
 
   function getPlaylistSummaries() {
     return getPlaylists().then(function (playlists) {
+      playlists = Array.isArray(playlists) ? playlists : [];
       return Promise.all(playlists.map(function (p) {
         return storeGetByIndex('channels', 'playlist_id', p.id).then(function (ch) {
+          ch = Array.isArray(ch) ? ch : [];
           return Object.assign({}, p, { channel_count: ch.length });
         });
       }));
@@ -126,7 +128,9 @@
 
   // ── Channels ───────────────────────────────────────────────────────────────
   function saveChannels(playlistId, channels) {
+    channels = Array.isArray(channels) ? channels : [];
     return storeGetByIndex('channels', 'playlist_id', playlistId).then(function (existing) {
+      existing = Array.isArray(existing) ? existing : [];
       return tx('channels', 'readwrite').then(function (s) {
         existing.forEach(function (c) { s.delete(c.id); });
         var order = 0;
@@ -143,12 +147,14 @@
 
   function getChannels(playlistId) {
     return storeGetByIndex('channels', 'playlist_id', playlistId).then(function (channels) {
+      channels = Array.isArray(channels) ? channels : [];
       return channels.sort(function (a, b) { return (a.sort_order || 0) - (b.sort_order || 0); });
     });
   }
 
   // ── EPG ────────────────────────────────────────────────────────────────────
   function saveEpgPrograms(programs) {
+    programs = Array.isArray(programs) ? programs : [];
     return tx('epg_programs', 'readwrite').then(function (s) {
       programs.forEach(function (p) {
         p.id = p.id || (p.channel_id + '_' + p.start);
@@ -158,12 +164,16 @@
   }
 
   function getEpgProgramsWindow(payload) {
-    var channel_ids = payload.channel_ids;
-    var start = payload.start;
-    var end = payload.end;
+    payload = payload || {};
+    var channel_ids = Array.isArray(payload.channel_ids) ? payload.channel_ids : [];
+    var start = Number(payload.start);
+    var end = Number(payload.end);
+    if (!Number.isFinite(start)) start = 0;
+    if (!Number.isFinite(end)) end = Number.MAX_SAFE_INTEGER;
     var result = [];
     var promises = channel_ids.map(function (cid) {
       return storeGetByIndex('epg_programs', 'channel_id', cid).then(function (programs) {
+        programs = Array.isArray(programs) ? programs : [];
         programs.filter(function (p) { return p.end > start && p.start < end; })
           .forEach(function (p) { result.push(p); });
       });
@@ -173,8 +183,10 @@
 
   function clearEpg(playlistId) {
     return getChannels(playlistId).then(function (channels) {
+      channels = Array.isArray(channels) ? channels : [];
       var cids = new Set(channels.map(function (c) { return c.id; }));
       return storeGetAll('epg_programs').then(function (all) {
+        all = Array.isArray(all) ? all : [];
         return tx('epg_programs', 'readwrite').then(function (s) {
           all.filter(function (p) { return cids.has(p.channel_id); })
             .forEach(function (p) { s.delete(p.id); });
@@ -199,7 +211,21 @@
   // ── Watch state ────────────────────────────────────────────────────────────
   function getWatchedMovies(playlistId) {
     return storeGetAll('watched_movies').then(function (all) {
-      return all.filter(function (m) { return m.playlist_id === playlistId; });
+      return all.filter(function (m) { return !playlistId || m.playlist_id === playlistId; });
+    });
+  }
+
+  function getContinueWatching(playlistId) {
+    return storeGetAll('watched_movies').then(function (all) {
+      return all.filter(function (m) {
+        return (!playlistId || m.playlist_id === playlistId) && Number(m.position || 0) > 0;
+      });
+    });
+  }
+
+  function getWatchedEpisodes(playlistId) {
+    return storeGetAll('watched_episodes').then(function (all) {
+      return all.filter(function (e) { return !playlistId || e.playlist_id === playlistId; });
     });
   }
 
@@ -299,6 +325,8 @@
     getPref: getPref,
     setPref: setPref,
     getWatchedMovies: getWatchedMovies,
+    getContinueWatching: getContinueWatching,
+    getWatchedEpisodes: getWatchedEpisodes,
     markMovieWatched: markMovieWatched,
     upsertContinueWatching: upsertContinueWatching,
     removeContinueWatching: removeContinueWatching,
