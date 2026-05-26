@@ -37,9 +37,15 @@ The browser shim supports:
   referrer hints.
 - Browser playback through `/api/iptv-proxy` so provider media and playlists
   are fetched server-side behind DaveTV auth.
+- DaveAI provider-vault quickstart for Apollo Group TV and XtremeHD. When Dave
+  is signed into `apps.daveai.tech`, a compact provider panel can import a safe
+  starter catalog into IndexedDB. Imported rows contain only DaveAI
+  `/api/provider-vault/stream` URLs; raw provider usernames/passwords stay
+  server-side.
 
 No provider credentials are committed here. Users must enter their own provider
-host, username, and password in the app.
+host, username, and password in the app for manual accounts, or use the DaveAI
+provider-vault buttons for configured managed accounts.
 
 ## Compliance Notes
 
@@ -61,12 +67,20 @@ Latest Codex proof from the live VPS deployment:
   XMLTV pass-through.
 - visual proof: desktop and mobile screenshots clean, no clipping, only benign
   console info logs.
+- provider-vault quickstart proof: local static Docker visual check with demo
+  provider flags, plus live provider-vault endpoint checks against the DaveTV
+  authenticated edge.
 
 Proof archive:
 
 - `C:\Users\Admin\Downloads\VPS\_visual_artifacts\ipz-shim-polish-proof-2026-05-26T1553\summary.json`
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\ipz-provider-vault-proof-20260526\summary.json`
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\ipz-provider-vault-proof-20260526\import-smoke.json`
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\ipz-provider-vault-proof-20260526\ipz-provider-quickstart.png`
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\ipz-provider-vault-proof-20260526\ipz-provider-import-smoke.png`
 - `C:\Users\Admin\Downloads\VPS\staging\iptv-player-zero-clean-web-final-20260526T1553.zip`
 - VPS backup: `/var/backups/daveai-apps/iptv-player-zero-provider-compat-final-20260526T154233Z.tgz`
+- VPS backup: `/var/backups/daveai-apps/iptv-player-zero-before-provider-vault-20260526T1746Z.tgz`
 
 ## Local Static Build
 

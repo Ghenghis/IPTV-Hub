@@ -260,8 +260,9 @@
   <script src="/iptv-player-zero/js/player-shim.js"></script>
   <script src="/iptv-player-zero/js/samsung-remote.js"></script>
   <script src="/iptv-player-zero/js/tauri-shim.js"></script>
+  <script src="/iptv-player-zero/js/provider-vault-quickstart.js"></script>
 
-  <!-- Eagerly open IndexedDB on first launch. Provider credentials are user-entered only. -->
+  <!-- Eagerly open IndexedDB on first launch. Provider credentials are either user-entered or kept in the DaveAI server-side vault. -->
   <script>
     (function () {
       if (typeof window.Store === 'undefined' || !window.Store.openDb) return;

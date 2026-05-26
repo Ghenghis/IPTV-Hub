@@ -8,6 +8,7 @@
 FROM nginxinc/nginx-unprivileged:1.27-alpine
 
 COPY --chown=nginx:nginx static/ /usr/share/nginx/html/
+COPY --chown=nginx:nginx static/ /usr/share/nginx/html/iptv-player-zero/
 
 EXPOSE 8080
 
