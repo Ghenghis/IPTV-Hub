@@ -8,12 +8,13 @@
 (function (window, document) {
   'use strict';
 
-  var BUILD_ID = '20260526-v2';
+  var BUILD_ID = '20260526-v4';
   var DB_NAME = 'iptvnator';
   var STORE_NAME = 'playlists';
   var SETTINGS_KEY = 'settings';
   var SEED_MARKER = 'iptvnator_provider_vault_seeded';
   var RELOAD_MARKER = 'iptvnator_provider_vault_reloaded';
+  var PENDING_ROUTE_KEY = 'iptvnator_provider_vault_pending_route';
 
   var PROVIDERS = [
     { id: 'apollo', name: 'Apollo Group TV' },
@@ -56,6 +57,32 @@
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
     });
+  }
+
+  function disableHostedServiceWorker() {
+    try {
+      if (window.navigator && navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+          registrations.forEach(function (registration) {
+            registration.unregister().catch(function () {});
+          });
+        }).catch(function () {});
+      }
+    } catch (ignored) {}
+
+    try {
+      if (window.caches && caches.keys) {
+        caches.keys().then(function (names) {
+          names
+            .filter(function (name) {
+              return /^ngsw:/i.test(name);
+            })
+            .forEach(function (name) {
+              caches.delete(name).catch(function () {});
+            });
+        }).catch(function () {});
+      }
+    } catch (ignored) {}
   }
 
   function providersUrl() {
@@ -214,6 +241,40 @@
     });
   }
 
+  function dbGetAll(db) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(STORE_NAME, 'readonly');
+      var request = tx.objectStore(STORE_NAME).getAll();
+      request.onsuccess = function () {
+        resolve(Array.isArray(request.result) ? request.result : []);
+      };
+      request.onerror = function () {
+        reject(request.error || new Error('Could not read playlists'));
+      };
+    });
+  }
+
+  function dbDeleteMany(db, ids) {
+    return new Promise(function (resolve, reject) {
+      if (!ids.length) {
+        resolve();
+        return;
+      }
+      var tx = db.transaction(STORE_NAME, 'readwrite');
+      var store = tx.objectStore(STORE_NAME);
+      ids.forEach(function (id) {
+        store.delete(id);
+      });
+      tx.oncomplete = function () {
+        resolve();
+      };
+      tx.onerror = function () {
+        reject(tx.error || new Error('Could not delete legacy playlists'));
+      };
+      tx.onabort = tx.onerror;
+    });
+  }
+
   function playlistId(providerId) {
     return 'daveai-provider-vault-' + safeId(providerId);
   }
@@ -318,6 +379,60 @@
     return null;
   }
 
+  function migrateLegacyIndexedDbXtreamProviders(setStatus) {
+    return openDb()
+      .then(function (db) {
+        return dbGetAll(db).then(function (rows) {
+          var currentId = currentXtreamPlaylistId();
+          var removed = [];
+          var deleteIds = [];
+          var currentProvider = null;
+
+          rows.forEach(function (row) {
+            var provider = legacyXtreamProvider(row);
+            var id = row && (row._id || row.id);
+            if (!provider || !id) return;
+            deleteIds.push(id);
+            removed.push({
+              id: id,
+              title: row.title || row.name || row.filename || provider.name,
+              providerId: provider.id,
+              hadServerUrl: Boolean(row.serverUrl),
+              source: row.source || '',
+            });
+            if (currentId && String(id) === currentId) {
+              currentProvider = provider;
+            }
+          });
+
+          if (!deleteIds.length) {
+            db.close();
+            return null;
+          }
+
+          return dbDeleteMany(db, deleteIds).then(function () {
+            db.close();
+            writeJsonStorage('iptvnator_provider_vault_legacy_indexeddb_backup', {
+              buildId: BUILD_ID,
+              backedUpAt: new Date().toISOString(),
+              entries: removed,
+            });
+            if (typeof setStatus === 'function') {
+              setStatus('Moved saved Apollo/XtremeHD workspaces to safe DaveAI vault playlists.');
+            }
+            return currentProvider || removed.map(function (entry) {
+              return PROVIDERS.find(function (provider) {
+                return provider.id === entry.providerId;
+              });
+            }).filter(Boolean)[0] || null;
+          });
+        });
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
   function groupTitle(type, item) {
     var raw = item && item.group && item.group.title;
     var fallback =
@@ -352,6 +467,7 @@
 
     return {
       id: id,
+      playlistId: playlist._id,
       url: url,
       name: name,
       title: name,
@@ -511,11 +627,20 @@
           try {
             window.localStorage.setItem(SEED_MARKER, BUILD_ID);
           } catch (ignored) {}
+          var pendingRoute = '';
+          try {
+            pendingRoute = window.sessionStorage.getItem(PENDING_ROUTE_KEY) || '';
+            window.sessionStorage.removeItem(PENDING_ROUTE_KEY);
+          } catch (ignored) {}
           if (window.sessionStorage.getItem(RELOAD_MARKER) !== BUILD_ID) {
             window.sessionStorage.setItem(RELOAD_MARKER, BUILD_ID);
             setStatus('Provider playlists are ready. Reloading once...');
             window.setTimeout(function () {
-              reloadAppRoot();
+              if (pendingRoute) {
+                window.location.replace(pendingRoute);
+              } else {
+                reloadAppRoot();
+              }
             }, 800);
           } else {
             setStatus('DaveAI provider playlists are ready.');
@@ -531,6 +656,28 @@
     if (window.location.pathname === target) return false;
     window.location.replace(target);
     return true;
+  }
+
+  function preemptLegacyXtreamRoute() {
+    if (!currentXtreamPlaylistId()) return null;
+    var provider = PROVIDERS[1];
+    var playlists = readJsonStorage('xtream-playlists', []);
+    if (Array.isArray(playlists)) {
+      var currentId = currentXtreamPlaylistId();
+      playlists.some(function (row) {
+        if (String(row && row.id || '') !== currentId) return false;
+        provider = legacyXtreamProvider(row) || provider;
+        return true;
+      });
+    }
+    var target = playlistRoute(provider.id);
+    try {
+      window.sessionStorage.setItem(PENDING_ROUTE_KEY, target);
+      if (window.location.pathname !== target && window.history && window.history.replaceState) {
+        window.history.replaceState(null, document.title, target);
+      }
+    } catch (ignored) {}
+    return provider;
   }
 
   function importProviderNoReload(provider, setStatus) {
@@ -619,7 +766,9 @@
     return { setStatus: setStatus };
   }
 
+  disableHostedServiceWorker();
   forceEnglishSettings();
+  var preemptedLegacyProvider = preemptLegacyXtreamRoute();
 
   ready(function () {
     configuredProviders().then(function (providers) {
@@ -630,18 +779,24 @@
           '1';
       } catch (ignored) {}
       var panel = hidden ? { setStatus: function () {} } : createPanel(providers);
-      var legacyProvider =
-        migrateLegacyXtreamProviders(panel.setStatus) ||
-        providerFromLegacyBackup() ||
-        (currentXtreamPlaylistId() ? PROVIDERS[1] : null);
-      autoSeed(providers, panel.setStatus).catch(function (error) {
-        panel.setStatus(
-          'DaveAI provider setup needs attention: ' +
-            (error && error.message ? error.message : 'unknown error'),
-          true
-        );
-      }).then(function () {
-        redirectLegacyXtreamRoute(legacyProvider);
+      var localLegacyProvider = migrateLegacyXtreamProviders(panel.setStatus);
+      migrateLegacyIndexedDbXtreamProviders(panel.setStatus).then(function (dbLegacyProvider) {
+        var legacyProvider =
+          localLegacyProvider ||
+          dbLegacyProvider ||
+          preemptedLegacyProvider ||
+          providerFromLegacyBackup() ||
+          (currentXtreamPlaylistId() ? PROVIDERS[1] : null);
+
+        autoSeed(providers, panel.setStatus).catch(function (error) {
+          panel.setStatus(
+            'DaveAI provider setup needs attention: ' +
+              (error && error.message ? error.message : 'unknown error'),
+            true
+          );
+        }).then(function () {
+          redirectLegacyXtreamRoute(legacyProvider);
+        });
       });
     });
   });

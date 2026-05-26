@@ -73,6 +73,11 @@ Each app had to satisfy:
   - runtime config pins `BACKEND_URL` to same-origin `/api`;
   - stale direct Apollo/XtremeHD Xtream workspaces migrate to safe DaveAI vault
     playlists;
+  - stale direct Xtream rows are cleaned from both localStorage and IndexedDB;
+  - hosted service-worker caches are cleared with the Angular safety worker so
+    older browsers stop serving the broken app shell;
+  - provider-vault rows now include playlist identity and recent-history guards
+    so playback has zero console errors;
   - XtremeHD playback proof loaded `2600 channels` and played the first stream
     with no console or page errors.
 - Repaired IPTV Player Zero after user review:

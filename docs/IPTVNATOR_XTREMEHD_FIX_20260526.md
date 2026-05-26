@@ -11,9 +11,13 @@ The hosted app also had an empty runtime config, allowing the PWA to fall back t
 - Forced the hosted base href to `/` so deep links load root assets.
 - Added a runtime `assets/app-config.js` override with `BACKEND_URL: '/api'`.
 - Cache-busted `assets/app-config.js` and the DaveAI provider bootstrap in the Docker image and live static file.
-- Upgraded the DaveAI provider bootstrap to `20260526-v2`.
+- Upgraded the DaveAI provider bootstrap to `20260526-v4`.
 - Migrated stale direct Apollo/XtremeHD Xtream rows out of localStorage and into a backup key.
+- Migrated stale direct Apollo/XtremeHD Xtream rows out of IndexedDB playlist storage as well.
 - Redirected stale `/workspace/xtreams/...` provider routes to the safe DaveAI vault playlist route.
+- Preempted stale Xtream routes before Angular initializes so the broken workspace path does not flash `Portal unavailable`.
+- Disabled the hosted Angular service worker cache path by deploying the Angular safety worker as `ngsw-worker.js`; this clears stale `ngsw:` caches for browsers that had already cached the older app shell.
+- Added a provider-vault row `playlistId` and guarded IPTVnator's recent-history IndexedDB update so playback cannot throw on a missing playlist-meta row.
 - Kept provider credentials server-side; browser rows use only `/api/provider-vault/*` URLs.
 
 ## Proof
@@ -32,9 +36,18 @@ Verifier result:
 - Apollo and XtremeHD catalogs both return 200.
 - No `Portal unavailable`.
 - No page errors.
-- No console errors in playback proof.
+- No console errors in repro, playback, or stale-state migration proofs.
 - Playback proof clicked the first XtremeHD channel and received a `/api/provider-vault/stream` response.
 - Video element reached `readyState: 4`, `paused: false`, and had no media error.
+- Stale localStorage `xtream-playlists` becomes `[]`.
+- Stale IndexedDB direct Xtream row is removed.
+- New seed marker is `20260526-v4`.
+
+Latest proof set:
+
+- `iptvnator-repro-summary.json`: `ok=true`, `consoleErrorCount=0`, `pageErrorCount=0`.
+- `iptvnator-playback-summary.json`: `ok=true`, `streamResponseCount=1`, `video.readyState=4`, `consoleErrorCount=0`.
+- `iptvnator-v3-stale-migration-proof.json`: `ok=true`, `seeded=20260526-v4`, stale row removed, `consoleBad=0`.
 
 ## Rollback
 
