@@ -54,7 +54,9 @@ COPY --from=build /src/.nuvioweb.commit /usr/share/nginx/html/.nuvioweb.commit
 # authenticated server-side stream URLs while keeping raw credentials out of
 # the browser.
 COPY overrides/nuvio-daveai-vault-addon.js /usr/share/nginx/html/nuvio-daveai-vault-addon.js
-RUN sed -i 's#<script src="app.bundle.js"></script>#<script src="nuvio-daveai-vault-addon.js"></script>\\n  <script src="app.bundle.js"></script>#' /usr/share/nginx/html/index.html
+COPY overrides/nuvio-daveai-vault-addon.js /usr/share/nginx/html/nuvio-daveai-vault-addon.console-polish-20260526.js
+COPY overrides/daveai-avatar-catalog.json /usr/share/nginx/html/daveai-avatar-catalog.json
+RUN sed -i 's#<script src="app.bundle.js"></script>#<script src="nuvio-daveai-vault-addon.console-polish-20260526.js"></script>\\n  <script src="app.bundle.js"></script>#' /usr/share/nginx/html/index.html
 
 # nginx:alpine ships wget; healthcheck hits "/" on the container port.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

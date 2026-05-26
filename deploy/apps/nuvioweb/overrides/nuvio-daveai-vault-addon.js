@@ -21,6 +21,9 @@
     series: { type: 'series', title: 'Series', limit: 500 },
   };
   var originalFetch = window.fetch ? window.fetch.bind(window) : null;
+  var originalXhrOpen = window.XMLHttpRequest && window.XMLHttpRequest.prototype
+    ? window.XMLHttpRequest.prototype.open
+    : null;
 
   function readJson(key, fallback) {
     try {
@@ -56,6 +59,14 @@
     if (!Array.isArray(urls)) {
       urls = [ADDON_BASE];
       changed = true;
+    } else {
+      var before = urls.length;
+      urls = urls.filter(function (url) {
+        return typeof url === 'string' &&
+          url.indexOf('apps.daveai.tech/api/provider-vault') === -1 &&
+          url.indexOf('apps.daveai.tech/daveai-provider-vault-addon') === -1;
+      });
+      if (urls.length !== before) changed = true;
     }
     if (urls.indexOf(ADDON_BASE) === -1) {
       urls.unshift(ADDON_BASE);
@@ -80,9 +91,7 @@
   }
 
   function providerApiBase() {
-    var host = window.location.hostname;
-    var isLocal = host === 'localhost' || host === '127.0.0.1' || host === '::1';
-    return host === 'apps.daveai.tech' || isLocal ? '/api/provider-vault' : 'https://apps.daveai.tech/api/provider-vault';
+    return '/api/provider-vault';
   }
 
   function vaultCatalogUrl(providerId) {
@@ -271,18 +280,76 @@
     return null;
   }
 
+  function rewriteLegacyProviderVaultRequest(input) {
+    var raw = typeof input === 'string' ? input : input && input.url;
+    if (!raw || raw.indexOf('https://apps.daveai.tech/api/provider-vault') !== 0) return null;
+    var rewritten = raw.replace('https://apps.daveai.tech/api/provider-vault', providerApiBase());
+    if (typeof input === 'string') return rewritten;
+    try {
+      return new Request(rewritten, input);
+    } catch (error) {
+      return rewritten;
+    }
+  }
+
+  function routeHostedRpcNoise(input) {
+    var raw = typeof input === 'string' ? input : input && input.url;
+    if (!raw) return null;
+    try {
+      var url = new URL(raw, window.location.origin);
+      if (url.pathname === '/rest/v1/rpc/get_avatar_catalog') {
+        return jsonResponse([]);
+      }
+    } catch (error) {}
+    return null;
+  }
+
+  function rewriteLegacyUrl(raw) {
+    if (!raw || raw.indexOf('https://apps.daveai.tech/api/provider-vault') !== 0) return raw;
+    return raw.replace('https://apps.daveai.tech/api/provider-vault', providerApiBase());
+  }
+
+  function installXhrShim() {
+    if (!originalXhrOpen || window.__daveAiNuvioVaultXhrInstalled) return;
+    window.__daveAiNuvioVaultXhrInstalled = true;
+    window.XMLHttpRequest.prototype.open = function (method, url) {
+      var nextMethod = method;
+      var nextUrl = url;
+      try {
+        var parsed = new URL(String(url || ''), window.location.origin);
+        if (parsed.pathname === '/rest/v1/rpc/get_avatar_catalog') {
+          nextMethod = 'GET';
+          nextUrl = '/daveai-avatar-catalog.json';
+        } else {
+          nextUrl = rewriteLegacyUrl(String(url || ''));
+        }
+      } catch (error) {
+        nextUrl = rewriteLegacyUrl(String(url || ''));
+      }
+      var args = Array.prototype.slice.call(arguments);
+      args[0] = nextMethod;
+      args[1] = nextUrl;
+      return originalXhrOpen.apply(this, args);
+    };
+  }
+
   function installFetchShim() {
     if (!originalFetch || window.__daveAiNuvioVaultFetchInstalled) return;
     window.__daveAiNuvioVaultFetchInstalled = true;
     window.fetch = function (input, init) {
       var routed = routeVirtualAddon(input);
-      return routed || originalFetch(input, init);
+      if (routed) return routed;
+      routed = routeHostedRpcNoise(input);
+      if (routed) return routed;
+      var rewritten = rewriteLegacyProviderVaultRequest(input);
+      return originalFetch(rewritten || input, init);
     };
   }
 
   ensureEnglish();
   ensureDaveTvGuestMode();
   ensureAddonInstalled();
+  installXhrShim();
   installFetchShim();
   window.__DAVEAI_NUVIO_VAULT_ADDON__ = {
     addonBase: ADDON_BASE,

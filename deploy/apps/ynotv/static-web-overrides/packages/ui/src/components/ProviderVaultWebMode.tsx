@@ -27,6 +27,7 @@ type VaultItem = {
   genre?: string;
   extension?: string;
   container_extension?: string;
+  url?: string;
 };
 
 type VaultCatalog = {
@@ -67,6 +68,8 @@ async function fetchJson<T>(url: string): Promise<T> {
 }
 
 function streamUrl(provider: Provider, item: VaultItem, kind: StreamKind) {
+  const providedUrl = text(item.url);
+  if (providedUrl.startsWith('/api/provider-vault/stream')) return providedUrl;
   const id = text(item.id ?? item.stream_id);
   const ext = text(item.extension ?? item.container_extension, kind === 'movie' ? 'mp4' : 'm3u8');
   const params = new URLSearchParams({ provider: provider.id, kind, id, ext });

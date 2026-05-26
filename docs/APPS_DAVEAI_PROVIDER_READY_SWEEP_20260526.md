@@ -1,6 +1,6 @@
 # apps.daveai.tech Provider-Ready Visual Sweep — 2026-05-26
 
-Status: `12/12 passed`
+Status: `12/12 passed` (`2026-05-26T19:51:01.490Z`)
 
 ## Scope
 
@@ -52,9 +52,21 @@ Each app had to satisfy:
   `extreme-infinitv`, `wizju-iptv-player`, `stalker-ui`, `open-tv`, `ynotv`.
 - Added the Stalker UI hosted `webapis` stub and patched the deployed script
   path from `$WEBAPIS/webapis/webapis.js` to `/webapis/webapis.js`.
+- Hardened NuvioWeb for DaveAI hosting:
+  - forced English first-run state;
+  - cleaned stale `apps.daveai.tech` provider-vault addon URLs from
+    `installedAddonUrls`;
+  - rewrote legacy cross-origin provider-vault requests to same-origin
+    `/api/provider-vault/*`;
+  - stubbed the optional hosted avatar RPC with a local empty catalog so the
+    web build no longer logs a Supabase-style `405`.
+- Updated YnoTV to trust provider-vault `item.url` values before rebuilding
+  stream URLs, fixing empty-id stream requests against Apollo/XtremeHD rows.
+- Added the provider-vault image proxy in Smart IPTV Web so apps that render
+  provider logos use safe same-origin `/api/provider-vault/image?src=...`
+  URLs instead of browser-blocked mixed-content HTTP poster URLs.
 
-## Non-Blocking Console Notes
+## Console Notes
 
-Some players still log blocked mixed-content poster/image warnings from provider
-catalog metadata. Playback and provider-vault URLs remain same-origin and the
-visual gates passed. A later polish wave can proxy or sanitize poster URLs.
+The latest sweep recorded zero `pageerror` events and zero captured console
+errors across all 12 apps, including `nuvio`, `iptv-restream`, and `open-tv`.

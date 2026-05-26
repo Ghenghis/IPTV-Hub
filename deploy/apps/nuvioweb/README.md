@@ -27,6 +27,10 @@ authenticated DaveTV provider vault. The browser only sees tokenized
 `/api/provider-vault/stream` URLs; provider usernames and passwords stay
 server-side. The override also pins the first-run language to English so the
 app does not start in a browser/system locale the user did not ask for.
+For hosted deployments it also removes stale cross-origin DaveAI addon URLs,
+rewrites legacy `apps.daveai.tech/api/provider-vault` requests back to the
+same-origin provider vault, and stubs the optional avatar RPC with a local empty
+catalog.
 
 Because the upstream emits a fully self-contained `dist/` (entry `index.html`
 + minified `app.bundle.js` + processed CSS + assets), the runtime is plain
@@ -151,6 +155,8 @@ Latest Codex proof for the DaveAI override:
 - `nginx.conf` — runtime nginx site, listens on `:8080`, gzip + caching.
 - `overrides/nuvio-daveai-vault-addon.js` — DaveAI provider-vault virtual
   Stremio addon for Apollo Group TV and XtremeHD.
+- `overrides/daveai-avatar-catalog.json` — hosted fallback for the optional
+  avatar RPC that is not wired in the DaveAI static deployment.
 - `docker-compose.service.yml` — service fragment consumed by
   `deploy/scripts/generate-stack.sh`.
 - `README.md` — this file.

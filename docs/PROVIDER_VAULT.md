@@ -28,6 +28,11 @@ provider in a slightly different shape:
 | **Provider-vault web** | xstream-player, smart-iptv-web, iptv-stream, iptv-player-zero, nuvioweb, iptvnator, extreme-infinitv, wizju-iptv-player, stalker-ui, iptv-restream, open-tv, ynotv | DaveTV server-side vault endpoints and safe same-origin stream/catalog URLs |
 | **No provider / preview only** | visual demos still marked preview-only in the launcher | static demo content; no creds needed |
 
+Current DaveTV web rollout also sanitizes provider logo/poster URLs. Safe
+non-secret HTTP/HTTPS image URLs are exposed to browser apps as same-origin
+`/api/provider-vault/image?src=...`; URLs with embedded credentials or
+credential-shaped query keys are rejected server-side.
+
 Today every player has its own settings UI. Setting up two paid providers
 (say *XtremeHD* and *Apollo Group TV*) across 8 players means **16
 credential entries** typed by hand, often on a TV remote. Each one is a
