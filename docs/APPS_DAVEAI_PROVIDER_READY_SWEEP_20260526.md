@@ -1,6 +1,6 @@
 # apps.daveai.tech Provider-Ready Visual Sweep — 2026-05-26
 
-Status: `13/13 passed` (`2026-05-26T20:00:13.611Z`)
+Status: `13/13 passed` (`2026-05-26T22:30:32.398Z`)
 
 ## Scope
 
@@ -14,7 +14,7 @@ Artifact directory:
 C:\Users\Admin\Downloads\VPS\_visual_artifacts\apps-provider-ready-sweep-20260526
 ```
 
-Summary:
+Latest summary:
 
 ```text
 C:\Users\Admin\Downloads\VPS\_visual_artifacts\apps-provider-ready-sweep-20260526\summary.json
@@ -92,7 +92,18 @@ Each app had to satisfy:
     same-origin `/api/provider-vault/stream` plus segment proxy URLs;
   - proof: `docs/IPTV_PLAYER_ZERO_FREE_PROVIDER_FIX_20260526.md`.
 
+## Latest Sweep Notes
+
+The latest sweep was rerun after the IPTV Player Zero and IPTVnator repairs.
+It passed all `13` launcher apps with:
+
+- `0` login-page regressions;
+- `0` client-side exception/application-error screens;
+- `0` provider credential-shaped text leaks;
+- `0` Playwright `pageerror` events.
+
 ## Console Notes
 
 The latest sweep recorded zero `pageerror` events and zero captured console
-errors across all 12 apps, including `nuvio`, `iptv-restream`, and `open-tv`.
+errors across all 13 apps, including `iptv-player-zero`, `iptvnator`,
+`nuvio`, `iptv-restream`, and `open-tv`.
