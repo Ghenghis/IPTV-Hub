@@ -1,10 +1,11 @@
-# Provider Vault — design
+# Provider Vault — design and current DaveAI rollout
 
-> **Status: design doc, not yet implemented.** This document defines the
-> contract; the corresponding `provider_*` Tauri commands, manifest schema
-> additions, settings UI tab, and launcher integration land in dedicated
-> follow-up PRs. The doc is committed *first* so the design can be reviewed
-> and challenged before any code lands.
+> **Status: partially implemented for DaveAI-hosted web apps.** The original
+> keychain/Tauri launcher design below is still the long-term contract, but
+> `apps.daveai.tech` now uses a server-side DaveTV provider vault and
+> same-origin `/api/provider-vault/*` endpoints for selected web players.
+> Browser apps must store only provider references or safe proxy URLs; they
+> must not persist raw Apollo Group TV or XtremeHD credentials.
 >
 > **Scope of policy framing:** IPTV-Hub is provider-agnostic. The vault stores
 > credentials that **the user already owns and is legally entitled to use**
@@ -24,7 +25,8 @@ provider in a slightly different shape:
 | **Xtream Codes API** | iptvnator, iptv-restream, smart-iptv-web | `host`, `username`, `password` (the player computes M3U + EPG URLs from these) |
 | **M3U URL** | nuvioweb, tvapp, xstream-player | A pre-signed URL like `https://<host>/get.php?username=...&password=...&type=m3u_plus` |
 | **Stalker portal** | stalker-ui | MAC address + portal base URL |
-| **No provider** | extreme-infinitv, iptv-stream | static demo content; no creds needed |
+| **Provider-vault web** | xstream-player, smart-iptv-web, iptv-stream, iptv-player-zero, nuvioweb, iptvnator, extreme-infinitv | DaveTV server-side vault endpoints and safe same-origin stream/catalog URLs |
+| **No provider / preview only** | visual demos still marked preview-only in the launcher | static demo content; no creds needed |
 
 Today every player has its own settings UI. Setting up two paid providers
 (say *XtremeHD* and *Apollo Group TV*) across 8 players means **16

@@ -32,8 +32,12 @@ What you get behind the hub's reverse proxy at `https://extreme-infinitv.<your-d
 
 - The full Astro/Svelte UI — Live TV, Movies, Series, EPG grid, Favorites,
   Recently added, Search, Downloads page, Settings.
-- Xtream Codes login (host / port / user / pass) and direct `.m3u` / `.m3u8`
-  URL playlists. Credentials persist in browser `localStorage`.
+- DaveAI provider-vault entries for Apollo Group TV and XtremeHD. The browser
+  stores only `davetv-vault://<provider>` playlist references; provider
+  credentials remain server-side and catalog/stream calls go through
+  `/api/provider-vault/*`.
+- Manual Xtream Codes login (host / port / user / pass) and direct `.m3u` /
+  `.m3u8` URL playlists remain available for user-supplied providers.
 - The HLS / MPEG-TS / Video.js player.
 - Spatial-focus navigation for keyboard / D-pad use.
 
@@ -50,12 +54,10 @@ What you do **not** get vs. the native build:
   `tauri-plugin-android-fs-api`) is no-op on the web. Offline playback does not
   work.
 - No native notifications, tray icon, or window-state persistence.
-- No CORS bypass. The browser will enforce CORS against your Xtream provider;
-  some providers do not send the required `Access-Control-Allow-Origin` header
-  and will fail in the web build even though they work in the desktop build.
-  The Caddy/nginx in front of this service is not configured to proxy Xtream
-  traffic — if you need that, add a fragment in `deploy/nginx/` and document
-  it.
+- No general CORS bypass for arbitrary manually-entered providers. DaveAI's
+  built-in Apollo Group TV and XtremeHD entries use the same-origin
+  `/api/provider-vault/*` backend proxy and do not expose provider credentials
+  in browser storage or URLs.
 
 If any of those gaps are deal-breakers, deploy the native build from
 <https://github.com/infinitel8p/Extreme-InfiniTV/releases/latest> on each
@@ -70,6 +72,7 @@ client and use this image only as an "anywhere I can reach a browser" fallback.
 | `.dockerignore` | Excludes `upstream/src-tauri/`, `upstream/tests/`, `upstream/docs/`, `upstream/.git`, etc. from the build context so Cargo never enters the picture. |
 | `docker-compose.service.yml` | Service fragment merged by `deploy/scripts/generate-stack.sh` into `docker-compose.apps.yml`. Binds host `127.0.0.1:9630` → container `80`. |
 | `upstream/` | A plain `git clone --depth=1 https://github.com/infinitel8p/Extreme-InfiniTV.git`. Not a submodule — re-fetch with `git -C upstream pull` to update. |
+| `overrides/` | DaveAI-hosted web overlay copied on top of `upstream/` during image build. Adds provider-vault entries/proxy calls and browser-safe version text without mutating the vendored upstream clone. |
 | `README.md` | This file. |
 
 ## Build pinning rationale
@@ -95,6 +98,21 @@ client and use this image only as an "anywhere I can reach a browser" fallback.
 None are baked into the image. Runtime configuration (Xtream credentials,
 playlist URLs, theme, font scale) is supplied by the user in the browser UI and
 persisted to `localStorage`. There are no server-side secrets to provision.
+DaveAI-hosted provider-vault entries are the exception: those entries are
+available automatically and keep the actual provider credentials in the DaveTV
+provider vault rather than in this static app.
+
+## DaveAI provider-vault proof
+
+Verified 2026-05-26:
+
+- `dist/_astro` and the VPS-served bundle contain `davetv-vault://` playlist
+  entries for Apollo Group TV and XtremeHD.
+- Browser proof against the static build confirmed English UI labels, automatic
+  Apollo selection, same-origin `/api/provider-vault/catalog` calls, and no raw
+  provider credentials in browser storage.
+- Visual artifact:
+  `C:/Users/Admin/Downloads/VPS/_visual_artifacts/extreme-infinitv-provider-vault-proof-20260526/`.
 
 ## Health
 

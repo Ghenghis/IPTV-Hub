@@ -48,6 +48,12 @@ RUN corepack enable \
 # stays small and Tauri's Rust crate never lands in the image.
 COPY upstream/ /build/
 
+# DaveAI web-hosted override layer. These files add server-side provider-vault
+# support for Apollo Group TV and XtremeHD, plus a browser-safe version label.
+# Keep them outside `upstream/` so the vendored source stays easy to refresh.
+COPY overrides/ /tmp/daveai-overrides/
+RUN cp -a /tmp/daveai-overrides/. /build/
+
 # Honour the lockfile committed upstream.
 RUN pnpm install --frozen-lockfile
 
