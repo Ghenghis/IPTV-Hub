@@ -19,6 +19,15 @@ NuvioTV Web is a single-page client that talks to user-installed Stremio
 addons for content discovery and source resolution. It does **not** host or
 proxy media itself; everything is browser-side. There is no backend.
 
+The DaveAI deployment adds one browser-side override script:
+`overrides/nuvio-daveai-vault-addon.js`. It registers a local
+Stremio-compatible "DaveAI IPTV" addon that exposes Apollo Group TV and
+XtremeHD as Nuvio catalogs while fetching real catalog and stream URLs from the
+authenticated DaveTV provider vault. The browser only sees tokenized
+`/api/provider-vault/stream` URLs; provider usernames and passwords stay
+server-side. The override also pins the first-run language to English so the
+app does not start in a browser/system locale the user did not ask for.
+
 Because the upstream emits a fully self-contained `dist/` (entry `index.html`
 + minified `app.bundle.js` + processed CSS + assets), the runtime is plain
 nginx — no Node process needed in production.
@@ -102,6 +111,15 @@ The compose service runs `wget --spider http://127.0.0.1:8080/` every 30 s
 (`start_period=10s`, `retries=3`). The Dockerfile carries the same probe so
 `docker run` users get the status without compose.
 
+## DaveAI Provider Proof
+
+Latest Codex proof for the DaveAI override:
+
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\nuvio-provider-vault-proof-20260526\local-proof-summary.json`
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\nuvio-provider-vault-proof-20260526\nuvio-vault-addon-local.png`
+- VPS backup before live static injection:
+  `/var/backups/daveai-apps/nuvio-before-provider-vault-20260526T1746Z.tgz`
+
 ## Update path
 
 1. Pick an upstream commit at https://github.com/NuvioMedia/NuvioWeb and copy
@@ -131,6 +149,8 @@ The compose service runs `wget --spider http://127.0.0.1:8080/` every 30 s
 
 - `Dockerfile` — multi-stage build (`node:20-alpine` → `nginx:1.27-alpine`).
 - `nginx.conf` — runtime nginx site, listens on `:8080`, gzip + caching.
+- `overrides/nuvio-daveai-vault-addon.js` — DaveAI provider-vault virtual
+  Stremio addon for Apollo Group TV and XtremeHD.
 - `docker-compose.service.yml` — service fragment consumed by
   `deploy/scripts/generate-stack.sh`.
 - `README.md` — this file.
