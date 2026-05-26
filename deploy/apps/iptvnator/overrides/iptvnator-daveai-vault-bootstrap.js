@@ -8,7 +8,7 @@
 (function (window, document) {
   'use strict';
 
-  var BUILD_ID = '20260526-v1';
+  var BUILD_ID = '20260526-v2';
   var DB_NAME = 'iptvnator';
   var STORE_NAME = 'playlists';
   var SETTINGS_KEY = 'settings';
@@ -218,6 +218,106 @@
     return 'daveai-provider-vault-' + safeId(providerId);
   }
 
+  function playlistRoute(providerId) {
+    return '/workspace/playlists/' + encodeURIComponent(playlistId(providerId)) + '/all';
+  }
+
+  function providerFromText(value) {
+    var haystack = String(value || '').toLowerCase();
+    if (haystack.indexOf('apollo') !== -1) return PROVIDERS[0];
+    if (haystack.indexOf('xtreme') !== -1 || haystack.indexOf('xhd') !== -1) return PROVIDERS[1];
+    return null;
+  }
+
+  function readJsonStorage(key, fallback) {
+    try {
+      var raw = window.localStorage && window.localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (ignored) {
+      return fallback;
+    }
+  }
+
+  function writeJsonStorage(key, value) {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (ignored) {
+      return false;
+    }
+  }
+
+  function legacyXtreamProvider(row) {
+    if (!row || typeof row !== 'object') return null;
+    return (
+      providerFromText(row.title) ||
+      providerFromText(row.name) ||
+      providerFromText(row.filename) ||
+      providerFromText(row.serverUrl)
+    );
+  }
+
+  function currentXtreamPlaylistId() {
+    var match = window.location.pathname.match(/\/workspace\/xtreams\/([^/]+)/i);
+    return match ? decodeURIComponent(match[1]) : '';
+  }
+
+  function migrateLegacyXtreamProviders(setStatus) {
+    var playlists = readJsonStorage('xtream-playlists', []);
+    if (!Array.isArray(playlists) || !playlists.length) {
+      return null;
+    }
+
+    var currentId = currentXtreamPlaylistId();
+    var removed = [];
+    var currentProvider = null;
+    var kept = playlists.filter(function (row) {
+      var provider = legacyXtreamProvider(row);
+      if (!provider) return true;
+      removed.push({
+        id: row.id,
+        title: row.title || row.name || row.filename || provider.name,
+        providerId: provider.id,
+        hadServerUrl: Boolean(row.serverUrl),
+      });
+      if (currentId && String(row.id || '') === currentId) {
+        currentProvider = provider;
+      }
+      return false;
+    });
+
+    if (!removed.length) {
+      return null;
+    }
+
+    writeJsonStorage('iptvnator_provider_vault_legacy_xtream_backup', {
+      buildId: BUILD_ID,
+      backedUpAt: new Date().toISOString(),
+      entries: removed,
+    });
+    writeJsonStorage('xtream-playlists', kept);
+    if (typeof setStatus === 'function') {
+      setStatus('Moved Apollo/XtremeHD to safe DaveAI vault playlists.');
+    }
+    return currentProvider || removed.map(function (entry) {
+      return PROVIDERS.find(function (provider) {
+        return provider.id === entry.providerId;
+      });
+    }).filter(Boolean)[0] || null;
+  }
+
+  function providerFromLegacyBackup() {
+    var backup = readJsonStorage('iptvnator_provider_vault_legacy_xtream_backup', null);
+    var entries = backup && Array.isArray(backup.entries) ? backup.entries : [];
+    for (var index = 0; index < entries.length; index += 1) {
+      var provider = PROVIDERS.find(function (item) {
+        return item.id === entries[index].providerId;
+      });
+      if (provider) return provider;
+    }
+    return null;
+  }
+
   function groupTitle(type, item) {
     var raw = item && item.group && item.group.title;
     var fallback =
@@ -425,6 +525,14 @@
     });
   }
 
+  function redirectLegacyXtreamRoute(provider) {
+    if (!provider || !currentXtreamPlaylistId()) return false;
+    var target = playlistRoute(provider.id);
+    if (window.location.pathname === target) return false;
+    window.location.replace(target);
+    return true;
+  }
+
   function importProviderNoReload(provider, setStatus) {
     setStatus('Loading ' + provider.name + ' catalog...');
     return Promise.all([openDb(), fetchJson(catalogUrl(provider.id))]).then(function (parts) {
@@ -522,12 +630,18 @@
           '1';
       } catch (ignored) {}
       var panel = hidden ? { setStatus: function () {} } : createPanel(providers);
+      var legacyProvider =
+        migrateLegacyXtreamProviders(panel.setStatus) ||
+        providerFromLegacyBackup() ||
+        (currentXtreamPlaylistId() ? PROVIDERS[1] : null);
       autoSeed(providers, panel.setStatus).catch(function (error) {
         panel.setStatus(
           'DaveAI provider setup needs attention: ' +
             (error && error.message ? error.message : 'unknown error'),
           true
         );
+      }).then(function () {
+        redirectLegacyXtreamRoute(legacyProvider);
       });
     });
   });

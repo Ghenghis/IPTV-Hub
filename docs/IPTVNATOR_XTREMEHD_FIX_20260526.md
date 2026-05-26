@@ -1,0 +1,43 @@
+# IPTVnator XtremeHD Fix - 2026-05-26
+
+## Summary
+
+`https://iptvnator.daveai.tech/` was failing on deep Xtream workspace URLs because the hosted static build used a relative base href. A direct route such as `/workspace/xtreams/.../vod` loaded module scripts from the nested route path, so nginx returned HTML for JavaScript files and Chromium rejected them.
+
+The hosted app also had an empty runtime config, allowing the PWA to fall back to its upstream backend URL instead of DaveAI's same-origin `/api` proxy.
+
+## Applied Fix
+
+- Forced the hosted base href to `/` so deep links load root assets.
+- Added a runtime `assets/app-config.js` override with `BACKEND_URL: '/api'`.
+- Cache-busted `assets/app-config.js` and the DaveAI provider bootstrap in the Docker image and live static file.
+- Upgraded the DaveAI provider bootstrap to `20260526-v2`.
+- Migrated stale direct Apollo/XtremeHD Xtream rows out of localStorage and into a backup key.
+- Redirected stale `/workspace/xtreams/...` provider routes to the safe DaveAI vault playlist route.
+- Kept provider credentials server-side; browser rows use only `/api/provider-vault/*` URLs.
+
+## Proof
+
+Artifacts:
+
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\iptvnator-xtremehd-fix-20260526\iptvnator-repro-summary.json`
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\iptvnator-xtremehd-fix-20260526\iptvnator-repro.png`
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\iptvnator-xtremehd-fix-20260526\iptvnator-playback-summary.json`
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\iptvnator-xtremehd-fix-20260526\iptvnator-xtremehd-playback.png`
+
+Verifier result:
+
+- Stale Xtream URL redirects to `/workspace/playlists/daveai-provider-vault-xtremehd/all`.
+- XtremeHD vault playlist loads with `2600 channels`.
+- Apollo and XtremeHD catalogs both return 200.
+- No `Portal unavailable`.
+- No page errors.
+- No console errors in playback proof.
+- Playback proof clicked the first XtremeHD channel and received a `/api/provider-vault/stream` response.
+- Video element reached `readyState: 4`, `paused: false`, and had no media error.
+
+## Rollback
+
+Live backup before deployment:
+
+- `/var/backups/daveai-apps/iptvnator-before-xtremehd-fix-20260526T202149Z.tgz`

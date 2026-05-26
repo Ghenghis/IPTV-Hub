@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TVapp DaveAI</title>
+  <link rel="stylesheet" href="css/style.css?v=provider-ready-20260526">
+</head>
+<body>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <video id="videoPlayer" autoplay muted playsinline controls></video>
+  <main id="shell">
+    <section id="statusPanel">
+      <div class="eyebrow">DaveTV Provider Vault</div>
+      <h1 id="channelName">Loading Apollo and XtremeHD</h1>
+      <p id="statusText">Preparing provider catalogs...</p>
+      <div id="providerCounts"></div>
+    </section>
+    <aside id="channelPanel">
+      <div class="toolbar">
+        <input id="searchInput" type="search" placeholder="Search channels, movies, series" autocomplete="off">
+        <div id="tabs" role="tablist" aria-label="Content type">
+          <button class="active" data-kind="all" type="button">All</button>
+          <button data-kind="live" type="button">Live</button>
+          <button data-kind="movie" type="button">Movies</button>
+          <button data-kind="series" type="button">Series</button>
+        </div>
+      </div>
+      <div id="channelList" aria-label="Provider streams"></div>
+    </aside>
+  </main>
+  <script src="js/main.js?v=provider-ready-20260526"></script>
+</body>
+</html>
