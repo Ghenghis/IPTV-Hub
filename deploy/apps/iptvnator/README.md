@@ -51,6 +51,25 @@ Override `CLIENT_URL` for production by exporting `IPTVNATOR_CLIENT_URL`
 before `docker compose up`, or by writing a `docker-compose.override.yml`
 in the deploy root.
 
+## DaveAI provider-vault bootstrap
+
+The IPTV-Hub build injects
+`iptvnator-daveai-vault-bootstrap.js` into the generated PWA before the Angular
+bundle starts. The bootstrap keeps Apollo Group TV and XtremeHD credentials
+server-side by importing provider-vault catalog rows as ordinary IPTVnator M3U
+playlists in IndexedDB:
+
+| Provider       | Playlist title                         | Browser data |
+| -------------- | -------------------------------------- | ------------ |
+| Apollo Group TV | `Apollo Group TV - DaveAI Vault`       | Safe `/api/provider-vault/stream` URLs only |
+| XtremeHD       | `XtremeHD - DaveAI Vault`              | Safe `/api/provider-vault/stream` URLs only |
+
+The script also pins first-run language defaults to English and leaves a small
+“DaveAI Providers” refresh panel so the user can refresh either provider catalog
+without typing credentials into IPTVnator. It does not modify the upstream
+Angular bundle and can be removed by deleting the injected script tag plus the
+override file.
+
 ## Build & run (local)
 
 ```sh
@@ -116,4 +135,5 @@ nginx (managed outside this repo) proxies the public URL to `127.0.0.1:9680`.
 | ------------------------------- | ------------------------------------------------------ |
 | `Dockerfile`                    | Pinned multi-stage build — fetch, Node build, runtime. |
 | `docker-compose.service.yml`    | Service fragment merged into `docker-compose.apps.yml`. |
+| `overrides/iptvnator-daveai-vault-bootstrap.js` | DaveAI provider-vault playlist seeder for Apollo/XtremeHD. |
 | `README.md`                     | This file.                                             |

@@ -72,10 +72,13 @@ ENV CLIENT_URL=http://localhost:9680
 
 COPY --from=build /usr/src/app/dist/apps/web /usr/share/nginx/html
 COPY --from=build /usr/src/app/dist/apps/web-backend ./web-backend
+COPY overrides/iptvnator-daveai-vault-bootstrap.js /usr/share/nginx/html/iptvnator-daveai-vault-bootstrap.js
 COPY --from=fetch /src/docker/nginx.conf /etc/nginx/http.d/default.conf.template
 COPY --from=fetch /src/docker/docker-entrypoint.sh /usr/local/bin/iptvnator-entrypoint
 
-RUN chmod +x /usr/local/bin/iptvnator-entrypoint
+RUN sed -i 's#<script src="polyfills#<script src="iptvnator-daveai-vault-bootstrap.js"></script><script src="polyfills#' /usr/share/nginx/html/index.html \
+ && grep -q 'iptvnator-daveai-vault-bootstrap.js' /usr/share/nginx/html/index.html \
+ && chmod +x /usr/local/bin/iptvnator-entrypoint
 
 # Upstream EXPOSEs 80; we keep the same so the upstream entrypoint and
 # nginx config Just Work. The 80 -> 9680 mapping is in compose, not here.
