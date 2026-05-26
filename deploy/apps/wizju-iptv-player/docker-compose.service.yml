@@ -12,12 +12,10 @@
 services:
   wizju-iptv-player:
     build:
-      # Build context is the per-app deploy folder. The Dockerfile clones nothing;
-      # operators that want to rebuild from a newer upstream commit must update
-      # the build context (e.g. by checking the upstream into ./upstream/ or by
-      # passing a different context path on the deploy host).
-      context: ./apps/wizju-iptv-player/upstream
-      dockerfile: ../Dockerfile
+      # Build context is the per-app deploy folder so the Dockerfile can copy
+      # both upstream/ and the tracked DaveAI overrides/ layer.
+      context: ./apps/wizju-iptv-player
+      dockerfile: Dockerfile
     image: iptv-hub/wizju-iptv-player:local
     container_name: ${COMPOSE_PROJECT_NAME:-iptv-hub}_wizju-iptv-player
     restart: unless-stopped

@@ -30,13 +30,17 @@ WORKDIR /src
 RUN corepack enable
 
 # Copy manifests first so the install layer caches independently of the source.
-COPY package.json pnpm-lock.yaml ./
+COPY upstream/package.json upstream/pnpm-lock.yaml ./
 
 # Frozen lockfile = the pnpm equivalent of `npm ci`.
 RUN pnpm install --frozen-lockfile
 
-# Copy the rest of the source tree.
-COPY . .
+# Copy the upstream source tree and then apply the tracked DaveAI override
+# layer. Keep upstream/ easy to refresh while preserving provider-vault support
+# in git.
+COPY upstream/ /src/
+COPY overrides/ /tmp/daveai-overrides/
+RUN cp -a /tmp/daveai-overrides/. /src/
 
 # Produce the web bundle. This runs `run-p type-check build-only:web`, which
 # fails the build on any TS error per CONTRACT.md §2.4 (zero-warning default).

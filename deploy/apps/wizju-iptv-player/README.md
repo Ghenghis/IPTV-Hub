@@ -20,13 +20,36 @@ fronted by nginx and slotted into the IPTV Hub stack at host port **9820** (per
 | ----------------------------- | ------------------------------------------------------------------ |
 | `Dockerfile`                  | Multi-stage build: `node:20-alpine` builds, `nginx:1.27-alpine` serves. |
 | `docker-compose.service.yml`  | Service fragment merged by `scripts/generate-stack.sh` into the per-app compose bundle. |
+| `overrides/`                  | DaveAI provider-vault integration and hosted playback polish applied over upstream before build. |
 | `README.md`                   | This file.                                                         |
 
 The `upstream/` sub-directory is **not** committed. Operators populate it during
 deploy by cloning the upstream repo at the pinned tag (see "Update path"
-below). The compose `build.context` points at `./apps/wizju-iptv-player/upstream`
-and the `dockerfile` field walks up one level to find the committed
-`Dockerfile`.
+below). The compose `build.context` points at `./apps/wizju-iptv-player` so the
+committed Dockerfile can copy both `upstream/` and the tracked `overrides/`
+layer.
+
+## DaveAI provider-vault integration
+
+This hosted build auto-seeds two first-class Wizju sources when the DaveTV
+provider vault reports them configured:
+
+| Provider | Wizju source id | Runtime data path |
+| -------- | --------------- | ----------------- |
+| Apollo Group TV | `daveai-vault-apollo` | `/api/provider-vault/catalog` -> safe `/api/provider-vault/stream` URLs |
+| XtremeHD | `daveai-vault-xtremehd` | `/api/provider-vault/catalog` -> safe `/api/provider-vault/stream` URLs |
+
+Raw provider usernames, passwords, and host URLs never enter browser storage or
+this repository. The overrides also make Wizju's existing Refresh action
+understand provider-vault catalog URLs, so the app can refresh Apollo/XtremeHD
+through the same UI it uses for M3U sources.
+
+Playback polish added for hosted use:
+
+- Video.js `preload=auto` and same-origin provider-vault stream URLs.
+- VHS/HLS retry and quality-stability options (`maxPlaylistRetries`,
+  `smoothQualityChange`, `enableLowInitialPlaylist: false`).
+- Safari keeps native HLS; Chromium-based browsers use VHS for better recovery.
 
 ## Ports
 
@@ -73,21 +96,21 @@ git clone --depth 1 https://github.com/j2jstudio/wizju-iptv-player.git \
 docker build \
   -f deploy/apps/wizju-iptv-player/Dockerfile \
   -t iptv-hub/wizju-iptv-player:local \
-  deploy/apps/wizju-iptv-player/upstream
+  deploy/apps/wizju-iptv-player
 ```
 
-A standalone test build (without an `upstream/` checkout) can use the per-app
-folder as context — the upstream `package.json`, `vite.config.web.ts`, and
-`src/` must be present at the context root for it to succeed.
+A standalone test build needs `upstream/` present under the per-app folder.
+The DaveAI changes are then applied from tracked `overrides/` during the build.
 
 ## Update path
 
 To pull a new upstream release:
 
 1. `cd deploy/apps/wizju-iptv-player/upstream && git fetch && git checkout <tag>`
-2. `pnpm install --frozen-lockfile` (sanity-check the lockfile still resolves).
-3. Rebuild via `deploy/scripts/generate-stack.sh` -> `docker compose build wizju-iptv-player`.
-4. `docker compose up -d wizju-iptv-player` to roll the running container.
+2. Keep the DaveAI `overrides/` layer in place.
+3. `pnpm install --frozen-lockfile` (sanity-check the lockfile still resolves).
+4. Rebuild via `deploy/scripts/generate-stack.sh` -> `docker compose build wizju-iptv-player`.
+5. `docker compose up -d wizju-iptv-player` to roll the running container.
 
 If upstream changes the web build script name or output directory, both must
 be updated in the Dockerfile in lock-step:
@@ -104,10 +127,9 @@ and is the correct choice for that base image.
 
 ## Known limitations
 
-- The SPA fetches playlist URLs directly from the user's browser. CORS is
-  enforced by remote IPTV providers; this image cannot proxy them. If a
-  playlist host rejects browser CORS, the operator needs a separate proxy —
-  out of scope for this slice.
+- Hosted DaveAI providers use the same-origin provider vault. Manually-added
+  third-party M3U URLs are still fetched by the user's browser, so CORS remains
+  the remote playlist host's decision.
 - No server-side analytics, metrics, or logging is emitted by the SPA itself.
   Per-app traffic is observable only via the host edge nginx access log
   configured by `deploy/scripts/generate-stack.sh`.
