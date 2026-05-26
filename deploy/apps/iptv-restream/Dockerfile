@@ -42,6 +42,7 @@ WORKDIR /app
 COPY --from=source /src/frontend/package.json /src/frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY --from=source /src/frontend/ ./
+COPY overrides/frontend/ ./
 ARG VITE_BACKEND_URL=""
 ARG VITE_STREAM_DELAY=18
 ARG VITE_STREAM_PROXY_DELAY=30
