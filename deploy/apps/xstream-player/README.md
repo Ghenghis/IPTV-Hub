@@ -111,8 +111,19 @@ After source updates on the VPS:
 ```sh
 cd /opt/davetv/services/xstream-player
 NODE_ENV=production npm run build
+rm -rf .next/standalone/.next/static .next/standalone/public
+mkdir -p .next/standalone/.next
+cp -a .next/static .next/standalone/.next/static
+cp -a public .next/standalone/public
 systemctl restart davetv-xstream-player.service
 curl -sf http://127.0.0.1:3101/ -o /dev/null && echo OK
+```
+
+The systemd unit should run the same layout as the Docker standalone runtime:
+
+```text
+WorkingDirectory=/opt/davetv/services/xstream-player/.next/standalone
+ExecStart=/usr/bin/env node server.js
 ```
 
 The production service currently sits behind the DaveTV auth gate. External

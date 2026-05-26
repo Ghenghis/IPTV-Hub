@@ -86,9 +86,9 @@ export default function Dashboard() {
 
     useEffect(() => {
         const hour = new Date().getHours();
-        if (hour < 12) setGreeting('Bom dia');
-        else if (hour < 18) setGreeting('Boa tarde');
-        else setGreeting('Boa noite');
+        if (hour < 12) setGreeting('Good morning');
+        else if (hour < 18) setGreeting('Good afternoon');
+        else setGreeting('Good evening');
     }, []);
 
     // Load carousels based on TMDb configuration
@@ -286,7 +286,7 @@ export default function Dashboard() {
     };
 
     const formatDate = (timestamp: string) => {
-        if (!timestamp) return 'Ilimitado';
+        if (!timestamp) return 'Unlimited';
         const date = new Date(parseInt(timestamp) * 1000);
         return date.toLocaleDateString();
     };
@@ -337,7 +337,7 @@ export default function Dashboard() {
 
                         <div className="bg-black/30  px-2.5 py-1 rounded-full border border-white/5 flex items-center gap-1.5 text-[10px] md:text-xs text-gray-400 hidden sm:flex">
                             <User size={12} />
-                            <span>{user?.status === 'Active' ? 'Ativo' : user?.status}</span>
+                            <span>{user?.status === 'Active' ? 'Active' : user?.status}</span>
                         </div>
 
                         <div className="bg-black/30  px-2.5 py-1 rounded-full border border-white/5 flex items-center gap-1.5 text-[10px] md:text-xs text-gray-400 hidden sm:flex">
@@ -404,7 +404,7 @@ export default function Dashboard() {
                                 <span className="text-xs font-bold bg-white/20  px-2 py-1 rounded text-white uppercase tracking-wider">Live Stream</span>
                             </div>
                             <h3 className="text-2xl font-bold text-white mb-1">Live TV</h3>
-                            <p className="text-gray-300 text-sm line-clamp-1">Assista seus canais favoritos ao vivo.</p>
+                            <p className="text-gray-300 text-sm line-clamp-1">Watch your favorite channels live.</p>
                         </div>
                     </Link>
 
@@ -443,7 +443,7 @@ export default function Dashboard() {
                                 <div className="p-3 bg-purple-600 rounded-full group-hover:scale-110 transition-transform">
                                     <Layers size={24} className="text-white" />
                                 </div>
-                                <span className="text-xs font-bold bg-white/20  px-2 py-1 rounded text-white uppercase tracking-wider">Maratonar</span>
+                                <span className="text-xs font-bold bg-white/20  px-2 py-1 rounded text-white uppercase tracking-wider">Binge</span>
                             </div>
                             <h3 className="text-2xl font-bold text-white mb-1">Series</h3>
                             <p className="text-gray-300 text-sm line-clamp-1">TV shows and episodes.</p>
@@ -456,7 +456,7 @@ export default function Dashboard() {
                     <div className="bg-[#1a1a1a] rounded-xl p-6 border border-[#333]">
                         <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                             <Clock size={18} className="text-gray-400" />
-                            Detalhes da Conta
+                            Account Details
                         </h3>
                         <div className="space-y-4">
                             <div className="flex justify-between border-b border-[#333] pb-2">
