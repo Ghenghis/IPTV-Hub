@@ -134,7 +134,7 @@ Each app had to satisfy:
     same-origin `/api/provider-vault/stream` plus segment proxy URLs;
   - proof: `docs/IPTV_PLAYER_ZERO_FREE_PROVIDER_FIX_20260526.md`.
 - Repaired IPTV Player Zero again after user review:
-    - bumped hosted cache keys to `20260527-free-provider16`;
+    - bumped hosted cache keys to `20260527-free-provider17`;
     - fixed stale browser-state crash recovery to delete the real hosted
       IndexedDB database (`ipz-db`) instead of only the legacy
       `iptv_player_zero` name;
@@ -142,6 +142,11 @@ Each app had to satisfy:
       `Something went wrong / Restart the app to continue / 100%` shell;
     - clears matching hosted caches and service-worker entries before the
       recovery reload;
+    - fixed the provider-loader dead end: if the DaveAI provider panel was
+      hidden but no playable provider playlists exist, it reappears and
+      auto-seeds Apollo Group TV plus XtremeHD;
+    - verified the stuck state (`ipz_provider_quickstart_hidden=1`, empty
+      `ipz-db`) self-created both provider playlists with `2200` rows each;
     - verified Settings contains no paid/pro purchase, Stripe, trial, price, or
       license-copy remnants;
     - Apollo Group TV and XtremeHD both reached `video.readyState=4`;

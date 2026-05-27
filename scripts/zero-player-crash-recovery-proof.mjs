@@ -8,7 +8,7 @@ const { chromium } = require('playwright');
 const outDir = 'C:/Users/Admin/Downloads/VPS/_visual_artifacts/zero-player-crash-recovery-proof-20260527';
 const cookiePath =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
-const buildId = '20260527-free-provider16';
+const buildId = '20260527-free-provider17';
 const appUrl = 'https://apps.daveai.tech/iptv-player-zero/?recovery_proof=' + Date.now();
 
 async function authCookies() {

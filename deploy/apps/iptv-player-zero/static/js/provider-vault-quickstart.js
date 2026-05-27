@@ -18,6 +18,8 @@
     movieLimit: 500,
     seriesLimit: 500,
   };
+  var QUICKSTART_BUILD_ID = '20260527-free-provider17';
+  var PROVIDER_PLAYLIST_PREFIX = 'daveai-provider-';
 
   function ready(fn) {
     if (document.readyState === 'loading') {
@@ -66,6 +68,69 @@
     try {
       if (window.localStorage) window.localStorage.setItem(key, JSON.stringify(value));
     } catch (e) {}
+  }
+
+  function providerPlaylistId(providerId) {
+    return PROVIDER_PLAYLIST_PREFIX + providerId;
+  }
+
+  function getProviderPlaylistStatus(providers) {
+    if (!window.Store || !window.Store.getPlaylists || !window.Store.getChannels) {
+      return Promise.resolve({
+        ready: false,
+        hasAny: false,
+        hasPlayable: false,
+        providers: [],
+      });
+    }
+
+    return window.Store.getPlaylists().then(function (playlists) {
+      playlists = Array.isArray(playlists) ? playlists : [];
+      return Promise.all(providers.map(function (provider) {
+        var playlistId = providerPlaylistId(provider.id);
+        var playlist = playlists.find(function (item) {
+          return item && item.id === playlistId;
+        });
+        if (!playlist) {
+          return {
+            provider: provider,
+            playlistId: playlistId,
+            exists: false,
+            channelCount: 0,
+          };
+        }
+        return window.Store.getChannels(playlistId).then(function (channels) {
+          channels = Array.isArray(channels) ? channels : [];
+          return {
+            provider: provider,
+            playlistId: playlistId,
+            exists: true,
+            channelCount: channels.length,
+          };
+        }).catch(function () {
+          return {
+            provider: provider,
+            playlistId: playlistId,
+            exists: true,
+            channelCount: 0,
+          };
+        });
+      }));
+    }).then(function (rows) {
+      return {
+        ready: true,
+        hasAny: rows.some(function (row) { return row.exists; }),
+        hasPlayable: rows.some(function (row) { return row.channelCount > 0; }),
+        providers: rows,
+      };
+    }).catch(function () {
+      return {
+        ready: false,
+        hasAny: false,
+        hasPlayable: false,
+        providers: [],
+      };
+    });
   }
 
   function markPlaylistEnabled(playlistId) {
@@ -158,7 +223,9 @@
     };
   }
 
-  function importProvider(provider, setStatus) {
+  function importProvider(provider, setStatus, options) {
+    options = options || {};
+    var shouldReload = options.reload !== false;
     if (!window.Store || !window.Store.savePlaylist || !window.Store.saveChannels) {
       setStatus('Player storage is still starting. Try again in a moment.', true);
       return Promise.resolve();
@@ -168,7 +235,7 @@
 
     return fetchJson(catalogUrl(provider.id))
       .then(function (catalog) {
-        var playlistId = 'daveai-provider-' + provider.id;
+        var playlistId = providerPlaylistId(provider.id);
         var live = Array.isArray(catalog.live) ? catalog.live : [];
         var movies = Array.isArray(catalog.movies) ? catalog.movies : [];
         var series = Array.isArray(catalog.series) ? catalog.series : [];
@@ -195,8 +262,9 @@
         }).then(function () {
           markPlaylistEnabled(playlistId);
         }).then(function () {
-          setStatus('Imported ' + channels.length.toLocaleString() + ' safe entries for ' + provider.name + '. Reloading...');
-          setTimeout(function () { window.location.reload(); }, 900);
+          setStatus('Imported ' + channels.length.toLocaleString() + ' safe entries for ' + provider.name + (shouldReload ? '. Reloading...' : '.'));
+          if (shouldReload) setTimeout(function () { window.location.reload(); }, 900);
+          return { playlistId: playlistId, channelCount: channels.length };
         });
       })
       .catch(function (err) {
@@ -204,8 +272,32 @@
       });
   }
 
-  function createPanel(providers) {
-    if (!providers.length || document.getElementById('ipz-provider-vault-panel')) return;
+  function autoloadProviders(providers, setStatus) {
+    var key = 'ipz_provider_autoload_build_id';
+    try {
+      if (window.localStorage && window.localStorage.getItem(key) === QUICKSTART_BUILD_ID) {
+        setStatus('DaveAI providers are ready to load. Choose Apollo Group TV or XtremeHD.');
+        return;
+      }
+      if (window.localStorage) window.localStorage.setItem(key, QUICKSTART_BUILD_ID);
+    } catch (e) {}
+
+    setStatus('Setting up Apollo Group TV and XtremeHD...');
+    providers.reduce(function (chain, provider) {
+      return chain.then(function () {
+        return importProvider(provider, setStatus, { reload: false });
+      });
+    }, Promise.resolve()).then(function () {
+      setStatus('Providers loaded. Reloading...');
+      setTimeout(function () { window.location.reload(); }, 900);
+    }).catch(function (err) {
+      setStatus('Provider setup paused: ' + (err && err.message ? err.message : 'try a provider button'), true);
+    });
+  }
+
+  function createPanel(providers, options) {
+    options = options || {};
+    if (!providers.length || document.getElementById('ipz-provider-vault-panel')) return null;
 
     var style = document.createElement('style');
     style.textContent = [
@@ -256,18 +348,34 @@
     });
 
     document.body.appendChild(panel);
+    if (options.autoload) {
+      window.setTimeout(function () {
+        autoloadProviders(providers, setStatus);
+      }, 250);
+    }
+    return panel;
   }
 
   ready(function () {
-    try {
-      if (window.localStorage && window.localStorage.getItem('ipz_provider_quickstart_hidden') === '1') return;
-    } catch (e) {}
+    configuredProviders().then(function (providers) {
+      if (!providers.length) return;
+      getProviderPlaylistStatus(providers).then(function (status) {
+        var hidden = false;
+        try {
+          hidden = window.localStorage && window.localStorage.getItem('ipz_provider_quickstart_hidden') === '1';
+        } catch (e) {}
 
-    configuredProviders().then(createPanel);
+        if (status.hasPlayable && hidden) return;
+
+        var shouldAutoload = !status.hasPlayable;
+        createPanel(providers, { autoload: shouldAutoload });
+      });
+    });
   });
 
   window.IPZProviderVaultQuickstart = {
     importProvider: importProvider,
     configuredProviders: configuredProviders,
+    getProviderPlaylistStatus: getProviderPlaylistStatus,
   };
 }(window, document));

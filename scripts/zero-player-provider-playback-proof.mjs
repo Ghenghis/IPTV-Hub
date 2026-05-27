@@ -9,6 +9,7 @@ const outDir = 'C:/Users/Admin/Downloads/VPS/_visual_artifacts/zero-player-provi
 const cookiePath =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
 const appUrl = 'https://apps.daveai.tech/iptv-player-zero/?proof=' + Date.now();
+const buildId = '20260527-free-provider17';
 const providers = [
   { id: 'apollo', name: 'Apollo Group TV' },
   { id: 'xtremehd', name: 'XtremeHD' },
@@ -39,8 +40,9 @@ async function authCookies() {
 
 async function resetPlayerState(page) {
   await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await page.evaluate(async () => {
+  await page.evaluate(async (buildId) => {
     localStorage.removeItem('ipz_provider_quickstart_hidden');
+    localStorage.setItem('ipz_provider_autoload_build_id', buildId);
     localStorage.removeItem('ipz_default_playlist_id');
     localStorage.removeItem('ipz_provider_quickstart_last_playlist_id');
     localStorage.removeItem('ipz_playlist_enabled_by_id');
@@ -54,7 +56,7 @@ async function resetPlayerState(page) {
         request.onsuccess = request.onerror = request.onblocked = () => resolve();
       });
     }
-  });
+  }, buildId);
 }
 
 async function inspectPlayer(page) {
