@@ -9,7 +9,7 @@ const outDir = 'C:/Users/Admin/Downloads/VPS/_visual_artifacts/zero-player-provi
 const cookiePath =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
 const appUrl = 'https://apps.daveai.tech/iptv-player-zero/?proof=' + Date.now();
-const buildId = '20260527-free-provider18';
+const buildId = '20260527-free-provider22';
 const providers = [
   { id: 'apollo', name: 'Apollo Group TV' },
   { id: 'xtremehd', name: 'XtremeHD' },
@@ -42,7 +42,7 @@ async function resetPlayerState(page) {
   await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.evaluate(async (buildId) => {
     localStorage.removeItem('ipz_provider_quickstart_hidden');
-    localStorage.setItem('ipz_provider_autoload_build_id', buildId);
+    localStorage.removeItem('ipz_provider_autoload_build_id');
     localStorage.removeItem('ipz_default_playlist_id');
     localStorage.removeItem('ipz_provider_quickstart_last_playlist_id');
     localStorage.removeItem('ipz_playlist_enabled_by_id');
@@ -57,6 +57,70 @@ async function resetPlayerState(page) {
       });
     }
   }, buildId);
+}
+
+async function waitForBothProviderRows(page) {
+  await page.waitForFunction(
+    () => window.Store && typeof window.Store.getChannels === 'function',
+    { timeout: 30000 }
+  );
+  await page.waitForFunction(
+    async () => {
+      const ids = ['daveai-provider-apollo', 'daveai-provider-xtremehd'];
+      const counts = await Promise.all(ids.map(async (id) => {
+        try {
+          const channels = await window.Store.getChannels(id);
+          return Array.isArray(channels) ? channels.length : 0;
+        } catch (error) {
+          return 0;
+        }
+      }));
+      return counts.every((count) => count >= 1000);
+    },
+    { timeout: 120000 }
+  );
+}
+
+async function waitForSetupIdle(page) {
+  await page.waitForFunction(
+    (id) => localStorage.getItem('ipz_provider_autoload_build_id') === id,
+    buildId,
+    { timeout: 120000 }
+  );
+  await page.waitForTimeout(2000);
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
+}
+
+async function waitForProviderVisible(page, provider) {
+  await page.waitForFunction(
+    (name) => {
+      const text = document.body.innerText || '';
+      return (
+        text.includes(name) &&
+        /All channels/i.test(text) &&
+        /(?:^|\n)\s*(?:2,?200|2200)\s*(?:\n|$)/i.test(text) &&
+        /USA Entertainment/i.test(text)
+      );
+    },
+    provider.name,
+    { timeout: 60000 }
+  );
+}
+
+async function activateProvider(page, provider) {
+  const playlistId = `daveai-provider-${provider.id}`;
+  await page.evaluate((id) => {
+    const enabled = { [id]: true };
+    localStorage.setItem('ipz_default_playlist_id', id);
+    localStorage.setItem('ipz_provider_quickstart_last_playlist_id', id);
+    localStorage.setItem('ipz_provider_quickstart_hidden', '1');
+    localStorage.setItem('ipz_playlist_enabled_by_id', JSON.stringify(enabled));
+    localStorage.setItem('ipz_playlist_enabled_by_id_premium', JSON.stringify(enabled));
+    localStorage.setItem('ipz_playlist_display_order_ids', JSON.stringify([id]));
+    localStorage.setItem('ipz_playlist_display_order_ids_premium', JSON.stringify([id]));
+  }, playlistId);
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
+  await waitForProviderVisible(page, provider);
 }
 
 async function inspectPlayer(page) {
@@ -147,11 +211,9 @@ for (const provider of providers) {
   try {
     await resetPlayerState(page);
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.getByRole('button', { name: `Load ${provider.name}` }).click({ force: true, timeout: 30000 });
-    await page.waitForFunction(
-      () => /All channels/i.test(document.body.innerText) && /(?:^|\n)\s*(?:2,?200|2200)\s*(?:\n|$)/i.test(document.body.innerText),
-      { timeout: 70000 }
-    );
+    await waitForBothProviderRows(page);
+    await waitForSetupIdle(page);
+    await activateProvider(page, provider);
     await page.getByRole('button', { name: 'Got it' }).click({ force: true, timeout: 3000 }).catch(() => {});
     await page.getByText('USA Entertainment', { exact: true }).first().click({ force: true, timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(1000);

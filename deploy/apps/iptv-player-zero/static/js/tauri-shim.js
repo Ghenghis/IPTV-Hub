@@ -7,7 +7,7 @@
 (function (window) {
   'use strict';
 
-  var DAVEAI_HOSTED_BUILD_ID = '20260527-free-provider19';
+  var DAVEAI_HOSTED_BUILD_ID = '20260527-free-provider22';
 
   // ── Helper: emit event the React app listens to via Tauri events ──────────
   function emitTauriEvent(event, payload) {
@@ -264,8 +264,60 @@
     return id;
   }
 
+  function readJsonStorage(keys, fallback) {
+    keys = Array.isArray(keys) ? keys : [keys];
+    for (var i = 0; i < keys.length; i++) {
+      try {
+        var raw = localStorage.getItem(keys[i]);
+        if (!raw) continue;
+        return JSON.parse(raw);
+      } catch (e) {}
+    }
+    return fallback;
+  }
+
+  function preferredPlaylistId() {
+    try {
+      var direct = localStorage.getItem('ipz_default_playlist_id') || localStorage.getItem('ipz_provider_quickstart_last_playlist_id');
+      if (direct) return String(direct).trim();
+      var order = readJsonStorage(['ipz_playlist_display_order_ids_premium', 'ipz_playlist_display_order_ids'], []);
+      if (Array.isArray(order) && order.length) return String(order[0] || '').trim();
+    } catch (e) {}
+    return '';
+  }
+
   function getPlaylistId(payload) {
-    return String((payload && (payload.playlist_id || payload.playlistId || payload.id)) || '').trim();
+    return String((payload && (payload.playlist_id || payload.playlistId || payload.id)) || preferredPlaylistId() || '').trim();
+  }
+
+  function applyPlaylistPrefs(playlists) {
+    playlists = Array.isArray(playlists) ? playlists.slice() : [];
+    var enabled = readJsonStorage(['ipz_playlist_enabled_by_id_premium', 'ipz_playlist_enabled_by_id'], null);
+    var order = readJsonStorage(['ipz_playlist_display_order_ids_premium', 'ipz_playlist_display_order_ids'], []);
+    var preferred = preferredPlaylistId();
+
+    if (enabled && typeof enabled === 'object' && !Array.isArray(enabled)) {
+      var enabledIds = Object.keys(enabled).filter(function (id) { return enabled[id]; });
+      if (enabledIds.length) {
+        playlists = playlists.filter(function (playlist) { return enabled[playlist && playlist.id]; });
+      }
+    }
+
+    var index = {};
+    if (Array.isArray(order)) {
+      order.forEach(function (id, i) { index[id] = i; });
+    }
+    playlists.sort(function (a, b) {
+      var aid = a && a.id;
+      var bid = b && b.id;
+      if (preferred && aid === preferred && bid !== preferred) return -1;
+      if (preferred && bid === preferred && aid !== preferred) return 1;
+      var ai = Object.prototype.hasOwnProperty.call(index, aid) ? index[aid] : 9999;
+      var bi = Object.prototype.hasOwnProperty.call(index, bid) ? index[bid] : 9999;
+      if (ai !== bi) return ai - bi;
+      return String(a && a.name || '').localeCompare(String(b && b.name || ''));
+    });
+    return playlists;
   }
 
   function defaultPlaylistPrefs() {
@@ -486,11 +538,11 @@
       // ── Playlists ──────────────────────────────────────────────────────────
       case 'get_playlists':
       case 'list_playlists':
-        return safeArr(Store.getPlaylists());
+        return safeArr(Store.getPlaylists().then(applyPlaylistPrefs));
 
       case 'get_playlist_summaries':
       case 'list_playlist_summaries':
-        return safeArr(Store.getPlaylistSummaries());
+        return safeArr(Store.getPlaylistSummaries().then(applyPlaylistPrefs));
 
       case 'add_playlist': {
         var pl = { id: Store.genId(), name: payload.name, url: payload.url || '', type: payload.type || 'm3u', created_at: Date.now(), updated_at: Date.now() };

@@ -18,7 +18,7 @@
     movieLimit: 500,
     seriesLimit: 500,
   };
-  var QUICKSTART_BUILD_ID = '20260527-free-provider19';
+  var QUICKSTART_BUILD_ID = '20260527-free-provider22';
   var PROVIDER_PLAYLIST_PREFIX = 'daveai-provider-';
 
   function ready(fn) {
@@ -113,6 +113,7 @@
         ready: false,
         hasAny: false,
         hasPlayable: false,
+        hasAllPlayable: false,
         providers: [],
       });
     }
@@ -154,6 +155,9 @@
         ready: true,
         hasAny: rows.some(function (row) { return row.exists; }),
         hasPlayable: rows.some(function (row) { return row.channelCount > 0; }),
+        hasAllPlayable: rows.length === providers.length && rows.every(function (row) {
+          return row.exists && row.channelCount > 0;
+        }),
         providers: rows,
       };
     }).catch(function () {
@@ -161,6 +165,7 @@
         ready: false,
         hasAny: false,
         hasPlayable: false,
+        hasAllPlayable: false,
         providers: [],
       };
     });
@@ -342,7 +347,7 @@
     } catch (e) {}
 
     setStatus('Setting up Apollo Group TV and XtremeHD...');
-    providers.reduce(function (chain, provider) {
+    return providers.reduce(function (chain, provider) {
       return chain.then(function () {
         return importProvider(provider, setStatus, { reload: false, throwOnError: true }).then(function (result) {
           if (!result || result.error || Number(result.channelCount || 0) <= 0) {
@@ -362,6 +367,7 @@
         if (window.localStorage) window.localStorage.removeItem(key);
       } catch (e) {}
       setStatus('Provider setup paused: ' + (err && err.message ? err.message : 'try a provider button'), true);
+      throw err;
     });
   }
 
@@ -399,14 +405,22 @@
       status.classList.toggle('error', Boolean(error));
     }
 
+    function setBusy(busy) {
+      panel.toggleAttribute('aria-busy', Boolean(busy));
+      Array.prototype.forEach.call(actions.querySelectorAll('button'), function (item) {
+        item.disabled = Boolean(busy);
+      });
+    }
+
     providers.forEach(function (provider) {
       var button = document.createElement('button');
       button.type = 'button';
       button.textContent = 'Load ' + provider.name;
       button.addEventListener('click', function () {
-        Array.prototype.forEach.call(actions.querySelectorAll('button'), function (item) { item.disabled = true; });
+        if (button.disabled || panel.hasAttribute('aria-busy')) return;
+        setBusy(true);
         importProvider(provider, setStatus).finally(function () {
-          Array.prototype.forEach.call(actions.querySelectorAll('button'), function (item) { item.disabled = false; });
+          setBusy(false);
         });
       });
       actions.appendChild(button);
@@ -420,7 +434,10 @@
     document.body.appendChild(panel);
     if (options.autoload) {
       window.setTimeout(function () {
-        autoloadProviders(providers, setStatus);
+        setBusy(true);
+        autoloadProviders(providers, setStatus).finally(function () {
+          setBusy(false);
+        });
       }, 250);
     }
     return panel;
@@ -435,9 +452,9 @@
           hidden = window.localStorage && window.localStorage.getItem('ipz_provider_quickstart_hidden') === '1';
         } catch (e) {}
 
-        if (status.hasPlayable && hidden) return;
+        if (status.hasAllPlayable && hidden) return;
 
-        var shouldAutoload = !status.hasPlayable;
+        var shouldAutoload = !status.hasAllPlayable;
         createPanel(providers, { autoload: shouldAutoload });
       });
     });
