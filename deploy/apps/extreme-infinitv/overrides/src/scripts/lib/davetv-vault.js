@@ -66,7 +66,6 @@ export function vaultLiveItems(catalog) {
       }
     })
     .filter((item) => item.id && item.name && item.url.startsWith("/api/provider-vault/"))
-    .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }))
 }
 
 export function vaultMovieItems(catalog) {

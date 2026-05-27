@@ -1,6 +1,6 @@
 # apps.daveai.tech Provider-Ready Visual Sweep — 2026-05-26
 
-Status: `13/13 passed` (`2026-05-27T01:08:16.007Z`)
+Status: `13/13 passed` (`2026-05-27T01:31:08.142Z`)
 
 ## Scope
 
@@ -156,6 +156,19 @@ Each app had to satisfy:
   - no page errors, no console errors, and no blocking failed requests;
   - proof:
     `deploy/apps/tvapp/PROOF-20260526.md`.
+- Repaired Extreme InfiniTV after deep provider playback audit:
+  - live playback now treats root-relative `/api/provider-vault/stream` URLs as
+    browser-playable same-origin HLS instead of rejecting them as custom
+    protocols requiring MPV/VLC;
+  - provider-vault live-channel order is preserved, keeping known-good
+    `USA AMC` rows first for both Apollo Group TV and XtremeHD;
+  - the app Dockerfile now builds with `node:22-alpine`, matching the current
+    Astro `>=22.12.0` requirement;
+  - Apollo Group TV and XtremeHD both reached `video.readyState=4` at
+    `1920x1080` through same-origin `/api/provider-vault/stream` plus segment
+    proxy requests;
+  - proof:
+    `deploy/apps/extreme-infinitv/PROOF-20260526.md`.
 
 ## Latest Sweep Notes
 
@@ -183,6 +196,9 @@ It was rerun again after the NuvioWeb live-playback repair and passed all
 
 It was rerun again after the IPTV Restream empty-id/provider-artwork repair and
 passed all `13` launcher apps with the same zero-regression result.
+
+It was rerun again after the Extreme InfiniTV same-origin HLS playback repair
+and passed all `13` launcher apps with the same zero-regression result.
 
 ## Console Notes
 

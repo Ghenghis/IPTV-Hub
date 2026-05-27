@@ -1632,6 +1632,20 @@ function pickConfiguredExternal() {
   return null
 }
 
+function isEmbeddedPlayableSrc(src) {
+  if (!src) return false
+  if (/^https?:\/\//i.test(src)) return true
+  // DaveTV vault streams are same-origin, root-relative HLS URLs. Video.js can
+  // play them directly; treating them as a custom scheme blocks playback before
+  // the browser ever requests the stream.
+  return src.startsWith("/") && !src.startsWith("//")
+}
+
+function unsupportedScheme(src) {
+  const match = /^([a-z][a-z0-9+.-]*):\/\//i.exec(src || "")
+  return (match?.[1] || "stream").toLowerCase()
+}
+
 async function play(streamId, name) {
   if (!currentEl) return
   const src = hasDirectUrl(streamId)
@@ -1640,8 +1654,8 @@ async function play(streamId, name) {
 
   // Embedded players (Video.js + hls.js) only speak http(s). M3U sources can
   // ship rtsp/rtmp/udp/mms/... - those need MPV/VLC
-  const isHttpSrc = /^https?:\/\//i.test(src || "")
-  if (!isHttpSrc && src) {
+  const isBrowserPlayableSrc = isEmbeddedPlayableSrc(src)
+  if (!isBrowserPlayableSrc && src) {
     const selectedBackend = getPlayerBackend()
     const backendIsExternal =
       selectedBackend === "mpv" || selectedBackend === "vlc"
@@ -1663,7 +1677,7 @@ async function play(streamId, name) {
         setNowPlaying(streamId)
         return
       }
-      const scheme = (src.split("://")[0] || "").toLowerCase()
+      const scheme = unsupportedScheme(src)
       toastError(
         t("stream.error.schemeUnsupported", { scheme }) ||
           `Can't play "${scheme}://" streams in the embedded player. Set up MPV or VLC in Settings → Playback.`

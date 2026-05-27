@@ -9,7 +9,8 @@
 # Output:    static SPA on container port 80.
 #
 # Notes on the build stage:
-#   - Node version is pinned to node:20-alpine (Node 20 LTS, the README minimum).
+#   - Node version is pinned to node:22-alpine. Current Astro requires Node
+#     >=22.12.0, so Node 20 no longer builds this upstream.
 #   - The pnpm version is pinned to the same value as the upstream `packageManager`
 #     field in package.json (pnpm@10.31.0 as of upstream v1.6.0) via `corepack prepare`.
 #     `corepack prepare pnpm@latest --activate` is requested by the contract, but we
@@ -29,7 +30,7 @@
 #     client-side router doesn't 404 on deep links.
 
 # ---------- Builder stage ----------
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 # Native build toolchain for any node-gyp deps the Astro/Vite dep graph pulls in.
 RUN apk add --no-cache python3 make g++ git libc6-compat

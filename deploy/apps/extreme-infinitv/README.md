@@ -79,7 +79,7 @@ client and use this image only as an "anywhere I can reach a browser" fallback.
 
 | Pin | Value | Why |
 | --- | --- | --- |
-| Builder image | `node:20-alpine` | Upstream README requires Node 20+; alpine is small and the build does not need glibc. |
+| Builder image | `node:22-alpine` | Current Astro requires Node >=22.12.0; alpine is small and the build does not need glibc. |
 | pnpm | `10.31.0` (env `PNPM_VERSION`) | Exact value of the `packageManager` field in `upstream/package.json` for v1.6.0. Activated via `corepack prepare`. |
 | Runtime image | `nginx:1.27-alpine` | Matches the hub's healthcheck container in `deploy/docker-compose.yml`. |
 | Image tag | `1.6.0` | Tracks `upstream/package.json:version`. Bump when re-cloning a newer upstream. |
@@ -113,6 +113,18 @@ Verified 2026-05-26:
   provider credentials in browser storage.
 - Visual artifact:
   `C:/Users/Admin/Downloads/VPS/_visual_artifacts/extreme-infinitv-provider-vault-proof-20260526/`.
+
+Deep playback verified 2026-05-27:
+
+- Live TV now treats same-origin `/api/provider-vault/stream` URLs as
+  browser-playable HLS instead of rejecting them as external protocols.
+- Provider-vault live-channel order is preserved so the known-good `USA AMC`
+  rows are first for Apollo Group TV and XtremeHD.
+- Apollo Group TV and XtremeHD both reached `video.readyState=4` at
+  `1920x1080` through same-origin `/api/provider-vault/stream` and
+  `/api/provider-vault/segment` requests.
+- Playwright proof:
+  [`PROOF-20260526.md`](./PROOF-20260526.md).
 
 ## Health
 
