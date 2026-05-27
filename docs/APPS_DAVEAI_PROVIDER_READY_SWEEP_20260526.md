@@ -1,6 +1,6 @@
 # apps.daveai.tech Provider-Ready Visual Sweep — 2026-05-26
 
-Status: `13/13 passed` (`2026-05-27T00:55:51.286Z`)
+Status: `13/13 passed` (`2026-05-27T01:08:16.007Z`)
 
 ## Scope
 
@@ -137,6 +137,17 @@ Each app had to satisfy:
     off for smoother long-buffer playback, and MPEG-TS stash buffering enabled;
   - proof:
     `deploy/apps/smart-iptv-web/PROOF-20260526.md`.
+- Repaired IPTV Restream after deep provider playback audit:
+  - provider-vault rows now preserve the vault-supplied safe stream URL before
+    trying to synthesize a stream URL from item ids;
+  - empty `id=` stream calls are gone for Apollo Group TV and XtremeHD;
+  - provider-vault artwork is rendered as local initials badges to avoid noisy
+    broken external image/proxy fetches in the compact horizontal channel list;
+  - Apollo Group TV and XtremeHD both reached `video.readyState=4` at
+    `1920x1080` through same-origin `/api/provider-vault/stream` requests with
+    non-empty ids and HTTP `200` responses;
+  - proof:
+    `deploy/apps/iptv-restream/PROOF-20260526.md`.
 
 ## Latest Sweep Notes
 
@@ -162,10 +173,11 @@ proof and passed all `13` launcher apps with the same zero-regression result.
 It was rerun again after the NuvioWeb live-playback repair and passed all
 `13` launcher apps with the same zero-regression result.
 
+It was rerun again after the IPTV Restream empty-id/provider-artwork repair and
+passed all `13` launcher apps with the same zero-regression result.
+
 ## Console Notes
 
-The latest sweep recorded zero `pageerror` events across all 13 apps. It also
-kept Nuvio, IPTV Player Zero, IPTVnator, xstream-player, Smart IPTV Web,
-Open TV, YnoTV, and TVapp free of captured console errors. One non-blocking
-resource-load console line remains in `iptv-restream` and is queued for that
-player's deep pass.
+The latest sweep recorded zero `pageerror` events and zero captured console
+errors across all 13 apps. The previous `iptv-restream` resource-load console
+noise was cleared during that player's deep pass.

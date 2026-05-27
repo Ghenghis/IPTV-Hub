@@ -20,6 +20,13 @@ function ChannelList({
   onChannelSelectCheckPermission,
   onChannelSelect,
 }: ChannelListProps) {
+  const initials = (name: string) =>
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join('') || 'TV';
 
   const onSelectChannel = (channel: Channel) => {
     setSearchQuery("");
@@ -52,11 +59,17 @@ function ChannelList({
           }`}
         >
           <div className="h-20 w-20 mb-2 flex items-center justify-center rounded-lg mx-auto">
-            <img
-              src={channel.avatar}
-              alt={channel.name}
-              className="w-full h-full object-contain rounded-lg transition-transform group-hover:scale-105"
-            />
+            {channel.avatar ? (
+              <img
+                src={channel.avatar}
+                alt={channel.name}
+                className="w-full h-full object-contain rounded-lg transition-transform group-hover:scale-105"
+              />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center rounded-lg bg-blue-500/15 text-lg font-bold text-blue-200 ring-1 ring-blue-400/30 transition-transform group-hover:scale-105">
+                {initials(channel.name)}
+              </span>
+            )}
           </div>
           <p className="text-sm font-medium truncate text-center">
             {channel.name.length > 28

@@ -12,6 +12,12 @@ function VideoPlayer({ channel, syncEnabled }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const { addToast, removeToast, clearToasts, editToast } = useContext(ToastContext);
+  const channelInitials = (channel?.name || 'TV')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'TV';
 
   useEffect(() => {
     if (!videoRef.current || !channel?.url) return;
@@ -246,11 +252,17 @@ function VideoPlayer({ channel, syncEnabled }: VideoPlayerProps) {
         onClick={handleVideoClick}
       />
       <div className="flex items-center p-4 bg-gray-900 text-white">
-        <img 
-          src={channel?.avatar} 
-          alt={`${channel?.name} avatar`} 
-          className="w-10 h-10 object-contain mr-3" 
-        />
+        {channel?.avatar ? (
+          <img
+            src={channel.avatar}
+            alt={`${channel.name} avatar`}
+            className="w-10 h-10 object-contain mr-3"
+          />
+        ) : (
+          <span className="mr-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/15 text-sm font-bold text-blue-200 ring-1 ring-blue-400/30">
+            {channelInitials}
+          </span>
+        )}
         <span className="font-medium">{channel?.name}</span>
       </div>
     </div>

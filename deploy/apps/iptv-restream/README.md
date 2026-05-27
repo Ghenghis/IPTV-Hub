@@ -34,11 +34,16 @@ switches DaveTV deployments to provider-vault channels first:
 
 - Apollo Group TV and XtremeHD are loaded from `/api/provider-vault/catalog`.
 - Playback uses same-origin `/api/provider-vault/stream` URLs so raw provider
-  hosts, usernames, and passwords are never bundled or rendered.
+  hosts, usernames, and passwords are never bundled or rendered. The frontend
+  preserves vault-supplied stream URLs first and only synthesizes a stream URL
+  from non-empty provider ids as a fallback.
 - Upstream demo channels are hidden whenever provider-vault catalogs are
   available.
 - Provider-vault channels are read-only inside IPTV Restream; channel management
   still belongs to the DaveTV vault/admin flow.
+- Provider-vault channel artwork uses local initials badges in this compact
+  app, avoiding noisy external poster/logo failures while keeping channel names
+  and playback fully functional.
 - HLS playback uses a larger buffer window (`maxBufferLength=180`,
   `maxMaxBufferLength=600`, `backBufferLength=90`) for steadier long-form
   streams.
