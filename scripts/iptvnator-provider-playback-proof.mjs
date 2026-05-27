@@ -11,7 +11,7 @@ const cookiePath =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
 const baseUrl = 'https://iptvnator.daveai.tech';
 const staleXtreamId = '0c911b96-4d88-45f4-bcf9-c71586cf0428';
-const expectedBuildId = '20260527-v7';
+const expectedBuildId = '20260527-v8';
 
 const providers = [
   { id: 'xtremehd', title: 'XtremeHD', route: '/workspace/playlists/daveai-provider-vault-xtremehd/all' },
@@ -46,7 +46,7 @@ async function seedStaleXtreamState(page) {
     timeout: 60000,
   });
   await page.waitForTimeout(1200);
-  await page.evaluate(async ({ staleXtreamId }) => {
+  await page.evaluate(async ({ staleXtreamId, expectedBuildId }) => {
     localStorage.setItem(
       'xtream-playlists',
       JSON.stringify([
@@ -59,7 +59,7 @@ async function seedStaleXtreamState(page) {
         },
       ])
     );
-    localStorage.removeItem('iptvnator_provider_vault_seeded');
+    localStorage.setItem('iptvnator_provider_vault_seeded', expectedBuildId);
     sessionStorage.clear();
 
     await new Promise((resolve, reject) => {
@@ -75,6 +75,21 @@ async function seedStaleXtreamState(page) {
         const db = request.result;
         const tx = db.transaction('playlists', 'readwrite');
         const store = tx.objectStore('playlists');
+        [
+          ['daveai-provider-vault-xtremehd', 'XtremeHD'],
+          ['daveai-provider-vault-apollo', 'Apollo Group TV'],
+        ].forEach(([id, title]) => {
+          store.put({
+            _id: id,
+            title: `${title} - DaveAI Vault`,
+            filename: `${title} - DaveAI Vault`,
+            source: 'daveai-provider-vault',
+            providerId: id.replace('daveai-provider-vault-', ''),
+            daveaiBuildId: expectedBuildId,
+            count: 0,
+            playlist: { items: [] },
+          });
+        });
         store.put({
           _id: staleXtreamId,
           title: 'XtremeHD',
@@ -94,7 +109,7 @@ async function seedStaleXtreamState(page) {
         };
       };
     });
-  }, { staleXtreamId });
+  }, { staleXtreamId, expectedBuildId });
 }
 
 async function readState(page) {

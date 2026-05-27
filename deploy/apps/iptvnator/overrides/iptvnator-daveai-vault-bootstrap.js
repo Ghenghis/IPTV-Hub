@@ -8,7 +8,7 @@
 (function (window, document) {
   'use strict';
 
-  var BUILD_ID = '20260527-v7';
+  var BUILD_ID = '20260527-v8';
   var DB_NAME = 'iptvnator';
   var STORE_NAME = 'playlists';
   var SETTINGS_KEY = 'settings';
@@ -642,11 +642,32 @@
   }
 
   function hasSeededPlaylists(providers) {
+    function rowIsHealthy(provider, row) {
+      var items =
+        row &&
+        row.playlist &&
+        Array.isArray(row.playlist.items)
+          ? row.playlist.items.length
+          : 0;
+      var count = Number(row && row.count || 0);
+      return Boolean(
+        row &&
+          row._id === playlistId(provider.id) &&
+          row.source === 'daveai-provider-vault' &&
+          row.providerId === provider.id &&
+          row.daveaiBuildId === BUILD_ID &&
+          count > 0 &&
+          items > 0
+      );
+    }
+
     return openDb()
       .then(function (db) {
         return Promise.all(
           providers.map(function (provider) {
-            return dbGet(db, playlistId(provider.id)).then(Boolean);
+            return dbGet(db, playlistId(provider.id)).then(function (row) {
+              return rowIsHealthy(provider, row);
+            });
           })
         ).then(function (flags) {
           db.close();
@@ -697,6 +718,12 @@
             setStatus('DaveAI provider playlists are ready.');
           }
           return true;
+        })
+        .catch(function (error) {
+          try {
+            window.localStorage.removeItem(SEED_MARKER);
+          } catch (ignored) {}
+          throw error;
         });
     });
   }
