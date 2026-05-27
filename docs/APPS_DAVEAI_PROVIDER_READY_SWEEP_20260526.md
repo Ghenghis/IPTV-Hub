@@ -134,8 +134,14 @@ Each app had to satisfy:
     same-origin `/api/provider-vault/stream` plus segment proxy URLs;
   - proof: `docs/IPTV_PLAYER_ZERO_FREE_PROVIDER_FIX_20260526.md`.
 - Repaired IPTV Player Zero again after user review:
-    - bumped hosted cache keys to `20260527-free-provider15`;
-    - added stale browser-state crash recovery for `.map`/collection crashes;
+    - bumped hosted cache keys to `20260527-free-provider16`;
+    - fixed stale browser-state crash recovery to delete the real hosted
+      IndexedDB database (`ipz-db`) instead of only the legacy
+      `iptv_player_zero` name;
+    - added a rendered-fatal-state watchdog for the exact
+      `Something went wrong / Restart the app to continue / 100%` shell;
+    - clears matching hosted caches and service-worker entries before the
+      recovery reload;
     - verified Settings contains no paid/pro purchase, Stripe, trial, price, or
       license-copy remnants;
     - Apollo Group TV and XtremeHD both reached `video.readyState=4`;

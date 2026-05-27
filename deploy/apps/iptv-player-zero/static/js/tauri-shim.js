@@ -7,7 +7,7 @@
 (function (window) {
   'use strict';
 
-  var DAVEAI_HOSTED_BUILD_ID = '20260527-free-provider15';
+  var DAVEAI_HOSTED_BUILD_ID = '20260527-free-provider16';
 
   // ── Helper: emit event the React app listens to via Tauri events ──────────
   function emitTauriEvent(event, payload) {
@@ -108,18 +108,54 @@
   }
 
   function deleteHostedDatabase() {
-    return new Promise(function (resolve) {
-      try {
-        var request = window.indexedDB && window.indexedDB.deleteDatabase('iptv_player_zero');
-        if (!request) {
-          resolve();
-          return;
-        }
-        request.onsuccess = request.onerror = request.onblocked = function () { resolve(); };
-      } catch (e) {
-        resolve();
-      }
+    var names = ['ipz-db', 'iptv_player_zero', 'iptv-player-zero'];
+    var storeReset = window.Store && typeof window.Store.deleteDb === 'function'
+      ? window.Store.deleteDb()
+      : Promise.resolve();
+
+    return storeReset.then(function () {
+      return Promise.all(names.map(function (name) {
+        return new Promise(function (resolve) {
+          try {
+            var request = window.indexedDB && window.indexedDB.deleteDatabase(name);
+            if (!request) {
+              resolve();
+              return;
+            }
+            request.onsuccess = request.onerror = request.onblocked = function () { resolve(); };
+          } catch (e) {
+            resolve();
+          }
+        });
+      }));
     });
+  }
+
+  function clearHostedCaches() {
+    try {
+      if (window.caches && window.caches.keys) {
+        window.caches.keys().then(function (keys) {
+          keys.forEach(function (key) {
+            if (/ipz|iptv-player-zero|vite|workbox/i.test(key)) {
+              window.caches.delete(key).catch(function () {});
+            }
+          });
+        }).catch(function () {});
+      }
+    } catch (e) {}
+
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+          registrations.forEach(function (registration) {
+            var scope = registration && registration.scope || '';
+            if (/iptv-player-zero|apps\.daveai\.tech/i.test(scope)) {
+              registration.update().catch(function () {});
+            }
+          });
+        }).catch(function () {});
+      }
+    } catch (e) {}
   }
 
   function recoverHostedStateAfterFatalError(reason) {
@@ -131,6 +167,7 @@
       window.sessionStorage.setItem('ipz_daveai_recovery_reason', String(reason || 'unknown').slice(0, 220));
     } catch (e) {}
     clearHostedProviderState();
+    clearHostedCaches();
     deleteHostedDatabase().finally(function () {
       window.setTimeout(function () {
         window.location.replace('/iptv-player-zero/?recovered=' + encodeURIComponent(DAVEAI_HOSTED_BUILD_ID));
@@ -159,10 +196,25 @@
       if (shouldRecover(message)) recoverHostedStateAfterFatalError(message);
     });
 
+    function inspectRenderedFatalState() {
+      try {
+        var text = document && document.body ? document.body.innerText || '' : '';
+        if (/Something went wrong/i.test(text) && /Restart the app|100%/i.test(text)) {
+          recoverHostedStateAfterFatalError('rendered fatal state');
+        }
+      } catch (e) {}
+    }
+
+    [1200, 3000, 6000].forEach(function (delay) {
+      window.setTimeout(inspectRenderedFatalState, delay);
+    });
+
     try {
       var priorBuild = window.localStorage.getItem('ipz_daveai_hosted_build_id');
       if (priorBuild && priorBuild !== DAVEAI_HOSTED_BUILD_ID) {
         clearHostedProviderState();
+        clearHostedCaches();
+        deleteHostedDatabase();
       }
       window.localStorage.setItem('ipz_daveai_hosted_build_id', DAVEAI_HOSTED_BUILD_ID);
     } catch (e) {}

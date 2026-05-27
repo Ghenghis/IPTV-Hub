@@ -47,10 +47,13 @@ async function resetPlayerState(page) {
     localStorage.removeItem('ipz_playlist_enabled_by_id_premium');
     localStorage.removeItem('ipz_playlist_display_order_ids');
     localStorage.removeItem('ipz_playlist_display_order_ids_premium');
-    await new Promise((resolve) => {
-      const request = indexedDB.deleteDatabase('iptv_player_zero');
-      request.onsuccess = request.onerror = request.onblocked = () => resolve();
-    });
+    const dbNames = ['ipz-db', 'iptv_player_zero', 'iptv-player-zero'];
+    for (const dbName of dbNames) {
+      await new Promise((resolve) => {
+        const request = indexedDB.deleteDatabase(dbName);
+        request.onsuccess = request.onerror = request.onblocked = () => resolve();
+      });
+    }
   });
 }
 

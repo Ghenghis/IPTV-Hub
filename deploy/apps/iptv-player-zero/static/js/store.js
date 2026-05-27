@@ -55,6 +55,28 @@
     });
   }
 
+  function closeDb() {
+    try {
+      if (_db) _db.close();
+    } catch (e) {}
+    _db = null;
+  }
+
+  function deleteDb() {
+    closeDb();
+    return new Promise(function (resolve) {
+      try {
+        var req = indexedDB.deleteDatabase(DB_NAME);
+        req.onsuccess = req.onerror = req.onblocked = function () {
+          _db = null;
+          resolve();
+        };
+      } catch (e) {
+        resolve();
+      }
+    });
+  }
+
   function tx(storeName, mode) {
     return openDb().then(function (db) {
       return db.transaction(storeName, mode).objectStore(storeName);
@@ -311,6 +333,8 @@
   // ── Exports ────────────────────────────────────────────────────────────────
   window.Store = {
     openDb: openDb,
+    closeDb: closeDb,
+    deleteDb: deleteDb,
     genId: genId,
     getPlaylists: getPlaylists,
     getPlaylistSummaries: getPlaylistSummaries,
