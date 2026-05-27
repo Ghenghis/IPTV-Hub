@@ -159,6 +159,24 @@ Each app had to satisfy:
   - proof:
     `deploy/apps/xstream-player/PROOF-20260526.md`,
     `deploy/apps/xstream-player/PROOF-20260527.md`.
+- Repaired provider artwork fallback after user review:
+  - shared provider-vault image proxy now returns a DaveTV SVG fallback for
+    safe-but-dead upstream poster/logo URLs instead of broken image `404`s;
+  - invalid or credential-bearing image URLs still refuse with `404`;
+  - the same fallback behavior was added to xstream-player's own
+    `/api/provider-vault/image` route;
+  - Smart IPTV Web and xstream-player were rebuilt and restarted on the VPS.
+- Deep-verified Wizju IPTV Player after user review:
+  - Apollo Group TV and XtremeHD both seed into the hosted IndexedDB store;
+  - both providers loaded `5200` provider-vault rows and played `USA AMC`;
+  - both providers reached `video.readyState=4` at `1920x1080`;
+  - both providers used same-origin `/api/provider-vault/stream` plus segment
+    proxy responses with HTTP `200`;
+  - the explicit broken-artwork proof returned SVG fallback status `200` with
+    `x-davetv-image-fallback: 1`;
+  - `0` page errors, `0` console errors, and `0` blocking failed requests;
+  - proof:
+    `deploy/apps/wizju-iptv-player/PROOF-20260527.md`.
 - Re-verified and polished Smart IPTV Web after user review:
   - Apollo Group TV and XtremeHD both load through provider-vault with client
     storage containing only `providerId`, not raw provider host/user/password;

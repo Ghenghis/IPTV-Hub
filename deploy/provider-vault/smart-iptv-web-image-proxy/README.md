@@ -12,6 +12,8 @@ Purpose:
 - reject credential-shaped image URLs;
 - proxy safe HTTP/HTTPS logos through same-origin
   `/api/provider-vault/image?src=...`;
+- return a DaveTV SVG fallback for safe-but-dead upstream images so channel
+  and movie cards do not render broken artwork;
 - remove mixed-content browser warnings in hosted apps such as Open TV and
   IPTV Restream while keeping raw provider credentials server-side.
 
@@ -26,7 +28,8 @@ Verification:
 
 ```text
 C:\Users\Admin\Downloads\VPS\_visual_artifacts\apps-provider-ready-sweep-20260526\summary.json
+C:\Users\Admin\Downloads\VPS\_visual_artifacts\wizju-provider-playback-proof-20260527\summary.json
 ```
 
-Latest accepted sweep: `12/12 passed`, `2026-05-26T19:51:01.490Z`, with zero
-captured console errors across the provider-ready app collection.
+Latest fallback proof: status `200`, `content-type: image/svg+xml`, and
+`x-davetv-image-fallback: 1` for a deliberately missing safe artwork URL.
