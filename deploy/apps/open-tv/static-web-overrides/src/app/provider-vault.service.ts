@@ -23,6 +23,7 @@ type VaultItem = {
   logo?: string;
   stream_icon?: string;
   cover?: string;
+  url?: string;
   tvg?: { name?: string; logo?: string };
   group?: { title?: string };
   category?: string;
@@ -86,7 +87,7 @@ export class ProviderVaultService {
       })),
     );
 
-    return catalogs.flatMap(({ provider, catalog }) => {
+    const providerChannels = catalogs.map(({ provider, catalog }) => {
       const live = (catalog.live || []).map((item, index) =>
         this.toChannel(provider, item, index, "live"),
       );
@@ -95,6 +96,7 @@ export class ProviderVaultService {
       );
       return live.concat(movies);
     });
+    return this.interleave(providerChannels);
   }
 
   filterChannels(channels: Channel[], filters: Filters, pageSize: number): Channel[] {
@@ -133,6 +135,18 @@ export class ProviderVaultService {
     return PROVIDERS;
   }
 
+  private interleave(lists: Channel[][]): Channel[] {
+    const result: Channel[] = [];
+    const max = Math.max(0, ...lists.map((list) => list.length));
+    for (let index = 0; index < max; index += 1) {
+      for (const list of lists) {
+        const item = list[index];
+        if (item) result.push(item);
+      }
+    }
+    return result;
+  }
+
   private async configuredProviders(): Promise<Provider[]> {
     const data = await this.fetchJson<{ providers?: Array<{ id?: string; configured?: boolean }> }>(
       "/api/provider-vault/providers",
@@ -166,6 +180,11 @@ export class ProviderVaultService {
   }
 
   private streamUrl(provider: Provider, item: VaultItem, kind: VaultKind): string {
+    const vaultUrl = this.text(item.url, "");
+    if (vaultUrl.startsWith("/api/provider-vault/stream")) {
+      return vaultUrl;
+    }
+
     const id = this.text(item.id ?? item.stream_id, "");
     const ext = this.text(item.extension ?? item.container_extension, kind === "movie" ? "mp4" : "m3u8");
     const params = new URLSearchParams({ provider: provider.id, kind, id, ext });

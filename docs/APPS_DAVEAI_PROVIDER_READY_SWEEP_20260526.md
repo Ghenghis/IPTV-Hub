@@ -1,6 +1,6 @@
 # apps.daveai.tech Provider-Ready Visual Sweep — 2026-05-26
 
-Status: `13/13 passed` (`2026-05-27T01:43:48.923Z`)
+Status: `13/13 passed` (`2026-05-27T01:53:51.462Z`)
 
 ## Scope
 
@@ -180,6 +180,19 @@ Each app had to satisfy:
   - `0` page errors, `0` console errors, and `0` blocking failed requests;
   - proof:
     `deploy/apps/iptv-stream/PROOF-20260526.md`.
+- Repaired Open TV after deep provider playback audit:
+  - the hosted app now trusts vault-provided `/api/provider-vault/stream` URLs
+    before trying to synthesize stream URLs, clearing the previous empty-id
+    HTTP `400` playback failure;
+  - Apollo Group TV and XtremeHD rows are interleaved so both providers are
+    visible and playable at the top of the catalog;
+  - Apollo Group TV and XtremeHD both played `USA AMC` at
+    `video.readyState=4` and `1920x1080`;
+  - both providers used same-origin `/api/provider-vault/stream` plus segment
+    proxy responses with HTTP `200`;
+  - `0` page errors, `0` console errors, and `0` blocking failed requests;
+  - proof:
+    `deploy/apps/open-tv/PROOF-20260526.md`.
 
 ## Latest Sweep Notes
 
@@ -216,6 +229,10 @@ Apollo Group TV and XtremeHD; no app code change was required.
 
 It was rerun again after the IPTV Stream deep provider-playback proof and
 passed all `13` launcher apps with the same zero-regression result.
+
+It was rerun again after the Open TV empty-id stream repair and Apollo/XtremeHD
+interleaving fix and passed all `13` launcher apps with the same
+zero-regression result.
 
 ## Console Notes
 
