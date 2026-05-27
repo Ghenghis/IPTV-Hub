@@ -1,6 +1,6 @@
 # apps.daveai.tech Provider-Ready Visual Sweep — 2026-05-26
 
-Status: `13/13 passed` (`2026-05-27T02:04:25.835Z`)
+Status: `13/13 passed` (`2026-05-27T02:26:50.463Z`)
 
 ## Scope
 
@@ -205,6 +205,19 @@ Each app had to satisfy:
   - `0` page errors, `0` console errors, and `0` blocking failed requests;
   - proof:
     `deploy/apps/open-tv/PROOF-20260526.md`.
+- Repaired Stalker UI after deep provider playback audit:
+  - Apollo Group TV and XtremeHD rows are now interleaved in all-provider live
+    TV, movie detail lookup, and series browsing so the second provider is not
+    buried behind the first provider's full catalog;
+  - the hosted build still uses the local `/webapis/webapis.js` Samsung/Tizen
+    stub instead of falling back to `index.html`;
+  - Apollo Group TV and XtremeHD both played `USA AMC` at
+    `video.readyState=4` and `1920x1080`;
+  - both providers used same-origin `/api/provider-vault/stream` plus segment
+    proxy responses with HTTP `200`;
+  - `0` page errors, `0` console errors, and `0` blocking failed requests;
+  - proof:
+    `deploy/apps/stalker-ui/PROOF-20260526.md`.
 
 ## Latest Sweep Notes
 
@@ -249,6 +262,9 @@ zero-regression result.
 It was rerun again after the YnoTV provider interleaving and active-card
 playback retry repair and passed all `13` launcher apps with the same
 zero-regression result.
+
+It was rerun again after the Stalker UI provider interleaving and deep playback
+proof and passed all `13` launcher apps with the same zero-regression result.
 
 ## Console Notes
 

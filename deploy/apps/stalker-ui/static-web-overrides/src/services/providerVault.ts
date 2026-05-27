@@ -174,6 +174,17 @@ function filterSearch(items: MediaItem[], search?: string): MediaItem[] {
   return items.filter((item) => text(item.title ?? item.name).toLowerCase().includes(needle))
 }
 
+function interleaveItems<T>(lists: T[][]): T[] {
+  const maxLength = lists.reduce((max, list) => Math.max(max, list.length), 0)
+  const out: T[] = []
+  for (let index = 0; index < maxLength; index += 1) {
+    for (const list of lists) {
+      if (list[index]) out.push(list[index])
+    }
+  }
+  return out
+}
+
 export function isProviderVaultUrl(url: string | null | undefined): boolean {
   return text(url).startsWith('/api/provider-vault/stream')
 }
@@ -191,8 +202,10 @@ export async function getVaultMovies(params: Record<string, unknown>): Promise<{
   const catalogs = await catalogsByProvider()
   if (params.movieId) {
     const movieId = String(params.movieId)
-    const allMovies = catalogs.flatMap(({ provider, catalog }) =>
-      (catalog.movies || []).map((item, index) => normalizeItem(provider, item, 'movie', index)),
+    const allMovies = interleaveItems(
+      catalogs.map(({ provider, catalog }) =>
+        (catalog.movies || []).map((item, index) => normalizeItem(provider, item, 'movie', index)),
+      ),
     )
     const match = allMovies.find((item) => item.id === movieId) || allMovies[0]
     return { data: match ? [match] : [], page: 1, total_items: match ? 1 : 0, isPortal: false }
@@ -223,8 +236,10 @@ export async function getVaultSeries(params: Record<string, unknown>): Promise<{
   total_items: number
 }> {
   const catalogs = await catalogsByProvider()
-  const allSeries = catalogs.flatMap(({ provider, catalog }) =>
-    (catalog.series || []).map((item, index) => normalizeItem(provider, item, 'series', index)),
+  const allSeries = interleaveItems(
+    catalogs.map(({ provider, catalog }) =>
+      (catalog.series || []).map((item, index) => normalizeItem(provider, item, 'series', index)),
+    ),
   )
 
   if (params.movieId || params.seasonId) {
@@ -242,8 +257,10 @@ export async function getVaultSeries(params: Record<string, unknown>): Promise<{
 
 export async function getVaultChannels(): Promise<{ data: MediaItem[]; page: number; total_items: number }> {
   const catalogs = await catalogsByProvider()
-  const channels = catalogs.flatMap(({ provider, catalog }) =>
-    (catalog.live || []).map((item, index) => normalizeItem(provider, item, 'live', index)),
+  const channels = interleaveItems(
+    catalogs.map(({ provider, catalog }) =>
+      (catalog.live || []).map((item, index) => normalizeItem(provider, item, 'live', index)),
+    ),
   )
   return { data: channels, page: 1, total_items: channels.length }
 }

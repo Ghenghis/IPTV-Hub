@@ -126,3 +126,27 @@ profile-status updates use them.
 - The Stalker portal protocol talks plain HTTP in many deployments; outgoing
   traffic from the container goes through the docker bridge and out the
   host's default route — no extra firewall rules are needed.
+
+## DaveTV Provider-Vault Host Build
+
+The hosted static Stalker UI at `https://stalker-ui.daveai.tech/` uses the
+tracked `static-web-overrides/` React/Vite build rather than the Go WebUI
+container above. The hosted build loads Apollo Group TV and XtremeHD through
+the DaveTV provider vault only, keeps provider credentials server-side, and
+plays through same-origin `/api/provider-vault/stream` and
+`/api/provider-vault/segment` URLs.
+
+Provider rows are interleaved when the user browses all live channels, movies,
+or series. That keeps both Apollo Group TV and XtremeHD visible near the top of
+the catalog instead of burying the second provider after the first provider's
+full result set.
+
+Latest deep playback proof:
+
+- `npm run build` from `G:\Github\IPTV-web\stalker-ui`
+- deployed sha256:
+  `c53ead67954d35c707cda203803e9d3b53f4e90d568bc0a601da98f06f92271c`
+- proof summary:
+  `C:\Users\Admin\Downloads\VPS\_visual_artifacts\stalker-ui-provider-playback-proof-20260527\summary.json`
+- screenshots:
+  `stalker-ui-apollo-player.png`, `stalker-ui-xtremehd-player.png`
