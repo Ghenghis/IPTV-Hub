@@ -104,6 +104,7 @@ await page.waitForFunction(
     const text = document.body.innerText || '';
     return /All channels/i.test(text) && /(?:^|\n)\s*(?:2,?200|2200)\s*(?:\n|$)/i.test(text);
   },
+  undefined,
   { timeout: 90000 }
 );
 await page.waitForTimeout(1500);

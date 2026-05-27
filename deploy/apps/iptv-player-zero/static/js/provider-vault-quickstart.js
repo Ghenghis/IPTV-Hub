@@ -18,7 +18,7 @@
     movieLimit: 500,
     seriesLimit: 500,
   };
-  var QUICKSTART_BUILD_ID = '20260527-free-provider18';
+  var QUICKSTART_BUILD_ID = '20260527-free-provider19';
   var PROVIDER_PLAYLIST_PREFIX = 'daveai-provider-';
 
   function ready(fn) {
@@ -72,6 +72,39 @@
 
   function providerPlaylistId(providerId) {
     return PROVIDER_PLAYLIST_PREFIX + providerId;
+  }
+
+  function storeIsReady() {
+    return Boolean(
+      window.Store &&
+      window.Store.savePlaylist &&
+      window.Store.saveChannels &&
+      window.Store.getPlaylists &&
+      window.Store.getChannels
+    );
+  }
+
+  function waitForStore(timeoutMs) {
+    timeoutMs = Number(timeoutMs || 10000);
+    var startedAt = Date.now();
+    return new Promise(function (resolve, reject) {
+      function check() {
+        if (storeIsReady()) {
+          if (window.__IPZ_DB_READY__ && typeof window.__IPZ_DB_READY__.then === 'function') {
+            window.__IPZ_DB_READY__.then(function () { resolve(); }).catch(function () { resolve(); });
+          } else {
+            resolve();
+          }
+          return;
+        }
+        if (Date.now() - startedAt > timeoutMs) {
+          reject(new Error('Player storage did not become ready'));
+          return;
+        }
+        window.setTimeout(check, 150);
+      }
+      check();
+    });
   }
 
   function getProviderPlaylistStatus(providers) {
@@ -242,9 +275,15 @@
   function importProvider(provider, setStatus, options) {
     options = options || {};
     var shouldReload = options.reload !== false;
-    if (!window.Store || !window.Store.savePlaylist || !window.Store.saveChannels) {
-      setStatus('Player storage is still starting. Try again in a moment.', true);
-      return Promise.resolve();
+    if (!storeIsReady()) {
+      setStatus('Player storage is starting...');
+      return waitForStore(12000).then(function () {
+        return importProvider(provider, setStatus, options);
+      }).catch(function (err) {
+        setStatus('Player storage is still starting. Try again in a moment.', true);
+        if (options.throwOnError) throw err;
+        return { error: true, message: err && err.message ? err.message : 'storage_not_ready' };
+      });
     }
 
     setStatus('Loading ' + provider.name + ' catalog...');
@@ -285,28 +324,43 @@
       })
       .catch(function (err) {
         setStatus('Could not import ' + provider.name + ': ' + (err && err.message ? err.message : 'check DaveTV sign-in'), true);
+        if (options.throwOnError) throw err;
+        return { error: true, message: err && err.message ? err.message : 'import_failed' };
       });
   }
 
   function autoloadProviders(providers, setStatus) {
     var key = 'ipz_provider_autoload_build_id';
     try {
-      if (window.localStorage && window.localStorage.getItem(key) === QUICKSTART_BUILD_ID) {
-        setStatus('DaveAI providers are ready to load. Choose Apollo Group TV or XtremeHD.');
-        return;
+      if (window.localStorage) {
+        var prior = window.localStorage.getItem(key);
+        window.localStorage.setItem(key, QUICKSTART_BUILD_ID + ':running:' + Date.now());
+        if (prior === QUICKSTART_BUILD_ID) {
+          setStatus('Repairing DaveAI provider playlists...');
+        }
       }
-      if (window.localStorage) window.localStorage.setItem(key, QUICKSTART_BUILD_ID);
     } catch (e) {}
 
     setStatus('Setting up Apollo Group TV and XtremeHD...');
     providers.reduce(function (chain, provider) {
       return chain.then(function () {
-        return importProvider(provider, setStatus, { reload: false });
+        return importProvider(provider, setStatus, { reload: false, throwOnError: true }).then(function (result) {
+          if (!result || result.error || Number(result.channelCount || 0) <= 0) {
+            throw new Error('No playable rows saved for ' + provider.name);
+          }
+          return result;
+        });
       });
     }, Promise.resolve()).then(function () {
+      try {
+        if (window.localStorage) window.localStorage.setItem(key, QUICKSTART_BUILD_ID);
+      } catch (e) {}
       setStatus('Providers loaded. Reloading...');
       setTimeout(function () { window.location.reload(); }, 900);
     }).catch(function (err) {
+      try {
+        if (window.localStorage) window.localStorage.removeItem(key);
+      } catch (e) {}
       setStatus('Provider setup paused: ' + (err && err.message ? err.message : 'try a provider button'), true);
     });
   }

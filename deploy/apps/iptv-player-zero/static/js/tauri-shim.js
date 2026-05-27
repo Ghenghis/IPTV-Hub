@@ -7,7 +7,7 @@
 (function (window) {
   'use strict';
 
-  var DAVEAI_HOSTED_BUILD_ID = '20260527-free-provider17';
+  var DAVEAI_HOSTED_BUILD_ID = '20260527-free-provider19';
 
   // ── Helper: emit event the React app listens to via Tauri events ──────────
   function emitTauriEvent(event, payload) {
@@ -1052,13 +1052,30 @@
       var ownText = text.length < 180;
       var isAction = /^(upgrade to pro|upgrade|refresh license|forgot password|\$12\.99|low price)$/i.test(text);
       var isPaymentSection = /\b(lifetime unlock|stripe|purchase|72-hour pro trial|free mode)\b/i.test(text);
+      var upgradeShell = node.closest && node.closest('.ipz-upgrade-modal-shell');
+      if (upgradeShell && upgradeShell.parentNode) {
+        upgradeShell.parentNode.removeChild(upgradeShell);
+        return;
+      }
       if (isAction || (isPaymentSection && ownText)) {
-        removeClosest(node, ['[role="dialog"] section', 'section', '.rounded-2xl', '.rounded-xl', 'button', 'a']);
+        removeClosest(node, ['.ipz-upgrade-modal-shell', '[role="dialog"] section', 'section', '.rounded-2xl', '.rounded-xl', 'button', 'a']);
       }
     });
   }
 
   function installHostedFullFreeUiPolish() {
+    try {
+      if (!document.getElementById('ipz-daveai-free-pro-style')) {
+        var style = document.createElement('style');
+        style.id = 'ipz-daveai-free-pro-style';
+        style.textContent = [
+          '.ipz-upgrade-modal-shell{display:none!important}',
+          '.ipz-upgrade-buy-btn,.ipz-keep-pro-forever-btn{display:none!important}',
+        ].join('\n');
+        document.head.appendChild(style);
+      }
+    } catch (e) {}
+
     var run = function () {
       try { polishHostedFullFreeUi(); } catch (e) {}
     };
