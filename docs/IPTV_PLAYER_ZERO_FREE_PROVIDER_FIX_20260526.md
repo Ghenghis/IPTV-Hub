@@ -8,10 +8,16 @@ Live URL:
 https://apps.daveai.tech/iptv-player-zero/
 ```
 
-Artifact directory:
+Original artifact directory:
 
 ```text
 C:\Users\Admin\Downloads\VPS\_visual_artifacts\ipz-free-provider-fix-20260526
+```
+
+Latest live proof artifact directory:
+
+```text
+C:\Users\Admin\Downloads\VPS\_visual_artifacts\zero-player-provider-proof-20260526
 ```
 
 ## What Changed
@@ -25,6 +31,9 @@ C:\Users\Admin\Downloads\VPS\_visual_artifacts\ipz-free-provider-fix-20260526
 - Fixed playback state churn by stabilizing the shared store selector wrapper.
 - Disabled unstable tutorial/helper overlays that were causing hosted ResizeObserver/state loops.
 - Kept provider credentials server-side; browser-visible playback uses same-origin `/api/provider-vault/*` URLs only.
+- After user review, bumped the deployed cache keys to `20260526-free-provider14`,
+  changed the hosted badge from bare `PRO` to `FREE PRO`, and re-ran strict
+  live Playwright proof against the current production bundle.
 
 ## Verification
 
@@ -54,6 +63,17 @@ Playback proof, generated `2026-05-26T21:57:44Z`:
 | Apollo Group TV | PASS | USA AMC | PASS | PASS | 4 | 0 |
 | XtremeHD | PASS | USA AMC | PASS | PASS | 4 | 0 |
 
+Latest live playback proof, generated `2026-05-27T00:14:19Z`:
+
+| Provider | Result | Catalog Rows | First Channel | Stream Proxy | Segment Proxy | Video Ready | Paid Text | Page Errors | Console Errors |
+| --- | --- | ---: | --- | --- | --- | ---: | ---: | ---: | ---: |
+| Apollo Group TV | PASS | 2200 | USA AMC | PASS | PASS | 4 | 0 | 0 | 0 |
+| XtremeHD | PASS | 2200 | USA AMC | PASS | PASS | 4 | 0 | 0 | 0 |
+
+The latest proof waits for the actual browser video element to reach
+`readyState=4`; earlier fixed-time checks could report false failures while the
+provider stream was still buffering.
+
 Screenshots:
 
 ```text
@@ -61,6 +81,8 @@ C:\Users\Admin\Downloads\VPS\_visual_artifacts\ipz-free-provider-fix-20260526\ip
 C:\Users\Admin\Downloads\VPS\_visual_artifacts\ipz-free-provider-fix-20260526\ipz-xtremehd-proof.png
 C:\Users\Admin\Downloads\VPS\_visual_artifacts\ipz-free-provider-fix-20260526\ipz-apollo-playback.png
 C:\Users\Admin\Downloads\VPS\_visual_artifacts\ipz-free-provider-fix-20260526\ipz-xtremehd-playback.png
+C:\Users\Admin\Downloads\VPS\_visual_artifacts\zero-player-provider-proof-20260526\zero-player-apollo-playback.png
+C:\Users\Admin\Downloads\VPS\_visual_artifacts\zero-player-provider-proof-20260526\zero-player-xtremehd-playback.png
 ```
 
 ## VPS State
@@ -69,6 +91,7 @@ Production backup before the repair:
 
 ```text
 /var/backups/daveai-apps/iptv-player-zero-before-free-provider-fix-20260526T200620Z.tgz
+/var/backups/daveai-apps/iptv-player-zero-before-provider14-20260527T000508Z.tgz
 ```
 
 Deployment target:
@@ -81,6 +104,6 @@ Cloudflare cache was purged after deploy.
 
 ## Notes
 
-- The visible `PRO` badge is intentional for this hosted DaveTV build: it means Pro is already unlocked for free, not that payment is required.
+- The visible badge is `FREE PRO` for this hosted DaveTV build: it means Pro is already unlocked for free, not that payment is required.
 - The old `Upgrade to Pro`, Stripe, trial, and price copy is absent from the verified hosted UI.
 - Proof auth uses a short-lived DaveTV auth-gate QA session. The auth gate keeps sessions in memory, so it must be restarted after writing a synthetic proof session.

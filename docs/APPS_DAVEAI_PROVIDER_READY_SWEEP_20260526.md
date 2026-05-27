@@ -1,6 +1,6 @@
 # apps.daveai.tech Provider-Ready Visual Sweep — 2026-05-26
 
-Status: `13/13 passed` (`2026-05-26T23:31:43.752Z`)
+Status: `13/13 passed` (`2026-05-27T00:17:06.700Z`)
 
 ## Scope
 
@@ -146,6 +146,9 @@ exception/application-error screens, `0` provider credential-shaped text leaks,
 
 It was rerun again after the IPTVnator v5 stale-XtremeHD repair and passed all
 `13` launcher apps with the same zero-regression result.
+
+It was rerun again after the IPTV Player Zero v14 free/pro + provider playback
+proof and passed all `13` launcher apps with the same zero-regression result.
 
 ## Console Notes
 

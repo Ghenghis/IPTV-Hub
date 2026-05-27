@@ -50,8 +50,9 @@ provider-vault buttons for configured managed accounts.
 ## Compliance Notes
 
 - The old `unlock.js` bypass script is not included.
-- The browser license shim reports an unlicensed/free browser state; it does
-  not force premium unlock flags.
+- The hosted DaveTV browser license shim reports an active lifetime/pro state
+  with `purchaseRequired: false`; all payment/Stripe/trial copy is removed from
+  the hosted build.
 - The active app and proxy keep provider credentials redacted in errors.
 - The active proxy rewrites HLS/M3U playlist media lines back through
   `/api/iptv-proxy`, but leaves XMLTV content untouched.
@@ -67,9 +68,11 @@ Latest Codex proof from the live VPS deployment:
   XMLTV pass-through.
 - visual proof: desktop and mobile screenshots clean, no clipping, only benign
   console info logs.
-- provider-vault quickstart proof: local static Docker visual check with demo
-  provider flags, plus live provider-vault endpoint checks against the DaveTV
-  authenticated edge.
+- provider-vault quickstart/playback proof: live authenticated Playwright check
+  imports Apollo Group TV and XtremeHD, verifies `2200` safe catalog rows per
+  provider, clicks `USA AMC`, confirms same-origin provider-vault stream and
+  segment responses, and waits for the browser video element to reach
+  `readyState=4`.
 
 Proof archive:
 
@@ -78,9 +81,13 @@ Proof archive:
 - `C:\Users\Admin\Downloads\VPS\_visual_artifacts\ipz-provider-vault-proof-20260526\import-smoke.json`
 - `C:\Users\Admin\Downloads\VPS\_visual_artifacts\ipz-provider-vault-proof-20260526\ipz-provider-quickstart.png`
 - `C:\Users\Admin\Downloads\VPS\_visual_artifacts\ipz-provider-vault-proof-20260526\ipz-provider-import-smoke.png`
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\zero-player-provider-proof-20260526\summary.json`
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\zero-player-provider-proof-20260526\zero-player-apollo-playback.png`
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\zero-player-provider-proof-20260526\zero-player-xtremehd-playback.png`
 - `C:\Users\Admin\Downloads\VPS\staging\iptv-player-zero-clean-web-final-20260526T1553.zip`
 - VPS backup: `/var/backups/daveai-apps/iptv-player-zero-provider-compat-final-20260526T154233Z.tgz`
 - VPS backup: `/var/backups/daveai-apps/iptv-player-zero-before-provider-vault-20260526T1746Z.tgz`
+- VPS backup: `/var/backups/daveai-apps/iptv-player-zero-before-provider14-20260527T000508Z.tgz`
 
 ## Local Static Build
 

@@ -902,10 +902,15 @@
   function polishHostedFullFreeUi() {
     var paidPattern = /\b(upgrade to pro|upgrade|lifetime unlock|\$12\.99|stripe|purchase|forgot password|refresh license|72-hour pro trial|free mode|low price)\b/i;
     var replacePattern = /3h\s*\(free\)/ig;
+    var proOnlyPattern = /^\s*PRO\s*$/i;
     var nodes = Array.prototype.slice.call(document.querySelectorAll('button,a,section,div,span,p'));
     nodes.forEach(function (node) {
       var text = textOf(node);
       if (!text) return;
+      if (proOnlyPattern.test(text) && node.childElementCount === 0) {
+        node.textContent = 'FREE PRO';
+        return;
+      }
       if (replacePattern.test(text) && node.childElementCount === 0) {
         node.textContent = text.replace(replacePattern, 'Full guide');
         return;
