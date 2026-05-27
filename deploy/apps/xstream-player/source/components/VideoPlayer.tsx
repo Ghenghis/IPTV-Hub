@@ -20,6 +20,7 @@ interface VideoPlayerProps {
     enterFullscreen?: boolean;
     onBack?: () => void;
     subtitleUrl?: string;
+    fallbackSrc?: string;
 }
 
 const readPositiveNumber = (value: string | undefined, fallback: number) => {
@@ -49,7 +50,8 @@ export default function VideoPlayer({
     hasPrevious = false,
     enterFullscreen = false,
     onBack,
-    subtitleUrl
+    subtitleUrl,
+    fallbackSrc
 }: VideoPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -70,6 +72,7 @@ export default function VideoPlayer({
     const [subtitleFontSize, setSubtitleFontSize] = useState(1.5);
     const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
     const [isMetadataLoaded, setIsMetadataLoaded] = useState(false);
+    const [playbackSrc, setPlaybackSrc] = useState(src);
 
     // Auto-enable subtitles when a new URL is provided
     useEffect(() => {
@@ -82,6 +85,12 @@ export default function VideoPlayer({
     const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const skipIndicatorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const centerIconTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const fallbackAttemptedRef = useRef(false);
+
+    useEffect(() => {
+        fallbackAttemptedRef.current = false;
+        setPlaybackSrc(src);
+    }, [src]);
 
     // Load saved font size
     useEffect(() => {
@@ -230,7 +239,7 @@ export default function VideoPlayer({
     };
 
     const hasAppliedInitialTime = useRef(false);
-    /** Snapshot de `initialTime` no momento em que `src` muda — evita recriar HLS quando o checkpoint atualiza. */
+    /** Snapshot `initialTime` when the source changes so progress updates do not rebuild playback. */
     const initialSeekForActiveSrcRef = useRef(0);
     const onProgressRef = useRef(onProgress);
     const onMetadataRef = useRef(onMetadata);
@@ -427,9 +436,10 @@ export default function VideoPlayer({
         setIsMetadataLoaded(false);
         hasAppliedInitialTime.current = false;
 
-        const isHLS = src.toLowerCase().includes('.m3u8');
-        const isDirectVideo = /\.(mp4|mkv|avi|webm|mov)$/i.test(src.split('?')[0]);
-        const isLiveHls = isHLS && /\/live\//i.test(src);
+        const activeSrc = playbackSrc;
+        const isHLS = activeSrc.toLowerCase().includes('.m3u8');
+        const isDirectVideo = /\.(mp4|mkv|avi|webm|mov)$/i.test(activeSrc.split('?')[0]);
+        const isLiveHls = isHLS && /\/live\//i.test(activeSrc);
         const useHlsJs = isHLS && Hls.isSupported();
 
         let hls: Hls | undefined;
@@ -458,6 +468,16 @@ export default function VideoPlayer({
                 video.currentTime = seekTarget;
                 hasAppliedInitialTime.current = true;
             }
+        };
+
+        const tryPlaybackFallback = (reason: string) => {
+            if (!fallbackSrc || fallbackAttemptedRef.current || fallbackSrc === activeSrc) return false;
+            fallbackAttemptedRef.current = true;
+            console.warn('[VideoPlayer] Switching to HLS fallback:', reason);
+            setError('Optimizing this stream for browser playback...');
+            setIsBuffering(true);
+            setPlaybackSrc(fallbackSrc);
+            return true;
         };
 
         const setupVideoHls = () => {
@@ -501,7 +521,7 @@ export default function VideoPlayer({
         };
 
         if (useHlsJs) {
-            console.log('[VideoPlayer] Initializing HLS.js for:', src);
+            console.log('[VideoPlayer] Initializing HLS.js for:', activeSrc);
             // Larger VOD buffers smooth movie playback; live streams stay closer to the edge.
             hls = new Hls({
                 enableWorker: true,
@@ -530,7 +550,7 @@ export default function VideoPlayer({
                     : {}),
             });
 
-            hls.loadSource(src);
+            hls.loadSource(activeSrc);
             hls.attachMedia(video);
 
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -541,6 +561,12 @@ export default function VideoPlayer({
             hls.on(Hls.Events.ERROR, (event, data) => {
                 console.error('[VideoPlayer] HLS Error:', data.type, data.details, data.fatal ? '(FATAL)' : '');
                 if (data.fatal) {
+                    if (fallbackSrc && activeSrc === fallbackSrc) {
+                        hls?.destroy();
+                        setError('This provider stream is unavailable right now. Try another title, episode, or provider.');
+                        setIsBuffering(false);
+                        return;
+                    }
                     setError(`Stream error: ${data.details}. Retrying...`);
                     switch (data.type) {
                         case Hls.ErrorTypes.NETWORK_ERROR:
@@ -550,6 +576,7 @@ export default function VideoPlayer({
                             hls?.recoverMediaError();
                             break;
                         default:
+                            if (tryPlaybackFallback(data.details || 'fatal hls error')) return;
                             hls?.destroy();
                             setError('Fatal playback error.');
                             break;
@@ -557,17 +584,7 @@ export default function VideoPlayer({
                 }
             });
         } else {
-            video.src = src;
-
-            video.addEventListener('error', () => {
-                const error = video.error;
-                if (!isDirectVideo && !Hls.isSupported()) {
-                    setError('Your browser does not support HLS playback.');
-                } else {
-                    setError(`Playback Error: ${error?.message || 'The video could not be loaded.'}`);
-                }
-                setIsBuffering(false);
-            }, { once: true });
+            video.src = activeSrc;
         }
 
         const updatePlayState = () => setIsPlaying(!video.paused);
@@ -679,7 +696,22 @@ export default function VideoPlayer({
 
         const handleVideoError = () => {
             const error = video.error;
-            setError(`Playback Error: ${error?.message || 'The video could not be loaded.'}`);
+            const rawMessage = error?.message || '';
+            const isDecodeError = /DEMUXER|MEDIA_ELEMENT_ERROR|Format error|FFmpegDemuxer|PIPELINE/i.test(rawMessage);
+            if (fallbackSrc && activeSrc === fallbackSrc) {
+                setError('This provider stream is unavailable right now. Try another title, episode, or provider.');
+                setIsBuffering(false);
+                return;
+            }
+            if (tryPlaybackFallback(error?.message || 'native video error')) return;
+            if (!isDirectVideo && !Hls.isSupported()) {
+                setError('Your browser does not support HLS playback.');
+                setIsBuffering(false);
+                return;
+            }
+            setError(isDecodeError
+                ? 'This provider stream is unavailable right now. Try another title, episode, or provider.'
+                : `Playback Error: ${rawMessage || 'The provider stream could not be loaded.'}`);
             setIsBuffering(false);
         };
 
@@ -711,7 +743,7 @@ export default function VideoPlayer({
             video.removeEventListener('error', handleVideoError);
             video.removeEventListener('volumechange', handleVolumeChange);
         };
-    }, [src, autoPlay]);
+    }, [playbackSrc, fallbackSrc, autoPlay]);
 
     useEffect(() => {
         const video = videoRef.current;
@@ -736,7 +768,7 @@ export default function VideoPlayer({
             video.addEventListener('loadedmetadata', onLateMetadata);
             return () => video.removeEventListener('loadedmetadata', onLateMetadata);
         }
-    }, [src, isMetadataLoaded]);
+    }, [playbackSrc, isMetadataLoaded]);
 
     const isLive = duration === Infinity || duration === 0;
     const volumePercent = Math.round(volume * 100);

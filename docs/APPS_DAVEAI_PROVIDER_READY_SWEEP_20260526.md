@@ -135,8 +135,14 @@ Each app had to satisfy:
     `/api/provider-vault/stream` and `/api/provider-vault/segment`;
   - provider artwork now uses same-origin `/api/provider-vault/image?src=...`
     so Chrome no longer blocks mixed-content HTTP poster images;
+  - 2026-05-27 follow-up fixed user-reported watch-page playback failures:
+    dead provider streams now show a friendly unavailable message instead of
+    raw demuxer/format errors, MP4 movie/series playback passes for both
+    providers, MKV playback is accepted when browser-playable, and live/movie/
+    series card grids pass visual proof after catalog sync;
   - proof:
-    `deploy/apps/xstream-player/PROOF-20260526.md`.
+    `deploy/apps/xstream-player/PROOF-20260526.md`,
+    `deploy/apps/xstream-player/PROOF-20260527.md`.
 - Re-verified and polished Smart IPTV Web after user review:
   - Apollo Group TV and XtremeHD both load through provider-vault with client
     storage containing only `providerId`, not raw provider host/user/password;

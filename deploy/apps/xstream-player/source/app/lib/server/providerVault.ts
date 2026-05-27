@@ -345,6 +345,17 @@ export async function proxyMediaResponse(sourceUrl: string, range?: string | nul
         });
     }
 
+    if (/text\/html|application\/json/i.test(contentType)) {
+        return new Response('Provider returned a non-video response for this stream', {
+            status: 502,
+            headers: {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Cache-Control': 'no-store',
+                'Access-Control-Allow-Origin': '*',
+            },
+        });
+    }
+
     const responseHeaders = new Headers();
     for (const key of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
         const value = upstream.headers.get(key);

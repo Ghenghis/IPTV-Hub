@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { useParams } from 'next/navigation';
 import Loader from '@/components/Loader';
-import { ArrowLeft, Layers, Play, Star, Calendar } from 'lucide-react';
+import { ArrowLeft, Play, Star, Calendar } from 'lucide-react';
 import Link from 'next/link';
+import FallbackArtwork from '@/components/FallbackArtwork';
 
 interface Series {
     series_id: string | number;
@@ -154,18 +155,12 @@ export default function SeriesList() {
                                 className="group relative bg-[#1f1f1f] rounded-xl overflow-hidden shadow-lg hover:shadow-2xl hover:shadow-purple-900/20 transition-all duration-300 transform hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-purple-600 focus:scale-105 z-10"
                             >
                                 <div className="aspect-[2/3] relative overflow-hidden bg-black">
-                                    {item.cover ? (
-                                        <img
-                                            src={item.cover}
-                                            alt={item.name}
-                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                            onError={(e) => (e.currentTarget.style.display = 'none')}
-                                        />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-gray-700">
-                                            <Layers size={48} />
-                                        </div>
-                                    )}
+                                    <FallbackArtwork
+                                        src={item.cover}
+                                        title={item.name}
+                                        kind="series"
+                                        imageClassName="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                    />
 
                                     {/* Overlay */}
                                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">

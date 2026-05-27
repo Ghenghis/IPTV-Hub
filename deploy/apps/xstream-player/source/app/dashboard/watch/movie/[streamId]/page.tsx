@@ -32,6 +32,7 @@ interface MovieInfo {
 import { useData } from '@/app/context/DataContext';
 import { useTMDb } from '@/app/context/TMDbContext';
 import { useSubtitle } from '@/app/context/SubtitleContext';
+import { safeImagePath } from '@/app/lib/catalogFilters';
 
 export default function WatchMoviePage() {
     const { credentials } = useAuth();
@@ -207,12 +208,16 @@ export default function WatchMoviePage() {
         } else if (credentials?.hostUrl && credentials.username && credentials.password) {
             streamUrl = `${credentials.hostUrl.replace(/\/$/, '')}/movie/${credentials.username}/${credentials.password}/${streamId}.${extension}`;
         }
+        const fallbackStreamUrl = credentials?.providerId
+            ? `/api/provider-vault/transcode-hls?provider=${encodeURIComponent(credentials.providerId)}&kind=movie&id=${encodeURIComponent(streamId)}&ext=${encodeURIComponent(extension)}`
+            : undefined;
 
         return (
             <div className="fixed inset-0 bg-black z-50 flex flex-col">
                 <div className="relative flex-1 flex items-center justify-center">
                     <VideoPlayer
                         src={streamUrl}
+                        fallbackSrc={fallbackStreamUrl}
                         poster={movie.info.movie_image}
                         autoPlay={true}
                         initialTime={resumeTime}
@@ -233,7 +238,7 @@ export default function WatchMoviePage() {
             <div className="absolute inset-0 overflow-hidden">
                 <div
                     className="absolute inset-0 bg-cover bg-center blur-3xl opacity-30 scale-110"
-                    style={{ backgroundImage: `url(${movie.info.movie_image})` }}
+                    style={{ backgroundImage: `url(${safeImagePath(movie.info.movie_image) || movie.info.movie_image})` }}
                 ></div>
                 <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/80 to-transparent"></div>
             </div>
@@ -252,7 +257,7 @@ export default function WatchMoviePage() {
                     {/* Poster */}
                     <div className="w-full max-w-[300px] lg:max-w-[400px] flex-shrink-0 rounded-xl overflow-hidden shadow-2xl shadow-black/50 mx-auto lg:mx-0">
                         <img
-                            src={movie.info.movie_image}
+                            src={safeImagePath(movie.info.movie_image) || movie.info.movie_image}
                             alt={movie.info.name}
                             className="w-full h-auto"
                             onError={(e) => e.currentTarget.src = 'https://via.placeholder.com/300x450?text=No+Poster'}

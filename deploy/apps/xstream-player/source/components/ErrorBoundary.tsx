@@ -25,6 +25,14 @@ class ErrorBoundary extends Component<Props, State> {
 
     public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
         console.error('Uncaught error:', error, errorInfo);
+        if (/ChunkLoadError|Failed to load chunk/i.test(error?.message || '')) {
+            const reloadKey = 'xstream_chunk_reload_once';
+            if (typeof window !== 'undefined' && !window.sessionStorage.getItem(reloadKey)) {
+                window.sessionStorage.setItem(reloadKey, '1');
+                window.location.reload();
+                return;
+            }
+        }
         this.setState({
             error,
             errorInfo
@@ -33,6 +41,7 @@ class ErrorBoundary extends Component<Props, State> {
 
     public render() {
         if (this.state.hasError) {
+            const isChunkError = /ChunkLoadError|Failed to load chunk/i.test(this.state.error?.message || '');
             return (
                 <div style={{
                     padding: '20px',
@@ -47,8 +56,14 @@ class ErrorBoundary extends Component<Props, State> {
                     fontFamily: 'monospace',
                     border: '5px solid #ff4d4d'
                 }}>
-                    <h1 style={{ fontSize: '24px', marginBottom: '10px' }}>⚠️ Application Error (TV Debug)</h1>
-                    <p style={{ color: '#ccc', marginBottom: '20px' }}>Ocorreu um erro ao renderizar a interface.</p>
+                    <h1 style={{ fontSize: '24px', marginBottom: '10px' }}>
+                        {isChunkError ? 'App update detected' : 'Application Error'}
+                    </h1>
+                    <p style={{ color: '#ccc', marginBottom: '20px' }}>
+                        {isChunkError
+                            ? 'The player loaded an older app file. Reload once to continue with the newest build.'
+                            : 'The player could not render this screen.'}
+                    </p>
                     <div style={{
                         background: '#000',
                         padding: '15px',
@@ -60,7 +75,7 @@ class ErrorBoundary extends Component<Props, State> {
                         color: '#fff',
                         border: '1px solid #333'
                     }}>
-                        <p><strong>Mensagem:</strong> {this.state.error?.message}</p>
+                        <p><strong>Message:</strong> {this.state.error?.message}</p>
                         <details open style={{ marginTop: '10px' }}>
                             <summary style={{ cursor: 'pointer', color: '#888' }}>Stack Trace</summary>
                             <pre style={{
@@ -88,7 +103,7 @@ class ErrorBoundary extends Component<Props, State> {
                             cursor: 'pointer'
                         }}
                     >
-                        Recarregar App
+                        Reload App
                     </button>
                 </div>
             );

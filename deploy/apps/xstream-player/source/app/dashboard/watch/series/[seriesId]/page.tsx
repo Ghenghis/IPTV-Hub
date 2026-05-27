@@ -43,6 +43,7 @@ interface SeriesInfo {
 import { useData } from '@/app/context/DataContext';
 import { useTMDb } from '@/app/context/TMDbContext';
 import { useSubtitle } from '@/app/context/SubtitleContext';
+import { safeImagePath } from '@/app/lib/catalogFilters';
 
 export default function WatchSeriesPage() {
     const { credentials } = useAuth();
@@ -263,6 +264,9 @@ export default function WatchSeriesPage() {
         } else if (credentials?.hostUrl && credentials.username && credentials.password) {
             streamUrl = `${credentials.hostUrl.replace(/\/$/, '')}/series/${credentials.username}/${credentials.password}/${selectedEpisode.id}.${extension}`;
         }
+        const fallbackStreamUrl = credentials?.providerId
+            ? `/api/provider-vault/transcode-hls?provider=${encodeURIComponent(credentials.providerId)}&kind=series&id=${encodeURIComponent(selectedEpisode.id)}&ext=${encodeURIComponent(extension)}`
+            : undefined;
 
         // Navigation logic
         const allEpisodes: Episode[] = [];
@@ -299,6 +303,7 @@ export default function WatchSeriesPage() {
                 <div className="relative flex-1 flex items-center justify-center">
                     <VideoPlayer
                         src={streamUrl}
+                        fallbackSrc={fallbackStreamUrl}
                         poster={series.info.cover}
                         autoPlay={true}
                         initialTime={resumeTime}
@@ -325,7 +330,7 @@ export default function WatchSeriesPage() {
             <div className="absolute inset-0 overflow-hidden h-[60vh]">
                 <div
                     className="absolute inset-0 bg-cover bg-top  opacity-40 scale-105"
-                    style={{ backgroundImage: `url(${series.info.cover})` }}
+                    style={{ backgroundImage: `url(${safeImagePath(series.info.cover) || series.info.cover})` }}
                 ></div>
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#141414]/90 to-[#141414]"></div>
             </div>
@@ -344,7 +349,7 @@ export default function WatchSeriesPage() {
                     {/* Poster */}
                     <div className="w-full max-w-[250px] lg:max-w-[350px] flex-shrink-0 rounded-xl overflow-hidden shadow-2xl shadow-black/50 mx-auto lg:mx-0">
                         <img
-                            src={series.info.cover}
+                            src={safeImagePath(series.info.cover) || series.info.cover}
                             alt={series.info.name}
                             className="w-full h-auto"
                             onError={(e) => e.currentTarget.src = 'https://via.placeholder.com/300x450?text=No+Cover'}

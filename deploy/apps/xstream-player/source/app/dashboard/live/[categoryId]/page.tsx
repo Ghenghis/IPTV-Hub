@@ -5,8 +5,9 @@ import { useAuth } from '../../../context/AuthContext';
 import { useParams } from 'next/navigation';
 import VideoPlayer from '@/components/VideoPlayer';
 import Loader from '@/components/Loader';
-import { ArrowLeft, Wifi } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import FallbackArtwork from '@/components/FallbackArtwork';
 
 interface Stream {
     stream_id: string | number;
@@ -154,12 +155,13 @@ export default function LiveStreams() {
                                     tabIndex={0}
                                     className="group bg-[#1f1f1f] hover:bg-[#252525] border border-[#333] rounded-lg p-3 flex items-center gap-4 transition-all focus:outline-none focus:ring-4 focus:ring-red-600 focus:scale-[1.02] z-10 hover:border-gray-500"
                                 >
-                                    <div className="w-12 h-12 flex-shrink-0 bg-black rounded-md flex items-center justify-center overflow-hidden border border-[#333]">
-                                        {stream.stream_icon ? (
-                                            <img src={stream.stream_icon} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                                        ) : (
-                                            <Wifi size={20} className="text-gray-600" />
-                                        )}
+                                    <div className="w-14 h-14 flex-shrink-0 overflow-hidden rounded-lg bg-black ring-1 ring-white/10">
+                                        <FallbackArtwork
+                                            src={stream.stream_icon}
+                                            title={stream.name}
+                                            kind="live"
+                                            imageClassName="h-full w-full object-contain p-1 transition-transform group-hover:scale-105"
+                                        />
                                     </div>
                                     <div className="min-w-0">
                                         <h4 className="font-medium line-clamp-2 text-sm text-gray-300 group-hover:text-white">
