@@ -148,6 +148,14 @@ Each app had to satisfy:
     non-empty ids and HTTP `200` responses;
   - proof:
     `deploy/apps/iptv-restream/PROOF-20260526.md`.
+- Deep-verified TVapp after the launcher sweep showed only its loading state:
+  - Apollo Group TV and XtremeHD both load through the DaveTV provider vault;
+  - both providers played USA AMC at `video.readyState=4` and `1920x1080`;
+  - both stream requests used same-origin `/api/provider-vault/stream` with
+    non-empty ids and HTTP `200`;
+  - no page errors, no console errors, and no blocking failed requests;
+  - proof:
+    `deploy/apps/tvapp/PROOF-20260526.md`.
 
 ## Latest Sweep Notes
 
