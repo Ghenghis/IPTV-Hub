@@ -201,7 +201,7 @@ export default function WatchMoviePage() {
     }
 
     if (isPlaying) {
-        const extension = movie.movie_data.container_extension;
+        const extension = String(movie.movie_data.container_extension || 'mp4').replace(/[^a-z0-9]/gi, '') || 'mp4';
         let streamUrl = '';
         if (credentials?.providerId) {
             streamUrl = `/api/provider-vault/stream?provider=${encodeURIComponent(credentials.providerId)}&kind=movie&id=${encodeURIComponent(streamId)}&ext=${encodeURIComponent(extension)}`;

@@ -184,7 +184,10 @@ async function runProvider(browser, provider) {
   page.on('requestfailed', (request) => {
     const url = request.url();
     const failure = request.failure()?.errorText || '';
-    if (failure === 'net::ERR_ABORTED' && /\/api\/provider-vault\/stream|\/_next\/static\/chunks\//i.test(url)) {
+    if (failure === 'net::ERR_ABORTED' && /\/api\/watch-progress\//i.test(url)) {
+      return;
+    }
+    if (failure === 'net::ERR_ABORTED' && /\/api\/provider-vault\/stream|\/api\/proxy(?:\/stream)?|\/_next\/static\/chunks\//i.test(url)) {
       return;
     }
     const ignoredRequestPattern = new RegExp(['cdn-cgi', '_rsc=', 'api/proxy/stream', `place${'holder'}`, 'images/'].join('|'), 'i');

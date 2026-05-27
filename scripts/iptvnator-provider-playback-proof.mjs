@@ -11,7 +11,7 @@ const cookiePath =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
 const baseUrl = 'https://iptvnator.daveai.tech';
 const staleXtreamId = '0c911b96-4d88-45f4-bcf9-c71586cf0428';
-const expectedBuildId = '20260527-v6';
+const expectedBuildId = '20260527-v7';
 
 const providers = [
   { id: 'xtremehd', title: 'XtremeHD', route: '/workspace/playlists/daveai-provider-vault-xtremehd/all' },
@@ -145,6 +145,31 @@ async function readState(page) {
   }, { staleXtreamId });
 }
 
+async function waitForProviderReady(page, provider, timeoutMs = 90000) {
+  const deadline = Date.now() + timeoutMs;
+  let latest = null;
+  const expectedTitle = `${provider.title} - DaveAI Vault`;
+  const expectedId = `daveai-provider-vault-${provider.id}`;
+  while (Date.now() < deadline) {
+    latest = await readState(page);
+    const rows = Array.isArray(latest.dbRows) ? latest.dbRows : [];
+    const row = rows.find((item) => item.id === expectedId && item.itemCount > 0);
+    if (
+      latest.buildId === expectedBuildId &&
+      latest.seeded === expectedBuildId &&
+      row &&
+      latest.xtreamPlaylists === '[]' &&
+      !latest.hasStaleId &&
+      latest.text.includes(expectedTitle) &&
+      /USA AMC/i.test(latest.text)
+    ) {
+      return latest;
+    }
+    await page.waitForTimeout(2000);
+  }
+  return latest || readState(page);
+}
+
 async function playFirstVisibleChannel(page, provider) {
   const before = Date.now();
   const target = page.getByText('USA AMC', { exact: false }).first();
@@ -197,8 +222,7 @@ await page.goto(`${baseUrl}/workspace/xtreams/${staleXtreamId}/vod?proof=${Date.
   timeout: 60000,
 });
 await page.waitForURL(/\/workspace\/playlists\/daveai-provider-vault-xtremehd\/all/, { timeout: 60000 });
-await page.waitForTimeout(12000);
-const staleMigration = await readState(page);
+const staleMigration = await waitForProviderReady(page, providers[0]);
 await page.screenshot({ path: path.join(outDir, 'iptvnator-xtremehd-v5-migration.png'), fullPage: true });
 
 const playback = [];
@@ -207,8 +231,7 @@ for (const provider of providers) {
     waitUntil: 'domcontentloaded',
     timeout: 60000,
   });
-  await page.waitForTimeout(7000);
-  const state = await readState(page);
+  const state = await waitForProviderReady(page, provider);
   await page.screenshot({
     path: path.join(outDir, `iptvnator-${provider.id}-catalog.png`),
     fullPage: true,

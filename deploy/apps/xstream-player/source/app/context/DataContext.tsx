@@ -69,6 +69,20 @@ function yieldToEventLoop(): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, 0));
 }
 
+function syncErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error || '');
+}
+
+function isSoftSyncAbort(error: unknown, signal: AbortSignal): boolean {
+    const name = error instanceof Error ? error.name : '';
+    const message = syncErrorMessage(error);
+    return (
+        signal.aborted ||
+        name === 'AbortError' ||
+        /abort|cancel|failed to fetch|network request failed|load failed/i.test(message)
+    );
+}
+
 export function DataProvider({ children }: { children: React.ReactNode }) {
     const { credentials } = useAuth();
     const [isSyncing, setIsSyncing] = useState(false);
@@ -223,9 +237,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 await fetchStreamsPaginated(type, action, progressStart, progressWeight, signal);
             }
 
-        } catch (error: any) {
-            if (error.name === 'AbortError') {
-                console.log(`Sync cancelled for ${type}`);
+        } catch (error: unknown) {
+            if (isSoftSyncAbort(error, signal)) {
+                console.warn(`Sync stopped for ${type}: ${syncErrorMessage(error) || 'cancelled'}`);
                 return;
             }
             console.error(`Sync error for ${type}:`, error);

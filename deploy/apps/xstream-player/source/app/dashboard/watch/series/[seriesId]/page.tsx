@@ -257,7 +257,7 @@ export default function WatchSeriesPage() {
     }
 
     if (selectedEpisode) {
-        const extension = selectedEpisode.container_extension;
+        const extension = String(selectedEpisode.container_extension || 'mp4').replace(/[^a-z0-9]/gi, '') || 'mp4';
         let streamUrl = '';
         if (credentials?.providerId) {
             streamUrl = `/api/provider-vault/stream?provider=${encodeURIComponent(credentials.providerId)}&kind=series&id=${encodeURIComponent(selectedEpisode.id)}&ext=${encodeURIComponent(extension)}`;

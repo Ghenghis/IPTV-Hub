@@ -8,7 +8,7 @@
 (function (window, document) {
   'use strict';
 
-  var BUILD_ID = '20260527-v6';
+  var BUILD_ID = '20260527-v7';
   var DB_NAME = 'iptvnator';
   var STORE_NAME = 'playlists';
   var SETTINGS_KEY = 'settings';
@@ -99,6 +99,19 @@
     return '/api/provider-vault/catalog?' + params.toString();
   }
 
+  function safeLogoUrl(value) {
+    var raw = text(value, '');
+    if (!raw || raw.indexOf('/api/provider-vault/image?') === 0) return raw;
+    try {
+      var url = new URL(raw, window.location.href);
+      if (url.protocol === 'http:' || url.protocol === 'https:') {
+        var params = new URLSearchParams({ src: url.href });
+        return '/api/provider-vault/image?' + params.toString();
+      }
+    } catch (ignored) {}
+    return raw;
+  }
+
   function appRootUrl() {
     try {
       var script = document.currentScript;
@@ -152,6 +165,26 @@
       .catch(function () {
         return [];
       });
+  }
+
+  function providerFromCurrentPlaylistRoute() {
+    var path = window.location && window.location.pathname || '';
+    return PROVIDERS.find(function (provider) {
+      return path.indexOf(playlistId(provider.id)) !== -1;
+    }) || null;
+  }
+
+  function prioritizeProviders(providers, preferredProvider) {
+    var preferred =
+      preferredProvider ||
+      providerFromCurrentPlaylistRoute() ||
+      (currentXtreamPlaylistId() ? PROVIDERS[1] : null);
+    if (!preferred || !preferred.id) return providers;
+    return providers.slice().sort(function (left, right) {
+      if (left.id === preferred.id) return -1;
+      if (right.id === preferred.id) return 1;
+      return 0;
+    });
   }
 
   function forceEnglishSettings() {
@@ -466,10 +499,10 @@
       provider.name + ' ' + type + ' ' + (index + 1)
     );
     var url = text(item && item.url, '');
-    var logo = text(
+    var logo = safeLogoUrl(text(
       item && (item.logo || item.stream_icon || (item.tvg && item.tvg.logo)),
       ''
-    );
+    ));
     var group = groupTitle(type, item);
     var id = [
       playlist._id,
@@ -506,6 +539,8 @@
       raw:
         '#EXTINF:-1 tvg-name="' +
         name.replace(/"/g, "'") +
+        '" tvg-logo="' +
+        logo.replace(/"/g, '%22') +
         '" group-title="' +
         group.replace(/"/g, "'") +
         '",' +
@@ -887,7 +922,7 @@
           providerFromLegacyBackup() ||
           (currentXtreamPlaylistId() ? PROVIDERS[1] : null);
 
-        autoSeed(providers, panel.setStatus).catch(function (error) {
+        autoSeed(prioritizeProviders(providers, legacyProvider), panel.setStatus).catch(function (error) {
           panel.setStatus(
             'DaveAI provider setup needs attention: ' +
               (error && error.message ? error.message : 'unknown error'),

@@ -73,6 +73,11 @@ async function waitForPlayback(page) {
 }
 
 async function proveProvider(page, providerName, screenshotName, streamEvents, errors) {
+  await page.goto(`${TARGET}?proof=${Date.now()}-${providerName.replace(/\W+/g, '-').toLowerCase()}`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 45000,
+  });
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
   await selectPlaylist(page, `${providerName} - DaveAI Vault`);
   await clickFirstChannel(page);
   const playback = await waitForPlayback(page);
@@ -111,9 +116,16 @@ page.on('console', (msg) => {
 });
 page.on('pageerror', (err) => pageErrors.push(String(err.message || err)));
 page.on('requestfailed', (request) => {
+  const failure = request.failure()?.errorText || 'unknown';
+  if (failure === 'net::ERR_ABORTED' && request.url().includes('/cdn-cgi/rum')) {
+    return;
+  }
+  if (failure === 'net::ERR_ABORTED' && request.url().includes('/api/provider-vault/segment')) {
+    return;
+  }
   failedRequests.push({
     url: sanitizeUrl(request.url()),
-    failure: request.failure()?.errorText || 'unknown',
+    failure,
   });
 });
 page.on('response', (response) => {

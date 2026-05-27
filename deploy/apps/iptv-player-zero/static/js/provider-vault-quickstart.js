@@ -18,7 +18,7 @@
     movieLimit: 500,
     seriesLimit: 500,
   };
-  var QUICKSTART_BUILD_ID = '20260527-free-provider17';
+  var QUICKSTART_BUILD_ID = '20260527-free-provider18';
   var PROVIDER_PLAYLIST_PREFIX = 'daveai-provider-';
 
   function ready(fn) {
@@ -189,8 +189,24 @@
     return '/api/provider-vault/catalog?' + params.toString();
   }
 
+  function safeLogoUrl(value) {
+    var logo = text(value);
+    if (!logo) return '';
+    if (/^\/api\/provider-vault\/image\b/i.test(logo)) return logo;
+    if (/^https?:\/\//i.test(logo)) {
+      return '/api/provider-vault/image?src=' + encodeURIComponent(logo);
+    }
+    return logo;
+  }
+
   function normalizeChannel(providerId, playlistId, item, type, index) {
     var name = text(item && item.name, type + ' ' + (index + 1));
+    var logo = safeLogoUrl(
+      (item && item.tvg && item.tvg.logo) ||
+      (item && item.logo) ||
+      (item && item.stream_icon) ||
+      (item && item.cover)
+    );
     var groupTitle = text(
       item && item.group && (item.group.title || item.group.name || item.group),
       type === 'live' ? 'Live TV' : type === 'movie' ? 'Movies' : 'Series'
@@ -213,10 +229,10 @@
       category_id: safeId(groupTitle) || type,
       group: groupTitle,
       group_title: groupTitle,
-      tvg: item && item.tvg ? item.tvg : { name: name, logo: '' },
+      tvg: Object.assign({}, item && item.tvg ? item.tvg : { name: name }, { name: name, logo: logo }),
       http: item && item.http ? item.http : {},
-      stream_icon: item && item.tvg ? item.tvg.logo : '',
-      logo: item && item.tvg ? item.tvg.logo : '',
+      stream_icon: logo,
+      logo: logo,
       raw: item && item.raw ? item.raw : '',
       provider_id: providerId,
       source: 'daveai-provider-vault',

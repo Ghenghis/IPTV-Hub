@@ -77,8 +77,8 @@ COPY overrides/app-config.js /usr/share/nginx/html/assets/app-config.js
 COPY --from=fetch /src/docker/nginx.conf /etc/nginx/http.d/default.conf.template
 COPY --from=fetch /src/docker/docker-entrypoint.sh /usr/local/bin/iptvnator-entrypoint
 
-RUN sed -i 's#assets/app-config.js"#assets/app-config.js?v=20260527-v6"#' /usr/share/nginx/html/index.html \
- && sed -i 's#<script src="polyfills#<script src="iptvnator-daveai-vault-bootstrap.js?v=20260527-v6"></script><script src="polyfills#' /usr/share/nginx/html/index.html \
+RUN sed -i 's#assets/app-config.js"#assets/app-config.js?v=20260527-v7"#' /usr/share/nginx/html/index.html \
+ && sed -i 's#<script src="polyfills#<script src="iptvnator-daveai-vault-bootstrap.js?v=20260527-v7"></script><script src="polyfills#' /usr/share/nginx/html/index.html \
  && sed -i 's#<base href="./">#<base href="/">#' /usr/share/nginx/html/index.html \
  && cp /usr/share/nginx/html/safety-worker.js /usr/share/nginx/html/ngsw-worker.js \
  && node -e 'const fs=require("node:fs"); const root="/usr/share/nginx/html"; const oldText="addPlaylistRecentlyViewed(e,n){if(!e)throw new Error(\"Playlist ID is required\");return this.getPlaylistById(e).pipe(De(i=>{let o=new Date().toISOString(),s=Array.isArray(i.recentlyViewed)?i.recentlyViewed:[]"; const newText="addPlaylistRecentlyViewed(e,n){if(!e)throw new Error(\"Playlist ID is required\");return this.getPlaylistById(e).pipe(De(i=>{if(!i)return K([]);let o=new Date().toISOString(),s=Array.isArray(i.recentlyViewed)?i.recentlyViewed:[]"; let patched=0; for (const name of fs.readdirSync(root)) { if (!/^chunk-.*\\.js$/.test(name)) continue; const file=root+"/"+name; const source=fs.readFileSync(file,"utf8"); if (!source.includes(oldText)) continue; fs.writeFileSync(file, source.replace(oldText,newText)); patched += 1; } if (patched !== 1) throw new Error("Expected to patch 1 IPTVnator recent-history bundle, patched "+patched);' \

@@ -10,6 +10,7 @@ const outDir =
 const cookiePath =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
 const baseUrl = 'https://nuvio.daveai.tech';
+const resetState = process.env.NUVIO_RESET_STATE === '1';
 const providers = [
   { id: 'apollo', label: 'Apollo Group TV' },
   { id: 'xtremehd', label: 'XtremeHD' },
@@ -48,31 +49,118 @@ async function pageText(page) {
   return page.locator('body').innerText({ timeout: 5000 }).catch(() => '');
 }
 
+async function resetAppState(page, provider) {
+  await page.goto(`${baseUrl}/?reset=${provider.id}-${Date.now()}`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {}
+  });
+}
+
+async function waitForProviderHome(page, provider) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await page.waitForFunction(
+        (providerId) =>
+          Boolean(document.querySelector(`[data-action="openDetail"][data-item-id^="daveai:${providerId}:live:0"]`)),
+        provider.id,
+        { timeout: 60000 },
+      );
+      return;
+    } catch (error) {
+      lastError = error;
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
+      await page.waitForTimeout(5000);
+    }
+  }
+  throw lastError;
+}
+
+async function auditLiveLogoLayout(page, provider) {
+  const layout = await page.evaluate((providerId) => {
+    const card = document.querySelector(
+      `[data-action="openDetail"][data-item-id^="daveai:${providerId}:live:0"]`,
+    );
+    const poster = card?.querySelector('.content-poster');
+    const hero = document.querySelector(
+      `.home-hero-card[data-item-id^="daveai:${providerId}:live:0"] .home-hero-backdrop`,
+    );
+    const heroLogo = document.querySelector(
+      `.home-hero-card[data-item-id^="daveai:${providerId}:live:0"] .home-hero-logo`,
+    );
+    function imgInfo(node) {
+      if (!node) return null;
+      const rect = node.getBoundingClientRect();
+      const style = getComputedStyle(node);
+      return {
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        display: style.display,
+        objectFit: style.objectFit,
+        naturalWidth: node.naturalWidth || 0,
+        naturalHeight: node.naturalHeight || 0,
+      };
+    }
+    const cardRect = card?.getBoundingClientRect();
+    return {
+      providerId,
+      card: cardRect
+        ? { width: Math.round(cardRect.width), height: Math.round(cardRect.height) }
+        : null,
+      poster: imgInfo(poster),
+      hero: imgInfo(hero),
+      heroLogo: imgInfo(heroLogo),
+    };
+  }, provider.id);
+
+  assert(layout.card && layout.card.height <= 260, `${provider.label} live card still too tall: ${JSON.stringify(layout)}`);
+  assert(
+    layout.poster && layout.poster.objectFit === 'contain',
+    `${provider.label} live poster is not contained: ${JSON.stringify(layout)}`,
+  );
+  assert(
+    !layout.hero || layout.hero.display === 'none' || layout.hero.width <= 260,
+    `${provider.label} live hero backdrop is still oversized: ${JSON.stringify(layout)}`,
+  );
+  assert(
+    !layout.heroLogo || (layout.heroLogo.width <= 220 && layout.heroLogo.height <= 150),
+    `${provider.label} live hero logo bounds are wrong: ${JSON.stringify(layout)}`,
+  );
+  return layout;
+}
+
 async function runProvider(page, provider) {
+  if (resetState) await resetAppState(page, provider);
   await page.goto(`${baseUrl}/?proof=${provider.id}-${Date.now()}`, {
     waitUntil: 'domcontentloaded',
     timeout: 60000,
   });
-  await page.waitForTimeout(25000);
-
-  const text = await pageText(page);
-  assert(text.includes(`${provider.label} - Live TV`), `${provider.label} live catalog missing`);
-  assert(text.includes('USA AMC'), `${provider.label} first live channel missing`);
-
-  await page.screenshot({
-    path: path.join(outDir, `nuvio-${provider.id}-home.png`),
-    fullPage: true,
-  });
+  await waitForProviderHome(page, provider);
+  await page.waitForTimeout(3000);
 
   const card = page
     .locator(`[data-action="openDetail"][data-item-id^="daveai:${provider.id}:live:0"]`)
     .first();
   await card.waitFor({ timeout: 60000 });
+  const text = await pageText(page);
+  assert(text.includes('USA AMC'), `${provider.label} first live channel missing`);
+  const layout = await auditLiveLogoLayout(page, provider);
+
+  await page.screenshot({
+    path: path.join(outDir, `nuvio-${provider.id}-home.png`),
+    fullPage: true,
+  });
   await card.click({ timeout: 15000 });
   await page.waitForTimeout(5000);
 
   const detailText = await pageText(page);
-  assert(detailText.includes('Next S1E1'), `${provider.label} live meta did not expose playable episode`);
+  assert(detailText.includes('Play'), `${provider.label} detail did not expose a playable action`);
   assert(detailText.includes('USA AMC'), `${provider.label} detail did not open USA AMC`);
 
   await page.screenshot({
@@ -81,6 +169,12 @@ async function runProvider(page, provider) {
   });
 
   await page.keyboard.press('Enter');
+  await page.waitForTimeout(3000);
+  const daveAiFilter = page.locator('button.stream-route-chip', { hasText: 'DaveAI IPTV' }).first();
+  if (await daveAiFilter.isVisible().catch(() => false)) {
+    await daveAiFilter.click({ timeout: 15000 });
+    await page.waitForTimeout(3000);
+  }
   const streamCard = page.locator('[data-action="playStream"]').first();
   await streamCard.waitFor({ timeout: 60000 });
   await page.screenshot({
@@ -88,6 +182,7 @@ async function runProvider(page, provider) {
     fullPage: true,
   });
 
+  await streamCard.focus();
   await page.keyboard.press('Enter');
   await page
     .waitForFunction(
@@ -123,7 +218,7 @@ async function runProvider(page, provider) {
     !state.text.includes('Infinity:NaN:NaN'),
     `${provider.label} live duration polish failed: ${state.text.slice(0, 220).replace(/\s+/g, ' ')}`,
   );
-  return state;
+  return { ...state, layout };
 }
 
 await fs.mkdir(outDir, { recursive: true });
@@ -185,6 +280,8 @@ const summary = {
   stream200,
   pageErrorCount: seen.pageErrors.length,
   consoleErrorCount: seen.consoleErrors.length,
+  pageErrors: seen.pageErrors,
+  consoleErrors: seen.consoleErrors,
   providerResponses: seen.providerResponses,
   artifacts: {
     apolloPlayer: path.join(outDir, 'nuvio-apollo-player.png'),

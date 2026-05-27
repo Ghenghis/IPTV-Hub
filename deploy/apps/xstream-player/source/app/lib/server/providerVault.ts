@@ -13,6 +13,7 @@ export interface ProviderAccount {
     password: string;
     m3uUrl?: string;
     urlCandidates: string[];
+    alternates?: ProviderAccount[];
 }
 
 const PROVIDERS: Array<{ id: ProviderId; name: string; match: RegExp }> = [
@@ -23,6 +24,7 @@ const PROVIDERS: Array<{ id: ProviderId; name: string; match: RegExp }> = [
 const TOKEN_TTL_MS = 10 * 60 * 1000;
 const streamTokens = new Map<string, { url: string; expiresAt: number }>();
 const preferredServers = new Map<ProviderId, { server: string; expiresAt: number }>();
+const preferredAccounts = new Map<ProviderId, { account: ProviderAccount; expiresAt: number }>();
 
 function privateDir() {
     if (process.env.IPTV_PRIVATE_DIR) return process.env.IPTV_PRIVATE_DIR;
@@ -63,10 +65,28 @@ function combinedPrivateText() {
         .join('\n\n');
 }
 
+function privateTextEntries() {
+    return textFiles(privateDir()).map((file) => ({
+        file,
+        basename: path.basename(file).toLowerCase(),
+        text: fs.readFileSync(file, 'utf8'),
+    }));
+}
+
 function valueAfter(label: string, text: string) {
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const match = text.match(new RegExp(`${escaped}\\s*[:=]\\s*([^\\r\\n]+)`, 'i'));
     return cleanValue(match?.[1]);
+}
+
+function labelMatches(labels: string[], text: string) {
+    const pattern = labels.map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const matches: Array<{ index: number; value: string }> = [];
+    for (const match of text.matchAll(new RegExp(`(?:^|[\\r\\n])\\s*(?:${pattern})\\s*[:=]\\s*([^\\r\\n]+)`, 'gi'))) {
+        const value = cleanValue(match[1]);
+        if (value) matches.push({ index: match.index ?? 0, value });
+    }
+    return matches;
 }
 
 function normalizeServer(raw: string) {
@@ -75,46 +95,137 @@ function normalizeServer(raw: string) {
     return `${parsed.protocol}//${parsed.host}`;
 }
 
-function accountFromContext(id: ProviderId, name: string, context: string): ProviderAccount | null {
+function accountsFromContext(id: ProviderId, name: string, context: string): ProviderAccount[] {
     const urlCandidates = [...context.matchAll(/https?:\/\/[^\s"'<>]+/gi)]
         .map((match) => cleanValue(match[0]).replace(/[),.]+$/g, ''))
         .filter(Boolean);
 
     const playlistUrl = urlCandidates.find((url) => /get\.php|m3u|type=|output=|player_api/i.test(url));
-    let server = '';
-    let username = '';
-    let password = '';
+    const accounts: ProviderAccount[] = [];
+    const seen = new Set<string>();
+
+    function push(server: string, username: string, password: string, m3uUrl?: string) {
+        if (!server || !username || !password) return;
+        try {
+            const normalizedServer = normalizeServer(server);
+            const key = `${normalizedServer}|${username}|${password}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            accounts.push({
+                id,
+                name,
+                server: normalizedServer,
+                username,
+                password,
+                m3uUrl,
+                urlCandidates,
+            });
+        } catch {
+            // Ignore malformed note snippets.
+        }
+    }
 
     for (const raw of [playlistUrl, ...urlCandidates].filter(Boolean) as string[]) {
         try {
             const parsed = new URL(raw);
-            username ||= cleanValue(parsed.searchParams.get('username') || parsed.searchParams.get('user') || '');
-            password ||= cleanValue(parsed.searchParams.get('password') || parsed.searchParams.get('pass') || '');
-            server ||= `${parsed.protocol}//${parsed.host}`;
+            const username = cleanValue(parsed.searchParams.get('username') || parsed.searchParams.get('user') || '');
+            const password = cleanValue(parsed.searchParams.get('password') || parsed.searchParams.get('pass') || '');
+            push(`${parsed.protocol}//${parsed.host}`, username, password, raw);
         } catch {
             // Ignore notes that are not valid URLs.
         }
     }
 
-    server ||= valueAfter('server', context) || valueAfter('host', context) || valueAfter('portal', context);
-    username ||= valueAfter('username', context) || valueAfter('user', context);
-    password ||= valueAfter('password', context) || valueAfter('pass', context);
+    const urlServers = [...new Set(urlCandidates.map((raw) => {
+        try {
+            const parsed = new URL(raw);
+            return `${parsed.protocol}//${parsed.host}`;
+        } catch {
+            return '';
+        }
+    }).filter(Boolean))];
+    const serverLabels = labelMatches(['server', 'host', 'portal'], context);
+    const servers = serverLabels.concat(urlServers.map((value) => ({ index: 0, value })));
+    const usernames = labelMatches(['username', 'user'], context);
+    const passwords = labelMatches(['password', 'pass'], context);
+    const defaultServer = serverLabels[0]?.value || urlServers[0] || '';
 
-    if (!server || !username || !password) return null;
+    usernames.forEach((userMatch, index) => {
+        const passMatch = passwords[index] || passwords.find((item) => item.index >= userMatch.index) || passwords[0];
+        const serverMatch = [...servers].reverse().find((item) => item.index <= userMatch.index) || servers[0];
+        push(serverMatch?.value || defaultServer, userMatch.value, passMatch?.value || '', playlistUrl);
+    });
 
-    try {
-        return {
-            id,
-            name,
-            server: normalizeServer(server),
-            username,
-            password,
-            m3uUrl: playlistUrl,
-            urlCandidates,
-        };
-    } catch {
-        return null;
+    return accounts;
+}
+
+function accountFromContext(id: ProviderId, name: string, context: string): ProviderAccount | null {
+    return accountsFromContext(id, name, context)[0] || null;
+}
+
+function providerSectionContexts(provider: { id: ProviderId; name: string; match: RegExp }) {
+  const entries = privateTextEntries();
+  const otherProviderMatches = PROVIDERS
+    .filter((item) => item.id !== provider.id)
+    .map((item) => item.match);
+    const contexts: string[] = [];
+
+    for (const entry of entries) {
+        const text = entry.text;
+        const providerMatcher = new RegExp(
+            provider.match.source,
+            provider.match.flags.includes('g') ? provider.match.flags : `${provider.match.flags}g`,
+        );
+        const exactProviderHits = [...text.matchAll(providerMatcher)];
+
+        for (const hit of exactProviderHits) {
+            const start = hit.index ?? 0;
+            let end = text.length;
+            for (const otherMatch of otherProviderMatches) {
+                const other = new RegExp(
+                    otherMatch.source,
+                    otherMatch.flags.includes('g') ? otherMatch.flags : `${otherMatch.flags}g`,
+                );
+                for (const otherHit of text.slice(start + 1).matchAll(other)) {
+                    const absolute = start + 1 + (otherHit.index ?? 0);
+                    if (absolute > start && absolute < end) end = absolute;
+                    break;
+                }
+            }
+            contexts.push(text.slice(start, Math.min(end, start + 6500)));
+        }
+
+    const filenameLooksProviderSpecific =
+      entry.basename.includes(provider.id) ||
+      provider.name.toLowerCase().split(/\s+/).some((part) => part.length >= 5 && entry.basename.includes(part));
+
+    if (filenameLooksProviderSpecific && exactProviderHits.length === 0) {
+      contexts.push(text);
     }
+
+    const filenameLooksOtherProviderSpecific = PROVIDERS
+      .filter((item) => item.id !== provider.id)
+      .some((item) => (
+        entry.basename.includes(item.id) ||
+        item.name.toLowerCase().split(/\s+/).some((part) => part.length >= 5 && entry.basename.includes(part))
+      ));
+    const textMentionsOtherProvider = otherProviderMatches.some((match) => match.test(text));
+    if (
+      exactProviderHits.length === 0 &&
+      !filenameLooksProviderSpecific &&
+      !filenameLooksOtherProviderSpecific &&
+      !textMentionsOtherProvider &&
+      accountFromContext(provider.id, provider.name, text)
+    ) {
+      contexts.push(text);
+    }
+  }
+
+    if (!contexts.length) {
+        contexts.push(combinedPrivateText());
+    }
+
+    return contexts;
 }
 
 export function providerIdFromSearch(raw?: string | null): ProviderId | null {
@@ -126,13 +237,21 @@ export function getProviderAccount(id: ProviderId) {
     const provider = PROVIDERS.find((item) => item.id === id);
     if (!provider) return null;
 
-    const text = combinedPrivateText();
-    const matchIndex = text.search(provider.match);
-    const context = matchIndex >= 0
-        ? text.slice(Math.max(0, matchIndex - 1200), matchIndex + 6500)
-        : text;
+    const accounts: ProviderAccount[] = [];
+    const seen = new Set<string>();
+    for (const context of providerSectionContexts(provider)) {
+        for (const account of accountsFromContext(provider.id, provider.name, context)) {
+            const key = `${account.server}|${account.username}|${account.password}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            accounts.push(account);
+        }
+    }
 
-    return accountFromContext(provider.id, provider.name, context);
+    const [primary, ...alternates] = accounts;
+    if (!primary) return null;
+    primary.alternates = alternates;
+    return primary;
 }
 
 export function listVaultProviders() {
@@ -148,22 +267,30 @@ export function listVaultProviders() {
 }
 
 export async function resolveWorkingAccount(account: ProviderAccount) {
-    const cached = preferredServers.get(account.id);
-    if (cached && cached.expiresAt > Date.now()) {
-        return { ...account, server: cached.server };
+    const cachedAccount = preferredAccounts.get(account.id);
+    if (cachedAccount && cachedAccount.expiresAt > Date.now()) {
+        return cachedAccount.account;
     }
 
-    for (const origin of candidateOrigins(account)) {
-        try {
-            if (await authStatusAtOrigin(account, origin)) {
-                preferredServers.set(account.id, {
-                    server: origin,
-                    expiresAt: Date.now() + 15 * 60 * 1000,
-                });
-                return { ...account, server: origin };
+    const candidates = [account, ...(account.alternates || [])];
+    for (const candidateAccount of candidates) {
+        for (const origin of candidateOrigins(candidateAccount)) {
+            try {
+                if (await authStatusAtOrigin(candidateAccount, origin)) {
+                    const workingAccount = { ...candidateAccount, server: origin };
+                    preferredServers.set(account.id, {
+                        server: origin,
+                        expiresAt: Date.now() + 15 * 60 * 1000,
+                    });
+                    preferredAccounts.set(account.id, {
+                        account: workingAccount,
+                        expiresAt: Date.now() + 15 * 60 * 1000,
+                    });
+                    return workingAccount;
+                }
+            } catch {
+                // Try the next candidate origin/account.
             }
-        } catch {
-            // Try the next candidate origin.
         }
     }
 

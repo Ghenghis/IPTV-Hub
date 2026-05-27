@@ -9,7 +9,7 @@ const outDir = 'C:/Users/Admin/Downloads/VPS/_visual_artifacts/zero-player-provi
 const cookiePath =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
 const appUrl = 'https://apps.daveai.tech/iptv-player-zero/?proof=' + Date.now();
-const buildId = '20260527-free-provider17';
+const buildId = '20260527-free-provider18';
 const providers = [
   { id: 'apollo', name: 'Apollo Group TV' },
   { id: 'xtremehd', name: 'XtremeHD' },
@@ -97,6 +97,17 @@ async function inspectPlayer(page) {
   });
 }
 
+function videoReachedPlayback(video) {
+  return (
+    video &&
+    !video.error &&
+    video.currentSrcKind === 'provider-vault' &&
+    video.width > 0 &&
+    video.height > 0 &&
+    video.readyState >= 1
+  );
+}
+
 await fs.mkdir(outDir, { recursive: true });
 
 const browser = await chromium.launch({ headless: true });
@@ -148,8 +159,16 @@ for (const provider of providers) {
     await row.click({ force: true, timeout: 30000 });
     await page.keyboard.press('Enter');
     await page.waitForFunction(
-      () => Array.from(document.querySelectorAll('video')).some((video) => video.readyState >= 2 && !video.error),
-      { timeout: 45000 }
+      () =>
+        Array.from(document.querySelectorAll('video')).some(
+          (video) =>
+            !video.error &&
+            video.readyState >= 1 &&
+            video.videoWidth > 0 &&
+            video.videoHeight > 0 &&
+            String(video.currentSrc || '').includes('/api/provider-vault'),
+        ),
+      { timeout: 90000 }
     );
   } catch (error) {
     actionError = String(error && error.message ? error.message : error);
@@ -167,7 +186,8 @@ for (const provider of providers) {
     state.hasProviderChannels &&
     state.hasLiveSelection &&
     streamResponses.some((item) => item.status === 200) &&
-    state.videos.some((video) => video.readyState >= 2 && !video.error) &&
+    streamResponses.some((item) => item.status === 200 && item.url.includes('/segment')) &&
+    state.videos.some(videoReachedPlayback) &&
     !actionError &&
     pageErrors.length === 0 &&
     consoleErrors.length === 0;

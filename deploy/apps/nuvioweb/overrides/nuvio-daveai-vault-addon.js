@@ -146,18 +146,20 @@
     var groupTitle = safeText(item && item.group && item.group.title, bucketInfo.title);
     var logo = safeText(item && item.tvg && item.tvg.logo, '');
     var id = ['daveai', provider.id, bucket, index, encodeURIComponent(name).slice(0, 80)].join(':');
+    var isLive = bucket === 'live';
     var meta = {
       id: id,
       type: bucketInfo.type,
       name: name,
       poster: logo || null,
-      background: logo || null,
+      background: isLive ? null : (logo || null),
       logo: logo || null,
       description: provider.name + ' - ' + groupTitle + ' via DaveAI provider vault.',
       genres: [groupTitle],
       releaseInfo: '',
     };
-    if (bucket === 'live') {
+    if (isLive) {
+      meta.posterShape = 'landscape';
       meta.videos = [{
         id: id,
         title: name,
@@ -412,12 +414,32 @@
     }
   }
 
+  function installLiveLogoPolish() {
+    if (window.__daveAiNuvioLiveLogoPolishInstalled) return;
+    window.__daveAiNuvioLiveLogoPolishInstalled = true;
+    var style = document.createElement('style');
+    style.id = 'daveai-nuvio-live-logo-polish';
+    style.textContent = [
+      '.home-hero-card[data-item-type="tv"] .home-hero-backdrop{display:none!important;}',
+      '.home-hero-card[data-item-type="tv"] .home-hero-backdrop-wrap{background:radial-gradient(circle at 72% 44%,rgba(255,255,255,.08),transparent 34%),linear-gradient(90deg,rgba(0,0,0,.88),rgba(0,0,0,.42) 48%,rgba(0,0,0,.9))!important;}',
+      '.home-hero-card[data-item-type="tv"] .home-hero-logo{max-width:180px!important;max-height:112px!important;width:auto!important;height:auto!important;object-fit:contain!important;}',
+      '.home-hero-card[data-item-type="tv"] .home-hero-title-text{display:block!important;position:static!important;width:auto!important;height:auto!important;opacity:1!important;clip:auto!important;overflow:visible!important;font-size:clamp(32px,4vw,64px)!important;line-height:1.05!important;}',
+      '.home-content-card[data-item-type="tv"]{height:220px!important;min-height:220px!important;}',
+      '.home-content-card[data-item-type="tv"] .content-poster{height:142px!important;object-fit:contain!important;padding:18px!important;box-sizing:border-box!important;background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02))!important;}',
+      '.home-content-card[data-item-type="tv"] .home-poster-expanded-backdrop{object-fit:contain!important;padding:18px!important;box-sizing:border-box!important;background:rgba(255,255,255,.04)!important;}',
+      '.home-content-card[data-item-type="tv"] .home-poster-copy{height:auto!important;min-height:62px!important;}',
+      '.home-content-card[data-item-type="tv"] .home-poster-title{white-space:normal!important;line-height:1.18!important;}'
+    ].join('\n');
+    (document.head || document.documentElement).appendChild(style);
+  }
+
   ensureEnglish();
   ensureDaveTvGuestMode();
   ensureAddonInstalled();
   installXhrShim();
   installFetchShim();
   installLiveDurationPolish();
+  installLiveLogoPolish();
   window.__DAVEAI_NUVIO_VAULT_ADDON__ = {
     addonBase: ADDON_BASE,
     providers: PROVIDERS.slice(),
