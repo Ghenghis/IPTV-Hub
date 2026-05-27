@@ -119,10 +119,24 @@ The compose service runs `wget --spider http://127.0.0.1:8080/` every 30 s
 
 Latest Codex proof for the DaveAI override:
 
+- `deploy/apps/nuvioweb/PROOF-20260526.md`
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\nuvio-provider-playback-proof-20260527\summary.json`
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\nuvio-provider-playback-proof-20260527\nuvio-apollo-player.png`
+- `C:\Users\Admin\Downloads\VPS\_visual_artifacts\nuvio-provider-playback-proof-20260527\nuvio-xtremehd-player.png`
+
+The current proof drives the live hosted Nuvio app with Playwright. Apollo
+Group TV and XtremeHD both open the Live TV catalog, expose `Next S1E1` for the
+first channel, play through the DaveAI provider vault, and reach
+`video.readyState=4` with no page or console errors.
+
+Earlier local virtual-addon proof:
+
 - `C:\Users\Admin\Downloads\VPS\_visual_artifacts\nuvio-provider-vault-proof-20260526\local-proof-summary.json`
 - `C:\Users\Admin\Downloads\VPS\_visual_artifacts\nuvio-provider-vault-proof-20260526\nuvio-vault-addon-local.png`
 - VPS backup before live static injection:
   `/var/backups/daveai-apps/nuvio-before-provider-vault-20260526T1746Z.tgz`
+- VPS backup before the live-playback episode-meta repair:
+  `/var/backups/daveai-apps/nuvio-before-live-videos-20260527T003213Z.tgz`
 
 ## Update path
 

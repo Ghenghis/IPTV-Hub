@@ -145,8 +145,9 @@
     var name = safeText(item && item.name, bucketInfo.title + ' ' + (index + 1));
     var groupTitle = safeText(item && item.group && item.group.title, bucketInfo.title);
     var logo = safeText(item && item.tvg && item.tvg.logo, '');
-    return {
-      id: ['daveai', provider.id, bucket, index, encodeURIComponent(name).slice(0, 80)].join(':'),
+    var id = ['daveai', provider.id, bucket, index, encodeURIComponent(name).slice(0, 80)].join(':');
+    var meta = {
+      id: id,
       type: bucketInfo.type,
       name: name,
       poster: logo || null,
@@ -156,6 +157,17 @@
       genres: [groupTitle],
       releaseInfo: '',
     };
+    if (bucket === 'live') {
+      meta.videos = [{
+        id: id,
+        title: name,
+        season: 1,
+        episode: 1,
+        thumbnail: logo || null,
+        description: meta.description,
+      }];
+    }
+    return meta;
   }
 
   function fetchCatalog(providerId) {
@@ -346,11 +358,66 @@
     };
   }
 
+  function cleanLiveDurationText(root) {
+    var scope = root || document.body;
+    if (!scope) return;
+    var walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+    var node;
+    while ((node = walker.nextNode())) {
+      if (node.nodeValue && /Infinity:NaN:NaN|NaN:NaN/.test(node.nodeValue)) {
+        node.nodeValue = node.nodeValue
+          .replace(/Infinity:NaN:NaN/g, 'Live')
+          .replace(/NaN:NaN/g, 'Live');
+      }
+    }
+  }
+
+  function installLiveDurationPolish() {
+    if (window.__daveAiNuvioLiveDurationPolishInstalled || !window.MutationObserver) return;
+    window.__daveAiNuvioLiveDurationPolishInstalled = true;
+    var rafActive = false;
+    var startRafSweep = function () {
+      if (rafActive || !window.requestAnimationFrame) return;
+      rafActive = true;
+      var startedAt = Date.now();
+      var tick = function () {
+        cleanLiveDurationText(document.body);
+        if (Date.now() - startedAt < 120000) window.requestAnimationFrame(tick);
+      };
+      window.requestAnimationFrame(tick);
+    };
+    var observer = new MutationObserver(function (mutations) {
+      mutations.forEach(function (mutation) {
+        if (mutation.type === 'characterData') {
+          cleanLiveDurationText(mutation.target.parentNode || document.body);
+        } else {
+          Array.prototype.forEach.call(mutation.addedNodes || [], function (node) {
+            if (node.nodeType === 1) cleanLiveDurationText(node);
+          });
+        }
+      });
+    });
+    if (document.body) {
+      cleanLiveDurationText(document.body);
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+      window.setInterval(function () { cleanLiveDurationText(document.body); }, 250);
+      startRafSweep();
+    } else {
+      document.addEventListener('DOMContentLoaded', function () {
+        cleanLiveDurationText(document.body);
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+        window.setInterval(function () { cleanLiveDurationText(document.body); }, 250);
+        startRafSweep();
+      }, { once: true });
+    }
+  }
+
   ensureEnglish();
   ensureDaveTvGuestMode();
   ensureAddonInstalled();
   installXhrShim();
   installFetchShim();
+  installLiveDurationPolish();
   window.__DAVEAI_NUVIO_VAULT_ADDON__ = {
     addonBase: ADDON_BASE,
     providers: PROVIDERS.slice(),

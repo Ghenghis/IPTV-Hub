@@ -1,6 +1,6 @@
 # apps.daveai.tech Provider-Ready Visual Sweep — 2026-05-26
 
-Status: `13/13 passed` (`2026-05-27T00:17:06.700Z`)
+Status: `13/13 passed` (`2026-05-27T00:55:51.286Z`)
 
 ## Scope
 
@@ -61,6 +61,15 @@ Each app had to satisfy:
     `/api/provider-vault/*`;
   - stubbed the optional hosted avatar RPC with a local empty catalog so the
     web build no longer logs a Supabase-style `405`.
+- Repaired NuvioWeb live playback after deep Playwright audit:
+  - provider-vault live-channel metadata now includes a playable one-episode
+    `videos` entry, which is what the upstream Nuvio `type: tv` route requires
+    before its Play action requests streams;
+  - Apollo Group TV and XtremeHD both play USA AMC through same-origin
+    `/api/provider-vault/stream` plus segment proxy requests;
+  - both providers reached `video.readyState=4` with zero page/console errors;
+  - live playback duration now shows `Live` instead of `Infinity:NaN:NaN`;
+  - proof: `deploy/apps/nuvioweb/PROOF-20260526.md`.
 - Updated YnoTV to trust provider-vault `item.url` values before rebuilding
   stream URLs, fixing empty-id stream requests against Apollo/XtremeHD rows.
 - Added the provider-vault image proxy in Smart IPTV Web so apps that render
@@ -150,8 +159,13 @@ It was rerun again after the IPTVnator v5 stale-XtremeHD repair and passed all
 It was rerun again after the IPTV Player Zero v14 free/pro + provider playback
 proof and passed all `13` launcher apps with the same zero-regression result.
 
+It was rerun again after the NuvioWeb live-playback repair and passed all
+`13` launcher apps with the same zero-regression result.
+
 ## Console Notes
 
-The latest sweep recorded zero `pageerror` events and zero captured console
-errors across all 13 apps, including `iptv-player-zero`, `iptvnator`,
-`nuvio`, `iptv-restream`, and `open-tv`.
+The latest sweep recorded zero `pageerror` events across all 13 apps. It also
+kept Nuvio, IPTV Player Zero, IPTVnator, xstream-player, Smart IPTV Web,
+Open TV, YnoTV, and TVapp free of captured console errors. One non-blocking
+resource-load console line remains in `iptv-restream` and is queued for that
+player's deep pass.
