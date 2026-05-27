@@ -1,6 +1,6 @@
 # apps.daveai.tech Provider-Ready Visual Sweep — 2026-05-26
 
-Status: `13/13 passed` (`2026-05-27T01:53:51.462Z`)
+Status: `13/13 passed` (`2026-05-27T02:04:25.835Z`)
 
 ## Scope
 
@@ -72,6 +72,18 @@ Each app had to satisfy:
   - proof: `deploy/apps/nuvioweb/PROOF-20260526.md`.
 - Updated YnoTV to trust provider-vault `item.url` values before rebuilding
   stream URLs, fixing empty-id stream requests against Apollo/XtremeHD rows.
+- Repaired YnoTV after deep provider playback audit:
+  - Apollo Group TV and XtremeHD rows are now interleaved at the top of the
+    catalog instead of burying XtremeHD after Apollo;
+  - clicking the already-active card retries playback, so browsers that buffered
+    the first channel but blocked autoplay recover on user click;
+  - Apollo Group TV and XtremeHD both played `USA AMC` at
+    `video.readyState=4` and `1920x1080`;
+  - both providers used same-origin `/api/provider-vault/stream` plus segment
+    proxy responses with HTTP `200`;
+  - `0` page errors, `0` console errors, and `0` blocking failed requests;
+  - proof:
+    `deploy/apps/ynotv/PROOF-20260526.md`.
 - Added the provider-vault image proxy in Smart IPTV Web so apps that render
   provider logos use safe same-origin `/api/provider-vault/image?src=...`
   URLs instead of browser-blocked mixed-content HTTP poster URLs.
@@ -232,6 +244,10 @@ passed all `13` launcher apps with the same zero-regression result.
 
 It was rerun again after the Open TV empty-id stream repair and Apollo/XtremeHD
 interleaving fix and passed all `13` launcher apps with the same
+zero-regression result.
+
+It was rerun again after the YnoTV provider interleaving and active-card
+playback retry repair and passed all `13` launcher apps with the same
 zero-regression result.
 
 ## Console Notes

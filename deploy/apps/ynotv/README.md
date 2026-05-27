@@ -10,6 +10,10 @@ Xtream URL construction. The DaveTV hosted version uses the files in
 - Apollo Group TV and XtremeHD load from `/api/provider-vault/catalog`.
 - Live channels and movies use safe same-origin `/api/provider-vault/stream`
   URLs.
+- Apollo Group TV and XtremeHD rows are interleaved so both providers are
+  visible and playable at the top of the catalog.
+- Clicking the active card retries playback, which recovers browsers that
+  buffered the auto-selected first channel but blocked autoplay.
 - The browser build bypasses Tauri/native source setup when running on
   `apps.daveai.tech`.
 - Playback uses HTML5 video plus HLS.js with larger buffers:

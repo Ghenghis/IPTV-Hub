@@ -97,6 +97,18 @@ function toChannel(provider: Provider, item: VaultItem, index: number, kind: Str
   };
 }
 
+function interleaveChannels(lists: Channel[][]): Channel[] {
+  const result: Channel[] = [];
+  const max = Math.max(0, ...lists.map((list) => list.length));
+  for (let index = 0; index < max; index += 1) {
+    for (const list of lists) {
+      const item = list[index];
+      if (item) result.push(item);
+    }
+  }
+  return result;
+}
+
 export function ProviderVaultWebMode() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [active, setActive] = useState<Channel | null>(null);
@@ -130,10 +142,12 @@ export function ProviderVaultWebMode() {
             return { provider, catalog: await fetchJson<VaultCatalog>(`/api/provider-vault/catalog?${params}`) };
           }),
         );
-        const loaded = catalogs.flatMap(({ provider, catalog }) => [
-          ...(catalog.live || []).map((item, index) => toChannel(provider, item, index, 'live')),
-          ...(catalog.movies || catalog.movie || []).map((item, index) => toChannel(provider, item, index, 'movie')),
-        ]);
+        const loaded = interleaveChannels(
+          catalogs.map(({ provider, catalog }) => [
+            ...(catalog.live || []).map((item, index) => toChannel(provider, item, index, 'live')),
+            ...(catalog.movies || catalog.movie || []).map((item, index) => toChannel(provider, item, index, 'movie')),
+          ]),
+        );
         if (cancelled) return;
         setChannels(loaded);
         setActive(loaded[0] || null);
@@ -199,6 +213,14 @@ export function ProviderVaultWebMode() {
     });
   }, [category, channels, kind, query]);
 
+  const selectChannel = (channel: Channel) => {
+    if (active?.id === channel.id) {
+      videoRef.current?.play().catch(() => undefined);
+      return;
+    }
+    setActive(channel);
+  };
+
   return (
     <main className="vault-shell">
       <section className="vault-hero">
@@ -250,7 +272,7 @@ export function ProviderVaultWebMode() {
           <button
             key={channel.id}
             className={`vault-card${active?.id === channel.id ? ' active' : ''}`}
-            onClick={() => setActive(channel)}
+            onClick={() => selectChannel(channel)}
           >
             <span>{channel.providerName}</span>
             <strong>{channel.name}</strong>
