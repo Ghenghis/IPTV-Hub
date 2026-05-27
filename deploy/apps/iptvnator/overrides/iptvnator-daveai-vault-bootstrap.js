@@ -8,7 +8,7 @@
 (function (window, document) {
   'use strict';
 
-  var BUILD_ID = '20260526-v5';
+  var BUILD_ID = '20260527-v6';
   var DB_NAME = 'iptvnator';
   var STORE_NAME = 'playlists';
   var SETTINGS_KEY = 'settings';
@@ -331,7 +331,12 @@
 
   function currentXtreamPlaylistId() {
     var match = window.location.pathname.match(/\/workspace\/xtreams\/([^/]+)/i);
-    return match ? decodeURIComponent(match[1]) : '';
+    if (!match) return '';
+    try {
+      return decodeURIComponent(match[1]);
+    } catch (ignored) {
+      return match[1] || '';
+    }
   }
 
   function migrateLegacyXtreamProviders(setStatus) {
@@ -665,6 +670,10 @@
     if (!provider || !currentXtreamPlaylistId()) return false;
     var target = playlistRoute(provider.id);
     if (window.location.pathname === target) return false;
+    try {
+      window.sessionStorage.setItem(PENDING_ROUTE_KEY, target);
+      window.sessionStorage.setItem('iptvnator_provider_vault_preempted_xtream', BUILD_ID);
+    } catch (ignored) {}
     window.location.replace(target);
     return true;
   }
@@ -682,15 +691,91 @@
       });
     }
     var target = playlistRoute(provider.id);
+    if (window.location.pathname === target) return provider;
     try {
       window.sessionStorage.setItem(PENDING_ROUTE_KEY, target);
       window.sessionStorage.setItem('iptvnator_provider_vault_preempted_xtream', BUILD_ID);
-      if (window.location.pathname !== target) {
-        window.location.replace(target);
-        return provider;
-      }
     } catch (ignored) {}
+    window.location.replace(target);
     return provider;
+  }
+
+  function installLegacyXtreamRouteWatchdog(defaultProvider) {
+    var stopped = false;
+    var attempts = 0;
+
+    function providerForCurrentRoute() {
+      return (
+        providerFromLegacyBackup() ||
+        defaultProvider ||
+        (currentXtreamPlaylistId() ? PROVIDERS[1] : null)
+      );
+    }
+
+    function repair(reason) {
+      if (stopped) return;
+      attempts += 1;
+      if (attempts > 80) {
+        stopped = true;
+        return;
+      }
+
+      var provider = providerForCurrentRoute();
+      if (!provider || !currentXtreamPlaylistId()) return;
+      try {
+        window.sessionStorage.setItem('iptvnator_provider_vault_route_repair', BUILD_ID + ':' + reason);
+      } catch (ignored) {}
+      redirectLegacyXtreamRoute(provider);
+    }
+
+    ['pushState', 'replaceState'].forEach(function (name) {
+      var original = window.history && window.history[name];
+      if (typeof original !== 'function') return;
+      try {
+        window.history[name] = function () {
+          var result = original.apply(this, arguments);
+          window.setTimeout(function () {
+            repair(name);
+          }, 0);
+          return result;
+        };
+      } catch (ignored) {}
+    });
+
+    window.addEventListener('popstate', function () {
+      repair('popstate');
+    });
+    window.addEventListener('hashchange', function () {
+      repair('hashchange');
+    });
+
+    var interval = window.setInterval(function () {
+      if (stopped || !currentXtreamPlaylistId()) {
+        window.clearInterval(interval);
+        stopped = true;
+        return;
+      }
+      repair('interval');
+    }, 500);
+
+    ready(function () {
+      var observer = null;
+      try {
+        observer = new MutationObserver(function () {
+          if (!currentXtreamPlaylistId()) {
+            if (observer) observer.disconnect();
+            return;
+          }
+          if (/Portal unavailable/i.test(document.body && document.body.innerText || '')) {
+            repair('portal-unavailable');
+          }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+      } catch (ignored) {}
+      repair('ready');
+    });
+
+    repair('install');
   }
 
   function importProviderNoReload(provider, setStatus) {
@@ -782,6 +867,7 @@
   disableHostedServiceWorker();
   forceEnglishSettings();
   var preemptedLegacyProvider = preemptLegacyXtreamRoute();
+  installLegacyXtreamRouteWatchdog(preemptedLegacyProvider);
 
   ready(function () {
     configuredProviders().then(function (providers) {

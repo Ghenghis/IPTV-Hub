@@ -6,12 +6,12 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
 const outDir =
-  'C:/Users/Admin/Downloads/VPS/_visual_artifacts/iptvnator-provider-proof-20260526';
+  'C:/Users/Admin/Downloads/VPS/_visual_artifacts/iptvnator-provider-proof-20260527';
 const cookiePath =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
 const baseUrl = 'https://iptvnator.daveai.tech';
 const staleXtreamId = '0c911b96-4d88-45f4-bcf9-c71586cf0428';
-const expectedBuildId = '20260526-v5';
+const expectedBuildId = '20260527-v6';
 
 const providers = [
   { id: 'xtremehd', title: 'XtremeHD', route: '/workspace/playlists/daveai-provider-vault-xtremehd/all' },
