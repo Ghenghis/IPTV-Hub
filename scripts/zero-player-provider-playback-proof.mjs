@@ -5,7 +5,7 @@ import path from 'node:path';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
-const outDir = 'C:/Users/Admin/Downloads/VPS/_visual_artifacts/zero-player-provider-proof-20260526';
+const outDir = 'C:/Users/Admin/Downloads/VPS/_visual_artifacts/zero-player-provider-proof-20260527';
 const cookiePath =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
 const appUrl = 'https://apps.daveai.tech/iptv-player-zero/?proof=' + Date.now();

@@ -7,6 +7,8 @@
 (function (window) {
   'use strict';
 
+  var DAVEAI_HOSTED_BUILD_ID = '20260527-free-provider15';
+
   // ── Helper: emit event the React app listens to via Tauri events ──────────
   function emitTauriEvent(event, payload) {
     window.dispatchEvent(new CustomEvent('tauri:' + event, { detail: payload }));
@@ -86,6 +88,84 @@
         favorites: true,
       },
     };
+  }
+
+  function clearHostedProviderState() {
+    var keys = [
+      'ipz_provider_quickstart_hidden',
+      'ipz_default_playlist_id',
+      'ipz_provider_quickstart_last_playlist_id',
+      'ipz_playlist_enabled_by_id',
+      'ipz_playlist_enabled_by_id_premium',
+      'ipz_playlist_display_order_ids',
+      'ipz_playlist_display_order_ids_premium',
+      'ipz_playlist_health_by_id',
+      'ipz_playlist_health_by_id_premium',
+    ];
+    keys.forEach(function (key) {
+      try { window.localStorage.removeItem(key); } catch (e) {}
+    });
+  }
+
+  function deleteHostedDatabase() {
+    return new Promise(function (resolve) {
+      try {
+        var request = window.indexedDB && window.indexedDB.deleteDatabase('iptv_player_zero');
+        if (!request) {
+          resolve();
+          return;
+        }
+        request.onsuccess = request.onerror = request.onblocked = function () { resolve(); };
+      } catch (e) {
+        resolve();
+      }
+    });
+  }
+
+  function recoverHostedStateAfterFatalError(reason) {
+    try {
+      if (window.sessionStorage.getItem('ipz_daveai_recovered_build') === DAVEAI_HOSTED_BUILD_ID) {
+        return;
+      }
+      window.sessionStorage.setItem('ipz_daveai_recovered_build', DAVEAI_HOSTED_BUILD_ID);
+      window.sessionStorage.setItem('ipz_daveai_recovery_reason', String(reason || 'unknown').slice(0, 220));
+    } catch (e) {}
+    clearHostedProviderState();
+    deleteHostedDatabase().finally(function () {
+      window.setTimeout(function () {
+        window.location.replace('/iptv-player-zero/?recovered=' + encodeURIComponent(DAVEAI_HOSTED_BUILD_ID));
+      }, 100);
+    });
+  }
+
+  function installHostedCrashRecovery() {
+    function shouldRecover(message) {
+      var text = String(message || '');
+      return (
+        /Cannot read properties of (?:undefined|null) \(reading '(?:map|filter|forEach|length)'\)/i.test(text) ||
+        /Something went wrong/i.test(text) ||
+        /TypeError/i.test(text) && /map|filter|forEach/i.test(text)
+      );
+    }
+
+    window.addEventListener('error', function (event) {
+      var message = event && (event.message || (event.error && event.error.message));
+      if (shouldRecover(message)) recoverHostedStateAfterFatalError(message);
+    });
+
+    window.addEventListener('unhandledrejection', function (event) {
+      var reason = event && event.reason;
+      var message = reason && (reason.message || reason.stack) || reason;
+      if (shouldRecover(message)) recoverHostedStateAfterFatalError(message);
+    });
+
+    try {
+      var priorBuild = window.localStorage.getItem('ipz_daveai_hosted_build_id');
+      if (priorBuild && priorBuild !== DAVEAI_HOSTED_BUILD_ID) {
+        clearHostedProviderState();
+      }
+      window.localStorage.setItem('ipz_daveai_hosted_build_id', DAVEAI_HOSTED_BUILD_ID);
+    } catch (e) {}
   }
 
   function licenseResponseBody() {
@@ -940,6 +1020,7 @@
   }
 
   bootLicenseStatus();
+  installHostedCrashRecovery();
   setTimeout(bootLicenseStatus, 500);
   setTimeout(bootLicenseStatus, 1500);
   setTimeout(bootLicenseStatus, 3000);

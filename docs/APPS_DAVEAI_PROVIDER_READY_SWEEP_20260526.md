@@ -133,6 +133,13 @@ Each app had to satisfy:
   - playback proof loaded USA AMC for both Apollo and XtremeHD through
     same-origin `/api/provider-vault/stream` plus segment proxy URLs;
   - proof: `docs/IPTV_PLAYER_ZERO_FREE_PROVIDER_FIX_20260526.md`.
+- Repaired IPTV Player Zero again after user review:
+    - bumped hosted cache keys to `20260527-free-provider15`;
+    - added stale browser-state crash recovery for `.map`/collection crashes;
+    - verified Settings contains no paid/pro purchase, Stripe, trial, price, or
+      license-copy remnants;
+    - Apollo Group TV and XtremeHD both reached `video.readyState=4`;
+    - proof: `deploy/apps/iptv-player-zero/PROOF-20260527.md`.
 - Re-verified and polished xstream-player after user review:
   - English login/dashboard surface remains intact (`Welcome`, provider buttons,
     manual Xtream fallback);

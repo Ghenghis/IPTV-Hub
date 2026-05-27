@@ -74,6 +74,21 @@ The latest proof waits for the actual browser video element to reach
 `readyState=4`; earlier fixed-time checks could report false failures while the
 provider stream was still buffering.
 
+Provider 15 follow-up proof, generated `2026-05-27T03:56Z`:
+
+| Surface | Result | Notes |
+| --- | --- | --- |
+| Apollo Group TV playback | PASS | `video.readyState=4`, same-origin provider-vault stream responses |
+| XtremeHD playback | PASS | `video.readyState=4`, same-origin provider-vault stream responses |
+| Settings/free-pro audit | PASS | no upgrade, purchase, Stripe, trial, price, or license-copy remnants |
+| Stale `.map` crash recovery | PASS | simulated stale crash recovered to `?recovered=20260527-free-provider15` |
+
+Latest proof:
+
+```text
+deploy/apps/iptv-player-zero/PROOF-20260527.md
+```
+
 Screenshots:
 
 ```text
@@ -92,6 +107,7 @@ Production backup before the repair:
 ```text
 /var/backups/daveai-apps/iptv-player-zero-before-free-provider-fix-20260526T200620Z.tgz
 /var/backups/daveai-apps/iptv-player-zero-before-provider14-20260527T000508Z.tgz
+/var/backups/daveai-apps/iptv-player-zero-before-provider15-20260527T035307Z.tgz
 ```
 
 Deployment target:
