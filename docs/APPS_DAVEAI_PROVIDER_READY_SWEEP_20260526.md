@@ -1,6 +1,6 @@
 # apps.daveai.tech Provider-Ready Visual Sweep — 2026-05-26
 
-Status: `13/13 passed` (`2026-05-27T01:31:08.142Z`)
+Status: `13/13 passed` (`2026-05-27T01:43:48.923Z`)
 
 ## Scope
 
@@ -169,6 +169,17 @@ Each app had to satisfy:
     proxy requests;
   - proof:
     `deploy/apps/extreme-infinitv/PROOF-20260526.md`.
+- Deep-verified IPTV Stream after the launcher sweep:
+  - Apollo Group TV and XtremeHD both load through isolated DaveTV provider-vault
+    source state, with no raw provider host/user/password rendered in the
+    browser;
+  - both providers selected `USA AMC` as the first curated row and reached
+    `video.readyState=4` at `1920x1080`;
+  - playback uses same-origin `/api/provider-vault/aac-hls` manifest and segment
+    responses with HTTP `200`;
+  - `0` page errors, `0` console errors, and `0` blocking failed requests;
+  - proof:
+    `deploy/apps/iptv-stream/PROOF-20260526.md`.
 
 ## Latest Sweep Notes
 
@@ -199,6 +210,12 @@ passed all `13` launcher apps with the same zero-regression result.
 
 It was rerun again after the Extreme InfiniTV same-origin HLS playback repair
 and passed all `13` launcher apps with the same zero-regression result.
+
+IPTV Stream was then deep-verified with a dedicated provider-playback proof for
+Apollo Group TV and XtremeHD; no app code change was required.
+
+It was rerun again after the IPTV Stream deep provider-playback proof and
+passed all `13` launcher apps with the same zero-regression result.
 
 ## Console Notes
 
