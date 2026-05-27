@@ -207,7 +207,7 @@ try {
     page.on('requestfailed', (request) => {
       const url = request.url();
       const err = request.failure()?.errorText || '';
-      if (err === 'net::ERR_ABORTED' && /_rsc=|\/api\/proxy\/stream|\/dashboard($|[/?])|\/dashboard\/watch\//i.test(url)) {
+      if (err === 'net::ERR_ABORTED' && /_rsc=|\/api\/proxy\/stream|\/api\/provider-vault\/image|\/dashboard($|[/?])|\/dashboard\/watch\//i.test(url)) {
         return;
       }
       if (!/favicon|cdn-cgi|socket\.io/i.test(url)) {

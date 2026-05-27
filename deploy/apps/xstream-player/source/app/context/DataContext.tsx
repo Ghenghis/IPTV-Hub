@@ -5,7 +5,7 @@ import { useAuth } from './AuthContext';
 import * as db from '../lib/db';
 import { getDeviceProfile } from '../lib/deviceProfile';
 import { streamSyncStreams } from '../lib/streamSync';
-import { safeImagePath } from '../lib/catalogFilters';
+import { categoryIdSet, filterEnglishCategories, isAllowedCatalogItem, safeImagePath } from '../lib/catalogFilters';
 
 interface DataContextType {
     isSyncing: boolean;
@@ -100,7 +100,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         action: string,
         progressStart: number,
         progressWeight: number,
-        signal: AbortSignal
+        signal: AbortSignal,
+        allowedCategoryIds?: Set<string>
     ) => {
         if (!credentials) return;
 
@@ -137,9 +138,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 hasMore = result.hasMore || false;
 
                 if (result.items.length > 0) {
-                    const batch = result.items.map((item: any) =>
-                        mapItemToSlimStream(item, type)
-                    );
+                    const batch = result.items
+                        .filter((item: any) => isAllowedCatalogItem(item, type, allowedCategoryIds))
+                        .map((item: any) => mapItemToSlimStream(item, type));
                     await db.saveStreams(batch);
                     processed += batch.length;
                 }
@@ -162,9 +163,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                     total = result.length;
                     for (let i = 0; i < total; i += pageSize) {
                         if (signal.aborted) return;
-                        const batch = result.slice(i, i + pageSize).map((item: any) =>
-                            mapItemToSlimStream(item, type)
-                        );
+                        const batch = result
+                            .slice(i, i + pageSize)
+                            .filter((item: any) => isAllowedCatalogItem(item, type, allowedCategoryIds))
+                            .map((item: any) => mapItemToSlimStream(item, type));
                         await db.saveStreams(batch);
                         if (profile.yieldBetweenBatches) {
                             await yieldToEventLoop();
@@ -210,8 +212,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             });
             const categories = await catRes.json();
 
-            if (Array.isArray(categories)) {
-                await db.saveCategories(categories.map(c => ({ ...c, type })));
+            const filteredCategories = Array.isArray(categories)
+                ? filterEnglishCategories(categories.map(c => ({ ...c, type })), type)
+                : [];
+            const allowedCategoryIds = categoryIdSet(filteredCategories);
+
+            if (filteredCategories.length > 0) {
+                await db.saveCategories(filteredCategories);
             }
 
             if (signal.aborted) return;
@@ -226,6 +233,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                     credentials,
                     signal,
                     mapItem: mapItemToSlimStream,
+                    shouldIncludeItem: (item) => isAllowedCatalogItem(item, type, allowedCategoryIds),
                     onProgress: (processed, total) => {
                         const fraction = total > 0 ? processed / total : 1;
                         const currentProgress = progressStart + (fraction * progressWeight);
@@ -234,7 +242,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 });
             } else {
                 // Fallback to paginated sync
-                await fetchStreamsPaginated(type, action, progressStart, progressWeight, signal);
+                await fetchStreamsPaginated(type, action, progressStart, progressWeight, signal, allowedCategoryIds);
             }
 
         } catch (error: unknown) {

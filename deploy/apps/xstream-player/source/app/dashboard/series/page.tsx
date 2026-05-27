@@ -8,6 +8,7 @@ import { Layers, PlayCircle } from 'lucide-react';
 import Loader from '@/components/Loader';
 import SortControls, { SortOption } from '@/components/SortControls';
 import { useSortPreference } from '@/app/hooks/useSortPreference';
+import { filterEnglishCategories } from '@/app/lib/catalogFilters';
 
 import HeroSection from '@/components/HeroSection';
 
@@ -49,12 +50,12 @@ export default function SeriesCategories() {
 
                 const data = await res.json();
                 if (Array.isArray(data)) {
-                    setCategories(data);
+                    setCategories(filterEnglishCategories(data.map(c => ({ ...c, type: 'series' as const })), 'series'));
                 } else {
                     setError('Failed to load categories');
                 }
             } catch (err) {
-                setError('Erro ao buscar categorias');
+                setError('Failed to fetch categories');
             } finally {
                 setLoading(false);
             }
@@ -86,7 +87,7 @@ export default function SeriesCategories() {
                         <h1 className="text-2xl md:text-3xl font-bold text-white">Series Categories</h1>
                     </div>
                     <div className="flex items-center gap-4">
-                        <span className="text-xs text-gray-400 uppercase tracking-widest hidden sm:block">Ordenar</span>
+                        <span className="text-xs text-gray-400 uppercase tracking-widest hidden sm:block">Sort</span>
                         <SortControls currentSort={sort} onSortChange={setSort} />
                     </div>
                 </div>

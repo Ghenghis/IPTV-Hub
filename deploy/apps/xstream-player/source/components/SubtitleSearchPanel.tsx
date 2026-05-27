@@ -17,17 +17,7 @@ interface SubtitleSearchPanelProps {
 }
 
 const LANGUAGES = [
-    { code: 'pt-BR', label: 'Portuguese (BR)' },
     { code: 'en', label: 'English' },
-    { code: 'es', label: 'Spanish' },
-    { code: 'fr', label: 'French' },
-    { code: 'de', label: 'Deutsch' },
-    { code: 'it', label: 'Italiano' },
-    { code: 'ja', label: '日本語' },
-    { code: 'ko', label: '한국어' },
-    { code: 'zh', label: '中文' },
-    { code: 'ar', label: 'العربية' },
-    { code: 'ru', label: 'Русский' },
 ];
 
 export default function SubtitleSearchPanel({
@@ -45,7 +35,7 @@ export default function SubtitleSearchPanel({
     const [results, setResults] = useState<SubtitleResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [isDownloading, setIsDownloading] = useState<number | null>(null);
-    const [selectedLanguage, setSelectedLanguage] = useState('pt-BR');
+    const [selectedLanguage, setSelectedLanguage] = useState('en');
     const [hasSearched, setHasSearched] = useState(false);
 
     const handleSearch = useCallback(async () => {
@@ -105,13 +95,13 @@ export default function SubtitleSearchPanel({
                     <Subtitles size={48} className="text-gray-500 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-white mb-2">Subtitles are not configured</h3>
                     <p className="text-sm text-gray-400 mb-4">
-                        Configure sua chave de API do OpenSubtitles no menu lateral para buscar legendas.
+                        Configure your OpenSubtitles API key in the side menu to search for English subtitles.
                     </p>
                     <button
                         onClick={onClose}
                         className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"
                     >
-                        Fechar
+                        Close
                     </button>
                 </div>
             </div>
@@ -133,7 +123,7 @@ export default function SubtitleSearchPanel({
                                 <p className="text-xs text-gray-500 truncate max-w-[200px]">{title}</p>
                                 {remainingDownloads !== null && (
                                     <span className={`text-xs px-1.5 py-0.5 rounded ${remainingDownloads <= 3 ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                                        {remainingDownloads} restantes
+                                        {remainingDownloads} remaining
                                     </span>
                                 )}
                             </div>
@@ -198,7 +188,7 @@ export default function SubtitleSearchPanel({
                         <div className="text-center py-12">
                             <Subtitles size={48} className="text-gray-600 mx-auto mb-3" />
                             <p className="text-gray-400">No subtitles found</p>
-                            <p className="text-xs text-gray-600 mt-1">Try another language or check the content name</p>
+                            <p className="text-xs text-gray-600 mt-1">Try another English subtitle result or check the content name</p>
                         </div>
                     )}
 

@@ -37,6 +37,52 @@ const HLS_LIVE_MAX_BUFFER_BYTES = readPositiveNumber(process.env.NEXT_PUBLIC_XST
 const HLS_VOD_PLAY_FALLBACK_MS = readPositiveNumber(process.env.NEXT_PUBLIC_XSTREAM_VOD_PLAY_FALLBACK_MS, 25000);
 const HLS_LIVE_PLAY_FALLBACK_MS = readPositiveNumber(process.env.NEXT_PUBLIC_XSTREAM_LIVE_PLAY_FALLBACK_MS, 10000);
 
+const isEnglishTrackValue = (value?: string | null) => {
+    const normalized = String(value || '').trim().toLowerCase().replace('_', '-');
+    return normalized === 'en'
+        || normalized === 'eng'
+        || normalized.startsWith('en-')
+        || normalized.includes('english');
+};
+
+const trackLooksEnglish = (...values: Array<string | null | undefined>) => values.some(isEnglishTrackValue);
+
+const preferEnglishHlsAudio = (hls: Hls) => {
+    const tracks = hls.audioTracks || [];
+    if (tracks.length <= 1) return;
+
+    const englishIndex = tracks.findIndex((track: any) => (
+        trackLooksEnglish(track.lang, track.name, track.groupId)
+    ));
+
+    if (englishIndex >= 0 && hls.audioTrack !== englishIndex) {
+        hls.audioTrack = englishIndex;
+    }
+};
+
+const preferEnglishNativeTracks = (video: HTMLVideoElement) => {
+    const audioTracks = (video as any).audioTracks;
+    if (audioTracks?.length > 1) {
+        const englishIndex = Array.from(audioTracks).findIndex((track: any) => (
+            trackLooksEnglish(track.language, track.label, track.id)
+        ));
+
+        if (englishIndex >= 0) {
+            Array.from(audioTracks).forEach((track: any, index) => {
+                track.enabled = index === englishIndex;
+            });
+        }
+    }
+
+    if (video.textTracks?.length) {
+        Array.from(video.textTracks).forEach((track) => {
+            if (!trackLooksEnglish(track.language, track.label, track.id)) {
+                track.mode = 'disabled';
+            }
+        });
+    }
+};
+
 export default function VideoPlayer({
     src,
     poster,
@@ -555,7 +601,12 @@ export default function VideoPlayer({
 
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 console.log('[VideoPlayer] HLS Manifest parsed.');
+                preferEnglishHlsAudio(hls!);
                 setupVideoHls();
+            });
+
+            hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
+                preferEnglishHlsAudio(hls!);
             });
 
             hls.on(Hls.Events.ERROR, (event, data) => {
@@ -621,6 +672,7 @@ export default function VideoPlayer({
         };
         const handleLoadedMetadata = () => {
             console.log('[VideoPlayer] Metadata loaded. readyState:', video.readyState);
+            preferEnglishNativeTracks(video);
             setDuration(video.duration);
             onMetadataRef.current?.(video.duration);
             setIsMetadataLoaded(true);
@@ -802,8 +854,8 @@ export default function VideoPlayer({
                         key={subtitleUrl}
                         kind="subtitles"
                         src={subtitleUrl}
-                        srcLang="pt-BR"
-                        label="Portuguese (BR)"
+                        srcLang="en"
+                        label="English"
                         default
                     />
                 )}

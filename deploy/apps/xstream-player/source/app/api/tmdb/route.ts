@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
         // Build query string
         const queryParams = new URLSearchParams({
             api_key: apiKey,
-            language: 'pt-BR',
+            language: 'en-US',
             ...params
         });
 

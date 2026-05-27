@@ -46,7 +46,7 @@ export async function POST(request: Request) {
         const subtitleData = {
             streamId,
             vtt,
-            language: language || 'pt-BR',
+            language: language || 'en',
             timestamp: Date.now()
         };
 

@@ -8,6 +8,7 @@ import { Film, PlayCircle } from 'lucide-react';
 import Loader from '@/components/Loader';
 import SortControls, { SortOption } from '@/components/SortControls';
 import { useSortPreference } from '@/app/hooks/useSortPreference';
+import { filterEnglishCategories } from '@/app/lib/catalogFilters';
 
 import HeroSection from '@/components/HeroSection'; // Added import
 
@@ -50,12 +51,12 @@ export default function MovieCategories() {
 
                 const data = await res.json();
                 if (Array.isArray(data)) {
-                    setCategories(data);
+                    setCategories(filterEnglishCategories(data.map(c => ({ ...c, type: 'movie' as const })), 'movie'));
                 } else {
                     setError('Failed to load categories');
                 }
             } catch (err) {
-                setError('Erro ao buscar categorias');
+                setError('Failed to fetch categories');
             } finally {
                 setLoading(false);
             }
@@ -113,7 +114,7 @@ export default function MovieCategories() {
 
                                 <div className="w-full flex items-center justify-between mt-2 pt-4 border-t border-[#333] group-hover:border-blue-600/30 transition-colors">
                                     <span className="text-xs font-medium text-gray-500 group-hover:text-blue-400 uppercase tracking-widest">
-                                        Explorar
+                                        Explore
                                     </span>
                                     <PlayCircle size={20} className="text-gray-600 group-hover:text-blue-500 transition-colors" />
                                 </div>

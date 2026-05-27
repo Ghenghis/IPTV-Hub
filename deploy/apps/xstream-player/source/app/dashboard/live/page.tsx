@@ -8,6 +8,7 @@ import { Tv, PlayCircle } from 'lucide-react';
 import Loader from '@/components/Loader';
 import SortControls, { SortOption } from '@/components/SortControls';
 import { useSortPreference } from '@/app/hooks/useSortPreference';
+import { filterEnglishCategories } from '@/app/lib/catalogFilters';
 
 interface Category {
     category_id: string;
@@ -47,12 +48,12 @@ export default function LiveCategories() {
 
                 const data = await res.json();
                 if (Array.isArray(data)) {
-                    setCategories(data);
+                    setCategories(filterEnglishCategories(data.map(c => ({ ...c, type: 'live' as const })), 'live'));
                 } else {
                     setError('Failed to load categories');
                 }
             } catch (err) {
-                setError('Erro ao buscar categorias');
+                setError('Failed to fetch categories');
             } finally {
                 setLoading(false);
             }
@@ -80,7 +81,7 @@ export default function LiveCategories() {
                     <h1 className="text-2xl md:text-3xl font-bold text-white">Live Categories</h1>
                 </div>
                 <div className="flex items-center gap-4">
-                    <span className="text-xs text-gray-400 uppercase tracking-widest hidden sm:block">Ordenar</span>
+                    <span className="text-xs text-gray-400 uppercase tracking-widest hidden sm:block">Sort</span>
                     <SortControls currentSort={sort} onSortChange={setSort} />
                 </div>
             </div>
@@ -105,7 +106,7 @@ export default function LiveCategories() {
 
                             <div className="w-full flex items-center justify-between mt-2 pt-4 border-t border-[#333] group-hover:border-red-600/30 transition-colors">
                                 <span className="text-xs font-medium text-gray-500 group-hover:text-red-400 uppercase tracking-widest">
-                                    Abrir
+                                    Open
                                 </span>
                                 <PlayCircle size={20} className="text-gray-600 group-hover:text-red-500 transition-colors" />
                             </div>

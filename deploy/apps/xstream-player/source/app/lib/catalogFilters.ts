@@ -19,6 +19,8 @@ const ENGLISH_SIGNALS = [
 ];
 
 const NON_ENGLISH_SIGNALS = [
+    /^(ARG|BG|BIH|BRA|BR|CH|CN|DE|DK|ES|FR|GR|IN|IT|JP|KR|MX|NL|NO|PK|PL|PT|RO|RU|SE|TR|UA)\b/,
+    /\bFR\b/,
     /\bARAB(IC)?\b/i,
     /\bBANGLA(DESH)?\b/i,
     /\bBRAZIL(IAN)?\b/i,
@@ -30,6 +32,13 @@ const NON_ENGLISH_SIGNALS = [
     /\bLATINO?\b/i,
     /\bLATAM\b/i,
     /\bMEXICO\b/i,
+    /\bARG\b/i,
+    /\bARGENTINA\b/i,
+    /\bAFRICA(N)?\b/i,
+    /\bBULGARIA(N)?\b/i,
+    /\bBOSNIA(N)?\b/i,
+    /\bCENTRAL AMERICA\b/i,
+    /\bSOUTH AMERICA\b/i,
     /\bFRANCE\b/i,
     /\bFRENCH\b/i,
     /\bGERMAN(Y)?\b/i,
@@ -40,6 +49,7 @@ const NON_ENGLISH_SIGNALS = [
     /\bHINDI\b/i,
     /\bINDIA(N)?\b/i,
     /\bPUNJABI\b/i,
+    /\bKURD(ISH)?\b/i,
     /\bTAMIL\b/i,
     /\bTELUGU\b/i,
     /\bMALAYALAM\b/i,
@@ -61,6 +71,28 @@ const NON_ENGLISH_SIGNALS = [
     /\bALBANIA(N)?\b/i,
     /\bAFGHAN\b/i,
     /\bPERSIAN\b/i,
+    /\bALGERIA(N)?\b/i,
+    /\bBAHRAIN\b/i,
+    /\bEGYPT(IAN)?\b/i,
+    /\bEMIRATES?\b/i,
+    /\bASIAN\b/i,
+    /\bEUROPEAN\b/i,
+    /\bIRAQ(I)?\b/i,
+    /\bJORDAN(IAN)?\b/i,
+    /\bKUWAIT(I)?\b/i,
+    /\bLEBANON|LEBANESE\b/i,
+    /\bMOROCCO|MOROCCAN\b/i,
+    /\bNETHERLAND(S)?\b/i,
+    /\bPALESTINE|PALESTINIAN\b/i,
+    /\bPORTUGAL\b/i,
+    /\bQATAR(I)?\b/i,
+    /\bRAMADAN\b/i,
+    /\bSAUDI\b/i,
+    /\bSYRIA(N)?\b/i,
+    /\bMULTI[\s-]*(LANG|SUB)\b/i,
+    /\bTRANSLATED?\b/i,
+    /\bKUNG[\s-]*FU\b/i,
+    /\bLOCAL\b/i,
 ];
 
 const LIVE_NEUTRAL_ALLOW = [
@@ -109,8 +141,8 @@ export function isEnglishCatalogName(name: string, type: CatalogType) {
     const hasEnglishSignal = hasSignal(normalized, ENGLISH_SIGNALS);
     const hasNonEnglishSignal = hasSignal(normalized, NON_ENGLISH_SIGNALS);
 
-    if (hasEnglishSignal) return true;
     if (hasNonEnglishSignal) return false;
+    if (hasEnglishSignal) return true;
 
     // Movie and series providers usually use genre/category names without a
     // language marker. Keep those unless the category is explicitly non-English.
@@ -136,7 +168,7 @@ export function isAllowedCatalogItem(
     allowedCategoryIds?: Set<string>,
 ) {
     const categoryId = String(item.category_id || '');
-    if (allowedCategoryIds?.size) return allowedCategoryIds.has(categoryId);
+    if (allowedCategoryIds) return allowedCategoryIds.has(categoryId);
     return isEnglishCatalogName(item.name || '', type);
 }
 

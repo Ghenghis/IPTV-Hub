@@ -211,7 +211,7 @@ export function SubtitleProvider({ children }: { children: ReactNode }) {
                     body: JSON.stringify({
                         streamId: String(streamId),
                         vtt,
-                        language: 'pt-BR'
+                        language: 'en'
                     })
                 });
             } catch (err) {
