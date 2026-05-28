@@ -7,26 +7,15 @@ const { chromium } = require('playwright');
 
 const BASE_URL = process.env.SMART_IPTV_WEB_URL || 'https://smart-iptv-web.daveai.tech';
 const AUTH_STATE = process.env.AUTH_STATE || 'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
-const OUT_DIR = process.env.OUT_DIR || 'C:/Users/Admin/Downloads/VPS/_visual_artifacts/smart-iptv-web-provider-proof-20260526';
-const PROVIDERS = (process.argv.slice(2).length ? process.argv.slice(2) : ['apollo', 'xtremehd'])
+const OUT_DIR = process.env.OUT_DIR || 'C:/Users/Admin/Downloads/VPS/_visual_artifacts/smart-iptv-web-provider-proof-20260528';
+const PROVIDERS = (process.argv.slice(2).length ? process.argv.slice(2) : ['apollo', 'xtremehd', 'combined'])
   .map((value) => value.toLowerCase());
 
 const providerNames = {
   apollo: 'Apollo Group TV',
   xtremehd: 'XtremeHD',
+  combined: 'Combined Tagged Catalog',
 };
-
-const requiredEnglish = [
-  'Smart IPTV',
-  'Securely connect to your provider',
-  'Xtream',
-  'M3U',
-  'Stalker',
-  'Server URL',
-  'Username',
-  'Password',
-  'Private provider accounts stay server-side',
-];
 
 const forbiddenNonEnglish = [
   'Bem-vindo',
@@ -35,6 +24,8 @@ const forbiddenNonEnglish = [
   'Usuário',
   'Senha',
   'Compatível',
+  'Ocorreu um erro',
+  'Recarregar App',
 ];
 
 function mkdirp(target) {
@@ -76,10 +67,94 @@ async function fetchJson(page, url) {
   }, url);
 }
 
-async function proveProvider(browser, providerId) {
-  const providerName = providerNames[providerId];
-  assert(providerName, `Unknown provider ${providerId}`);
+function itemQueryName(item) {
+  return String(item?.name || '')
+    .replace(/^\|EN\|\s*/i, '')
+    .replace(/^\|US\|\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
+async function fillSmartSearch(page, query) {
+  const inputs = page.getByRole('textbox');
+  const count = await inputs.count();
+  assert(count > 0, 'Smart search input not found');
+  await inputs.nth(count - 1).fill(query);
+  await page.waitForTimeout(900);
+}
+
+async function clickTextCard(page, expectedName) {
+  const clicked = await page.evaluate((name) => {
+    const normalizedName = name.toLowerCase();
+    const candidates = [...document.querySelectorAll('button, [role="button"], div')]
+      .map((element) => {
+        const text = (element.textContent || '').replace(/\s+/g, ' ').trim();
+        const rect = element.getBoundingClientRect();
+        return { element, text, rect };
+      })
+      .filter(({ text, rect }) => {
+        if (!text || rect.width < 60 || rect.height < 40) return false;
+        if (/Home|Live TV|Movies|Series|Settings|Logout|Search|Favorites|Bouquets/i.test(text)) return false;
+        return text.toLowerCase().includes(normalizedName) || normalizedName.includes(text.toLowerCase());
+      })
+      .sort((a, b) => (a.rect.width * a.rect.height) - (b.rect.width * b.rect.height));
+    const target = candidates[0];
+    if (!target) return null;
+    target.element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+    return target.text.slice(0, 200);
+  }, expectedName);
+  assert(clicked, `Could not click a card matching "${expectedName}"`);
+  return clicked;
+}
+
+async function cardStats(page, label) {
+  const stats = await page.evaluate(() => {
+    const nodes = [...document.querySelectorAll('button, [role="button"], div')]
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        const text = (element.textContent || '').replace(/\s+/g, ' ').trim();
+        const img = element.querySelector('img');
+        return {
+          text,
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          visible: rect.width > 50 && rect.height > 50,
+          img: img ? {
+            src: img.currentSrc || img.src,
+            alt: img.alt,
+            complete: img.complete,
+            naturalWidth: img.naturalWidth,
+            naturalHeight: img.naturalHeight,
+          } : null,
+        };
+      })
+      .filter((item) => item.visible && item.text && !/Home|Live TV|Movies|Series|Settings|Logout|Search|Favorites|Bouquets/i.test(item.text));
+    return {
+      visibleCards: nodes.length,
+      cardsWithText: nodes.filter((item) => item.text.length > 2).length,
+      cardsWithLoadedImages: nodes.filter((item) => item.img && item.img.complete && item.img.naturalWidth > 0 && item.img.naturalHeight > 0).length,
+      sample: nodes.slice(0, 8),
+    };
+  });
+  assert(stats.visibleCards > 0, `${label} rendered no visible cards`);
+  assert(stats.cardsWithText > 0, `${label} rendered cards without text data`);
+  return stats;
+}
+
+async function waitForDashboard(page, providerId) {
+  await page.waitForFunction(() => !/Loading your channels/i.test(document.body.innerText), { timeout: 120_000 });
+  await page.waitForFunction(() => /Welcome Back|Live TV/i.test(document.body.innerText), { timeout: 30_000 });
+  const text = await page.locator('body').innerText();
+  for (const forbidden of forbiddenNonEnglish) {
+    assert(!text.includes(forbidden), `${providerId} rendered non-English UI text: ${forbidden}`);
+  }
+  assert(text.includes('Welcome Back'), `${providerId} dashboard missing Welcome Back`);
+  assert(text.includes('Live TV'), `${providerId} dashboard missing Live TV`);
+  assert(text.includes('Movies'), `${providerId} dashboard missing Movies`);
+  assert(text.includes('Series'), `${providerId} dashboard missing Series`);
+}
+
+async function openProvider(browser, providerId) {
   const context = await browser.newContext({
     viewport: { width: 1440, height: 900 },
     deviceScaleFactor: 1,
@@ -91,6 +166,7 @@ async function proveProvider(browser, providerId) {
   const consoleErrors = [];
   const badResponses = [];
   const browserUrls = [];
+  const mediaResponses = [];
 
   const page = await context.newPage();
   page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -104,6 +180,9 @@ async function proveProvider(browser, providerId) {
   page.on('response', (response) => {
     const url = response.url();
     browserUrls.push(url);
+    if (/provider-vault\/(stream|aac-hls|segment)/i.test(url)) {
+      mediaResponses.push({ status: response.status(), url });
+    }
     if (response.status() >= 400 && !/favicon|_next\/image/i.test(url)) {
       badResponses.push({ status: response.status(), url });
     }
@@ -115,32 +194,11 @@ async function proveProvider(browser, providerId) {
     localStorage.setItem('iptv_setting_maxBufferLength', '300');
     localStorage.setItem('iptv_setting_bufferSize', '256');
     localStorage.setItem('iptv_setting_liveBufferLatencyChasing', 'false');
+    localStorage.setItem('stream_quality', 'auto');
   }, providerId);
 
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 45_000 });
-  await page.waitForLoadState('networkidle', { timeout: 45_000 }).catch(() => {});
-  await page.waitForTimeout(1500);
-
-  let loginText = await page.locator('body').innerText({ timeout: 15_000 });
-  for (const text of forbiddenNonEnglish) assert(!loginText.includes(text), `Non-English text leaked on login: ${text}`);
-
-  if (!loginText.includes('Welcome Back')) {
-    for (const text of requiredEnglish) assert(loginText.includes(text), `Missing English text on login: ${text}`);
-    await page.screenshot({ path: path.join(OUT_DIR, `smart-${providerId}-login.png`), fullPage: true });
-
-    await page.getByRole('button', { name: providerName }).click();
-    await page.waitForFunction(() => document.body.innerText.includes('Welcome Back'), { timeout: 60_000 });
-  } else {
-    await page.screenshot({ path: path.join(OUT_DIR, `smart-${providerId}-auto-login.png`), fullPage: true });
-  }
-
-  await page.waitForLoadState('networkidle', { timeout: 45_000 }).catch(() => {});
-  await page.waitForTimeout(2500);
-  const dashboardText = await page.locator('body').innerText();
-  assert(dashboardText.includes('Welcome Back'), `${providerId} dashboard did not load`);
-  assert(dashboardText.includes('Live TV'), `${providerId} dashboard missing Live TV`);
-  assert(dashboardText.includes('Movies'), `${providerId} dashboard missing Movies`);
-  assert(dashboardText.includes('Series'), `${providerId} dashboard missing Series`);
+  await waitForDashboard(page, providerId);
 
   const sessionShape = await page.evaluate(() => {
     const raw = localStorage.getItem('iptv_session');
@@ -149,88 +207,73 @@ async function proveProvider(browser, providerId) {
     return {
       type: data?.type || null,
       providerId: data?.data?.providerId || null,
+      providers: data?.data?.providers || null,
       hasUsername: Boolean(data?.data?.username),
       hasPassword: Boolean(data?.data?.password),
       hasHost: Boolean(data?.data?.host),
       userInfoKeys: data?.userInfo ? Object.keys(data.userInfo).sort() : [],
     };
   });
-  assert(sessionShape?.type === 'vault', `${providerId} did not store vault session`);
-  assert(sessionShape.providerId === providerId, `${providerId} stored wrong provider id`);
+
+  assert(sessionShape?.type === 'vault', `${providerId} did not store a vault session`);
+  assert(sessionShape.providerId === providerId, `${providerId} stored wrong provider id (${sessionShape?.providerId})`);
   assert(!sessionShape.hasUsername && !sessionShape.hasPassword && !sessionShape.hasHost, `${providerId} leaked credentials into localStorage`);
+
+  await page.screenshot({ path: path.join(OUT_DIR, `smart-${providerId}-dashboard.png`), fullPage: true });
+  return { context, page, pageErrors, consoleErrors, badResponses, browserUrls, mediaResponses, sessionShape };
+}
+
+async function proveProvider(browser, providerId) {
+  if (providerId === 'combined') return proveCombined(browser);
+
+  const providerName = providerNames[providerId];
+  assert(providerName, `Unknown provider ${providerId}`);
+  const run = await openProvider(browser, providerId);
+  const { context, page, pageErrors, consoleErrors, badResponses, browserUrls, mediaResponses, sessionShape } = run;
 
   const providerList = await fetchJson(page, '/api/provider-vault/providers');
   assert(providerList.ok, `/api/provider-vault/providers failed with ${providerList.status}`);
-  assert(
-    providerList.json?.providers?.some((provider) => provider.id === providerId && provider.configured),
-    `${providerId} missing from configured provider list`,
-  );
+  assert(providerList.json?.providers?.some((provider) => provider.id === providerId && provider.configured), `${providerId} missing from configured provider list`);
 
-  const catalog = await fetchJson(page, `/api/provider-vault/catalog?provider=${providerId}&liveLimit=1200&movieLimit=500&seriesLimit=500`);
+  const catalog = await fetchJson(page, `/api/provider-vault/catalog?provider=${providerId}&profile=english&liveLimit=1200&movieLimit=800&seriesLimit=800`);
   assert(catalog.ok, `${providerId} catalog failed with ${catalog.status}`);
   for (const key of ['live', 'movies', 'series']) {
     assert(Array.isArray(catalog.json?.[key]) && catalog.json[key].length > 0, `${providerId} catalog ${key} returned no rows`);
   }
+  assert(catalog.json?.profile === 'english', `${providerId} catalog did not use English profile`);
 
-  await page.screenshot({ path: path.join(OUT_DIR, `smart-${providerId}-dashboard.png`), fullPage: true });
+  const cardProof = {};
+  for (const section of ['Movies', 'Series']) {
+    await page.getByRole('button', { name: section }).click();
+    await page.waitForTimeout(900);
+    const key = section === 'Movies' ? 'movies' : 'series';
+    const queryName = itemQueryName(catalog.json[key][0]).slice(0, 32);
+    await fillSmartSearch(page, queryName);
+    cardProof[key] = await cardStats(page, `${providerId} ${section}`);
+    assert(cardProof[key].cardsWithLoadedImages > 0, `${providerId} ${section} cards did not load artwork`);
+    await page.screenshot({ path: path.join(OUT_DIR, `smart-${providerId}-${key}-cards.png`), fullPage: true });
+  }
 
-  await page.getByText(/\d+\s+Channels/i).first().click();
-  await page.waitForTimeout(1000);
-  const clickedCategory = await page.evaluate(() => {
-    const candidates = [...document.querySelectorAll('button')]
-      .filter((element) => {
-        const text = (element.textContent || '').replace(/\s+/g, ' ').trim();
-        return text.length < 80 && (/United States/i.test(text) || /24\/7/i.test(text));
-      });
-    const target = candidates.find((element) => /United States/i.test(element.textContent || '')) || candidates[0];
-    if (!target) return null;
-    const name = (target.textContent || '').replace(/\s+/g, ' ').trim();
-    target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-    return name;
-  });
-  assert(clickedCategory, `${providerId} could not select a live category`);
-  await page.waitForFunction(() => {
-    const elements = [...document.querySelectorAll('[role="button"], div')];
-    return elements.some((element) => /USA|AMC|CNN|FOX|ESPN|NBC|ABC|CH\s+\d+/i.test(element.textContent || ''));
-  }, { timeout: 45_000 }).catch(() => {});
+  await page.getByRole('button', { name: 'Live TV' }).click();
+  await page.waitForTimeout(900);
+  const liveName = itemQueryName(catalog.json.live.find((item) => item?.tvg?.logo) || catalog.json.live[0]).slice(0, 40);
+  await fillSmartSearch(page, liveName);
+  const liveCards = await cardStats(page, `${providerId} Live TV`);
+  await page.screenshot({ path: path.join(OUT_DIR, `smart-${providerId}-live-cards.png`), fullPage: true });
 
-  const beforeClickText = await page.locator('body').innerText();
-  assert(!/No channels found/i.test(beforeClickText), `${providerId} live tab showed no channels`);
-
-  const streamResponses = [];
-  const segmentResponses = [];
-  page.on('response', (response) => {
-    const url = response.url();
-    if (url.includes('/api/provider-vault/stream')) {
-      streamResponses.push({ status: response.status(), url });
-    }
-    if (url.includes('/api/provider-vault/segment') || url.includes('/api/provider-vault/aac-hls')) {
-      segmentResponses.push({ status: response.status(), url });
-    }
-  });
-
-  const clickedName = await page.evaluate(() => {
-    const candidates = [...document.querySelectorAll('button, [role="button"]')]
-      .filter((element) => {
-        const text = element.textContent || '';
-        return text.trim().length > 2 &&
-          /USA|AMC|CNN|FOX|ESPN|NBC|ABC|CH\s+\d+/i.test(text) &&
-          !/Home|Movies|Series|Settings|Logout|Search|Favorites|BOUQUETS/i.test(text);
-      });
-    const target = candidates.find((element) => /USA|AMC|CNN|FOX|ESPN|NBC|ABC/i.test(element.textContent || '')) || candidates[0];
-    if (!target) return null;
-    const name = (target.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 160);
-    target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-    return name;
-  });
-  assert(clickedName, `${providerId} could not select a live channel`);
-
+  const start = Date.now();
+  const clickedName = await clickTextCard(page, liveName);
   await page.waitForSelector('video', { timeout: 30_000 });
   await page.waitForFunction(() => {
     const video = document.querySelector('video');
-    return Boolean(video && (video.readyState >= 2 || video.currentSrc));
-  }, { timeout: 60_000 });
+    return Boolean(video && video.currentSrc && video.readyState >= 2 && !video.error);
+  }, { timeout: 90_000 });
+  await page.waitForFunction(() => {
+    const video = document.querySelector('video');
+    return Boolean(video && !video.paused && !video.muted && video.volume > 0);
+  }, { timeout: 45_000 });
   await page.waitForTimeout(5000);
+  const playbackMs = Date.now() - start;
 
   const videoState = await page.evaluate(() => {
     const video = document.querySelector('video');
@@ -242,16 +285,23 @@ async function proveProvider(browser, providerId) {
     return {
       readyState: video.readyState,
       paused: video.paused,
+      muted: video.muted,
+      volume: video.volume,
       currentSrc: video.currentSrc,
       error: video.error ? { code: video.error.code, message: video.error.message } : null,
       currentTime: video.currentTime,
       buffered,
+      videoWidth: video.videoWidth,
+      videoHeight: video.videoHeight,
     };
   });
 
-  assert(videoState?.readyState >= 2 || videoState?.currentSrc, `${providerId} video never prepared`);
+  assert(videoState?.readyState >= 2, `${providerId} video never prepared`);
   assert(!videoState?.error, `${providerId} video error ${JSON.stringify(videoState?.error)}`);
-  assert(streamResponses.some((response) => response.status >= 200 && response.status < 300), `${providerId} did not request provider-vault stream successfully`);
+  assert(videoState.paused === false, `${providerId} video is paused`);
+  assert(videoState.muted === false && videoState.volume > 0, `${providerId} video is muted or volume is zero`);
+  assert(videoState.currentTime >= 0, `${providerId} video currentTime invalid`);
+  assert(mediaResponses.some((response) => response.status >= 200 && response.status < 300), `${providerId} did not request provider-vault media successfully`);
 
   await page.screenshot({ path: path.join(OUT_DIR, `smart-${providerId}-playback.png`), fullPage: true });
 
@@ -281,23 +331,31 @@ async function proveProvider(browser, providerId) {
 
   return {
     provider: providerId,
-    loginTextOk: true,
     sessionShape,
     catalog: {
+      profile: catalog.json.profile,
       live: catalog.json.live.length,
       movies: catalog.json.movies.length,
       series: catalog.json.series.length,
     },
+    cards: {
+      live: liveCards,
+      movies: cardProof.movies,
+      series: cardProof.series,
+    },
     playback: {
       clickedName,
-      streamStatus: streamResponses.map((response) => response.status),
-      segmentStatus: segmentResponses.map((response) => response.status).slice(0, 10),
+      playbackMs,
+      mediaStatus: mediaResponses.map((response) => response.status).slice(0, 12),
       videoState: {
         readyState: videoState.readyState,
         paused: videoState.paused,
+        muted: videoState.muted,
+        volume: videoState.volume,
         error: videoState.error,
         bufferedRanges: videoState.buffered.length,
-        currentSrcIsVault: String(videoState.currentSrc || '').includes('/api/provider-vault/stream'),
+        currentSrcIsVault: String(videoState.currentSrc || '').includes('/api/provider-vault/'),
+        videoSize: [videoState.videoWidth, videoState.videoHeight],
       },
     },
     diagnostics: {
@@ -310,9 +368,46 @@ async function proveProvider(browser, providerId) {
   };
 }
 
+async function proveCombined(browser) {
+  const run = await openProvider(browser, 'combined');
+  const { context, page, pageErrors, consoleErrors, badResponses, sessionShape } = run;
+
+  await page.getByRole('button', { name: 'Live TV' }).click();
+  await page.waitForTimeout(900);
+  await fillSmartSearch(page, 'USA');
+  const text = await page.locator('body').innerText();
+  assert(text.includes('Apollo Group TV') || text.includes('XtremeHD'), 'Combined mode did not render provider tags');
+  assert(sessionShape.providerId === 'combined', 'Combined mode session did not persist combined provider id');
+  assert(Array.isArray(sessionShape.providers) && sessionShape.providers.includes('apollo') && sessionShape.providers.includes('xtremehd'), 'Combined mode did not persist separate provider list');
+  const cards = await cardStats(page, 'combined tagged live');
+  await page.screenshot({ path: path.join(OUT_DIR, 'smart-combined-tagged-cards.png'), fullPage: true });
+  await context.close();
+
+  const filteredBadResponses = badResponses.filter((response) => {
+    const url = response.url;
+    if (/provider-vault\/image/i.test(url) && [400, 404, 502].includes(response.status)) return false;
+    return true;
+  });
+
+  return {
+    provider: 'combined',
+    sessionShape,
+    cards,
+    diagnostics: {
+      pageErrors,
+      consoleErrors,
+      badResponses: filteredBadResponses.slice(0, 20),
+    },
+    ok: pageErrors.length === 0 && consoleErrors.length === 0 && filteredBadResponses.length === 0,
+  };
+}
+
 mkdirp(OUT_DIR);
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  args: ['--autoplay-policy=no-user-gesture-required'],
+});
 const results = {};
 try {
   for (const provider of PROVIDERS) {

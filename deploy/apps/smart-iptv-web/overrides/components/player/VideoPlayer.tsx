@@ -272,15 +272,16 @@ export default function VideoPlayer({
 
       const cleanUrl = playbackUrl.split('?')[0].toLowerCase();
       
-      const isHls = cleanUrl.endsWith('.m3u8') || streamExt === 'm3u8' || playbackUrl.includes('output=m3u8') || playbackUrl.includes('m3u8');
+      const isProviderVaultHls = playbackUrlDetails.pathname.includes('/api/provider-vault/aac-hls');
+      const isHls = isProviderVaultHls || cleanUrl.endsWith('.m3u8') || streamExt === 'm3u8' || playbackUrl.includes('output=m3u8') || playbackUrl.includes('m3u8');
       const isDash = cleanUrl.endsWith('.mpd');
       const nativeExts = ['mp4', 'webm', 'ogg', 'mov', 'mkv', 'mp3', 'aac'];
       const mpegTsExts = ['ts', 'mpg', 'mpeg', 'm2ts', 'flv'];
       const isNative = nativeExts.some(ext => cleanUrl.endsWith(`.${ext}`)) || nativeExts.includes(streamExt);
-      const isMpegTs = mpegTsExts.some(ext => cleanUrl.endsWith(`.${ext}`)) || mpegTsExts.includes(streamExt) || playbackUrl.includes('output=ts');
+      const isMpegTs = !isProviderVaultHls && (mpegTsExts.some(ext => cleanUrl.endsWith(`.${ext}`)) || mpegTsExts.includes(streamExt) || playbackUrl.includes('output=ts'));
       
       // If not HLS and not explicitly Native, and not DASH, assume MPEG-TS/FLV (common for IPTV)
-      const shouldTryMpegTs = isMpegTs || (!isHls && !isNative && !isDash);
+      const shouldTryMpegTs = !isProviderVaultHls && (isMpegTs || (!isHls && !isNative && !isDash));
 
       video.addEventListener('waiting', onWaiting);
       video.addEventListener('stalled', onWaiting);

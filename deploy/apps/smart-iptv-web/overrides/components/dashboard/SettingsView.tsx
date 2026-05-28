@@ -338,6 +338,8 @@ export default function SettingsView({ onClearData, onRefreshPlaylist }: Setting
                       <option value="32">32 MB (Default)</option>
                       <option value="64">64 MB (Smooth Playback, Slower Start)</option>
                       <option value="128">128 MB (For Unstable Connections)</option>
+                      <option value="256">256 MB (Large Movie Buffer)</option>
+                      <option value="512">512 MB (Maximum Buffer)</option>
                     </select>
                   </div>
 

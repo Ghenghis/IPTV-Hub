@@ -40,14 +40,25 @@ described above. The hosted override files that must be preserved when
 rebuilding that live service are tracked here:
 
 ```text
+overrides/app/SmartHomeClient.tsx
+overrides/components/auth/Login.tsx
+overrides/components/dashboard/ChannelGrid.tsx
 overrides/components/player/VideoPlayer.tsx
 overrides/components/dashboard/SettingsView.tsx
 ```
 
-These override files make the existing buffer controls real for hosted playback:
-300-second default HLS/MPEG-TS buffering, 256 MB default buffer memory, low
-latency off by default, and provider-vault playback without browser-side
-credentials. See `PROOF-20260526.md` for the live Apollo/XtremeHD proof.
+These override files make the hosted provider-vault experience real:
+
+- Apollo Group TV, XtremeHD, and Combined Tagged provider modes;
+- English catalog profile by default;
+- browser storage keeps provider IDs and display names only, not raw provider
+  host, username, or password;
+- HLS/MPEG-TS buffer controls with 300-second default buffering and 256/512 MB
+  presets;
+- provider-vault HLS manifests are always played with HLS.js, even when the
+  upstream source extension is `ts`.
+
+See `PROOF-20260528.md` for the current strict Apollo/XtremeHD/combined proof.
 
 ### EPG port — explicit
 
