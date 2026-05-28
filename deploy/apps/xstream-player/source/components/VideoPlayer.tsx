@@ -30,12 +30,8 @@ const readPositiveNumber = (value: string | undefined, fallback: number) => {
 
 const HLS_VOD_BUFFER_SECONDS = readPositiveNumber(process.env.NEXT_PUBLIC_XSTREAM_VOD_BUFFER_SECONDS, 300);
 const HLS_LIVE_BUFFER_SECONDS = readPositiveNumber(process.env.NEXT_PUBLIC_XSTREAM_LIVE_BUFFER_SECONDS, 90);
-const HLS_VOD_START_BUFFER_SECONDS = readPositiveNumber(process.env.NEXT_PUBLIC_XSTREAM_VOD_START_BUFFER_SECONDS, 20);
-const HLS_LIVE_START_BUFFER_SECONDS = readPositiveNumber(process.env.NEXT_PUBLIC_XSTREAM_LIVE_START_BUFFER_SECONDS, 6);
 const HLS_VOD_MAX_BUFFER_BYTES = readPositiveNumber(process.env.NEXT_PUBLIC_XSTREAM_VOD_MAX_BUFFER_MB, 512) * 1000 * 1000;
 const HLS_LIVE_MAX_BUFFER_BYTES = readPositiveNumber(process.env.NEXT_PUBLIC_XSTREAM_LIVE_MAX_BUFFER_MB, 192) * 1000 * 1000;
-const HLS_VOD_PLAY_FALLBACK_MS = readPositiveNumber(process.env.NEXT_PUBLIC_XSTREAM_VOD_PLAY_FALLBACK_MS, 25000);
-const HLS_LIVE_PLAY_FALLBACK_MS = readPositiveNumber(process.env.NEXT_PUBLIC_XSTREAM_LIVE_PLAY_FALLBACK_MS, 10000);
 
 const isEnglishTrackValue = (value?: string | null) => {
     const normalized = String(value || '').trim().toLowerCase().replace('_', '-');
@@ -489,24 +485,7 @@ export default function VideoPlayer({
         const useHlsJs = isHLS && Hls.isSupported();
 
         let hls: Hls | undefined;
-        /** Cancels native VOD startup buffering wait (progress/canplay + timeout). */
-        let cancelVodBufferedWait: (() => void) | undefined;
-        /** Cancels HLS startup buffering wait (buffer append/progress/canplay + timeout). */
-        let cancelHlsBufferedWait: (() => void) | undefined;
-        /** While true, `canplay` does not clear the spinner because autoplay is waiting for startup buffer. */
-        let vodAutoplayAwaitBuffer = false;
-        let hlsAutoplayAwaitBuffer = false;
-
-        const bufferedAheadSeconds = (v: HTMLVideoElement): number => {
-            if (v.buffered.length === 0) return 0;
-            const t = v.currentTime;
-            for (let i = 0; i < v.buffered.length; i++) {
-                const start = v.buffered.start(i);
-                const end = v.buffered.end(i);
-                if (t >= start && t <= end) return end - t;
-            }
-            return Math.max(0, v.buffered.end(v.buffered.length - 1) - t);
-        };
+        let playRequested = false;
 
         const applyInitialSeek = () => {
             if (seekTarget > 0 && !hasAppliedInitialTime.current) {
@@ -526,6 +505,25 @@ export default function VideoPlayer({
             return true;
         };
 
+        const requestAudiblePlay = (reason: string) => {
+            if (!autoPlay || playRequested) return;
+            playRequested = true;
+            video.muted = false;
+            if (video.volume === 0) video.volume = 1;
+            setIsMuted(false);
+            setVolume(video.volume || 1);
+
+            const playAttempt = video.play();
+            if (playAttempt && typeof playAttempt.catch === 'function') {
+                playAttempt.catch((e) => {
+                    playRequested = false;
+                    setShowControls(true);
+                    setIsBuffering(false);
+                    console.warn(`[VideoPlayer] Audible autoplay blocked after ${reason}:`, e);
+                });
+            }
+        };
+
         const setupVideoHls = () => {
             applyInitialSeek();
             if (!autoPlay) {
@@ -533,37 +531,7 @@ export default function VideoPlayer({
                 return;
             }
 
-            const minBufferSec = isLiveHls ? HLS_LIVE_START_BUFFER_SECONDS : HLS_VOD_START_BUFFER_SECONDS;
-            const fallbackMs = isLiveHls ? HLS_LIVE_PLAY_FALLBACK_MS : HLS_VOD_PLAY_FALLBACK_MS;
-            hlsAutoplayAwaitBuffer = true;
-            setIsBuffering(true);
-
-            const tryPlayWhenBuffered = () => {
-                const ahead = bufferedAheadSeconds(video);
-                if (ahead >= minBufferSec || (video.readyState >= 4 && ahead >= Math.min(3, minBufferSec))) {
-                    cancelHlsBufferedWait?.();
-                    video.play().catch(e => console.warn('[VideoPlayer] Play failed:', e));
-                }
-            };
-
-            const timeoutId = window.setTimeout(() => {
-                cancelHlsBufferedWait?.();
-                video.play().catch(e => console.warn('[VideoPlayer] Play failed:', e));
-            }, fallbackMs);
-
-            cancelHlsBufferedWait = () => {
-                hlsAutoplayAwaitBuffer = false;
-                window.clearTimeout(timeoutId);
-                video.removeEventListener('progress', tryPlayWhenBuffered);
-                video.removeEventListener('canplay', tryPlayWhenBuffered);
-                hls?.off(Hls.Events.BUFFER_APPENDED, tryPlayWhenBuffered);
-                cancelHlsBufferedWait = undefined;
-            };
-
-            video.addEventListener('progress', tryPlayWhenBuffered);
-            video.addEventListener('canplay', tryPlayWhenBuffered);
-            hls?.on(Hls.Events.BUFFER_APPENDED, tryPlayWhenBuffered);
-            tryPlayWhenBuffered();
+            requestAudiblePlay('hls manifest');
         };
 
         if (useHlsJs) {
@@ -682,44 +650,14 @@ export default function VideoPlayer({
                 return;
             }
 
-            // Native progressive VOD: do not play at loadedmetadata with near-zero buffer.
-            cancelVodBufferedWait?.();
             applyInitialSeek();
-
-            const minBufferSec = 8;
-            const fallbackMs = 12000;
 
             if (!autoPlay) {
                 setIsBuffering(false);
                 return;
             }
 
-            vodAutoplayAwaitBuffer = true;
-
-            const tryPlayWhenBuffered = () => {
-                const ahead = bufferedAheadSeconds(video);
-                if (ahead >= minBufferSec) {
-                    cancelVodBufferedWait?.();
-                    video.play().catch(e => console.warn('[VideoPlayer] Play failed:', e));
-                }
-            };
-
-            const timeoutId = window.setTimeout(() => {
-                cancelVodBufferedWait?.();
-                video.play().catch(e => console.warn('[VideoPlayer] Play failed:', e));
-            }, fallbackMs);
-
-            cancelVodBufferedWait = () => {
-                vodAutoplayAwaitBuffer = false;
-                window.clearTimeout(timeoutId);
-                video.removeEventListener('progress', tryPlayWhenBuffered);
-                video.removeEventListener('canplay', tryPlayWhenBuffered);
-                cancelVodBufferedWait = undefined;
-            };
-
-            video.addEventListener('progress', tryPlayWhenBuffered);
-            video.addEventListener('canplay', tryPlayWhenBuffered);
-            tryPlayWhenBuffered();
+            requestAudiblePlay('metadata');
         };
 
         const handleEnded = () => {
@@ -729,10 +667,9 @@ export default function VideoPlayer({
         const handleWaiting = () => setIsBuffering(true);
         const handleCanPlay = () => {
             console.log('[VideoPlayer] Can play. readyState:', video.readyState);
-            if (!vodAutoplayAwaitBuffer && !hlsAutoplayAwaitBuffer) {
-                setIsBuffering(false);
-            }
+            setIsBuffering(false);
             setIsMetadataLoaded(true);
+            requestAudiblePlay('canplay');
         };
 
         const handlePlaying = () => setIsBuffering(false);
@@ -780,8 +717,6 @@ export default function VideoPlayer({
         video.addEventListener('volumechange', handleVolumeChange);
 
         return () => {
-            cancelVodBufferedWait?.();
-            cancelHlsBufferedWait?.();
             if (hls) hls.destroy();
             video.removeEventListener('play', updatePlayState);
             video.removeEventListener('pause', updatePlayState);
@@ -839,6 +774,7 @@ export default function VideoPlayer({
                 ref={videoRef}
                 className="w-full h-full object-contain cursor-pointer"
                 poster={safeImagePath(poster) || poster}
+                autoPlay={autoPlay}
                 playsInline
                 preload="auto"
                 // crossOrigin="anonymous" // NEVER use this

@@ -160,9 +160,15 @@ async function videoState(page) {
   return page.evaluate(() => {
     const video = document.querySelector('video');
     const buffered = [];
+    let bufferedAhead = 0;
     if (video) {
       for (let i = 0; i < video.buffered.length; i += 1) {
-        buffered.push([video.buffered.start(i), video.buffered.end(i)]);
+        const start = video.buffered.start(i);
+        const end = video.buffered.end(i);
+        buffered.push([start, end]);
+        if (start <= video.currentTime && end > video.currentTime) {
+          bufferedAhead = Math.max(bufferedAhead, end - video.currentTime);
+        }
       }
     }
     return {
@@ -173,6 +179,19 @@ async function videoState(page) {
             networkState: video.networkState,
             paused: video.paused,
             currentTime: Number(video.currentTime || 0),
+            muted: video.muted,
+            volume: Number(video.volume || 0),
+            bufferedAhead: Number(bufferedAhead || 0),
+            audioTracks:
+              typeof video.audioTracks !== 'undefined' && video.audioTracks
+                ? Array.from(video.audioTracks).map((track) => ({
+                    enabled: track.enabled,
+                    kind: track.kind,
+                    label: track.label,
+                    language: track.language,
+                  }))
+                : null,
+            webkitAudioDecodedByteCount: Number(video.webkitAudioDecodedByteCount || 0),
             width: video.videoWidth,
             height: video.videoHeight,
             src: String(video.currentSrc || '').replace(/token=[^&]+/g, 'token=[token]'),
@@ -198,12 +217,19 @@ async function playMovie(page, provider, item, sampleIndex) {
 
   const deadline = Date.now() + 90_000;
   let latest = null;
+  let previousTime = -1;
   while (Date.now() < deadline) {
     latest = await videoState(page);
     const text = latest.bodyText || '';
     const video = latest.video;
     const rawPlaybackError = /DEMUXER|MEDIA_ELEMENT_ERROR|Format error|FFmpegDemuxer/i.test(text);
-    if (video?.readyState >= 2 && video.width > 0 && !video.error && !rawPlaybackError) break;
+    const audible = video && !video.muted && video.volume > 0.05;
+    const currentTime = Number(video?.currentTime || 0);
+    const timeMoved = currentTime > 0.35 || (previousTime >= 0 && currentTime - previousTime > 0.2);
+    if (video?.readyState >= 2 && video.width > 0 && !video.error && !rawPlaybackError && !video.paused && audible && timeMoved) {
+      break;
+    }
+    if (video?.readyState >= 2 && video.width > 0) previousTime = currentTime;
     await page.waitForTimeout(1500);
   }
 
@@ -211,7 +237,16 @@ async function playMovie(page, provider, item, sampleIndex) {
   const text = latest?.bodyText || '';
   const video = latest?.video;
   const rawPlaybackError = /DEMUXER|MEDIA_ELEMENT_ERROR|Format error|FFmpegDemuxer/i.test(text);
-  const ok = Boolean(video?.readyState >= 2 && video.width > 0 && !video.error && !rawPlaybackError);
+  const ok = Boolean(
+    video?.readyState >= 2 &&
+      video.width > 0 &&
+      !video.error &&
+      !rawPlaybackError &&
+      !video.paused &&
+      !video.muted &&
+      video.volume > 0.05 &&
+      video.currentTime > 0.25,
+  );
 
   return {
     provider: provider.id,
@@ -251,6 +286,9 @@ try {
     page.on('requestfailed', (request) => {
       const url = request.url();
       const failure = request.failure()?.errorText || '';
+      if (failure === 'net::ERR_ABORTED' && /\/api\/watch-progress\//i.test(url)) {
+        return;
+      }
       if (
         failure === 'net::ERR_ABORTED' &&
         (/\/api\/provider-vault\/stream|\/api\/proxy(?:\/stream)?|\/_next\/static\/chunks\//i.test(url) || /[?&]_rsc=/i.test(url))
