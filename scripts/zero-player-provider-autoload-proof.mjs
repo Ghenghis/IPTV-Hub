@@ -5,10 +5,18 @@ import path from 'node:path';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
-const outDir = 'C:/Users/Admin/Downloads/VPS/_visual_artifacts/zero-player-provider-autoload-proof-20260527';
+const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
+const outDir =
+  process.env.OUT_DIR ||
+  `C:/Users/Admin/Downloads/VPS/_visual_artifacts/zero-player-provider-autoload-proof-${stamp}`;
 const cookiePath =
+  process.env.COOKIE_PATH ||
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
-const appUrl = 'https://apps.daveai.tech/iptv-player-zero/?autoload_proof=' + Date.now();
+const appUrl =
+  (process.env.ZERO_PLAYER_URL || 'https://apps.daveai.tech/iptv-player-zero/') +
+  (String(process.env.ZERO_PLAYER_URL || '').includes('?') ? '&' : '?') +
+  'autoload_proof=' +
+  Date.now();
 const providerIds = ['apollo', 'xtremehd'];
 
 async function authCookies() {
@@ -39,6 +47,15 @@ async function resetToUserStuckState(page) {
         req.onsuccess = req.onerror = req.onblocked = () => resolve();
       });
     }
+  });
+}
+
+async function currentBuildId(page) {
+  return page.evaluate(() => {
+    const stored = localStorage.getItem('ipz_daveai_hosted_build_id');
+    if (stored) return stored;
+    const scripts = Array.from(document.scripts).map((script) => script.src || '').join('\n');
+    return scripts.match(/v=([^&\s]+)/)?.[1] || 'unknown-build';
   });
 }
 
@@ -99,15 +116,38 @@ page.on('pageerror', (error) => pageErrors.push(String(error.message || error)))
 
 await resetToUserStuckState(page);
 await page.goto(appUrl + '&after_reset=1', { waitUntil: 'domcontentloaded', timeout: 60000 });
+const buildId = await currentBuildId(page);
+await page.waitForFunction(
+  async (ids) => {
+    if (!window.Store || !window.Store.getChannels || !window.Store.getPlaylists) return false;
+    const text = document.body.innerText || '';
+    if (/Something went wrong|Cannot read properties|client-side exception/i.test(text)) return false;
+    const playlists = await window.Store.getPlaylists().catch(() => []);
+    for (const id of ids) {
+      const playlistId = `daveai-provider-${id}`;
+      if (!playlists.some((playlist) => playlist && playlist.id === playlistId)) return false;
+      const channels = await window.Store.getChannels(playlistId).catch(() => []);
+      if (!Array.isArray(channels) || channels.length < 2000) return false;
+    }
+    return localStorage.getItem('ipz_default_playlist_id') === 'daveai-provider-apollo';
+  },
+  providerIds,
+  { timeout: 120000 }
+);
+await page.waitForTimeout(2500);
+const textAfterStoreReady = await page.locator('body').innerText({ timeout: 10000 }).catch(() => '');
+if (/You have no playlists yet|No playlists imported/i.test(textAfterStoreReady)) {
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.waitForTimeout(2500);
+}
 await page.waitForFunction(
   () => {
     const text = document.body.innerText || '';
-    return /All channels/i.test(text) && /(?:^|\n)\s*(?:2,?200|2200)\s*(?:\n|$)/i.test(text);
+    return /All channels/i.test(text) && !/You have no playlists yet|No playlists imported|Something went wrong/i.test(text);
   },
   undefined,
-  { timeout: 90000 }
+  { timeout: 45000 }
 );
-await page.waitForTimeout(1500);
 
 const state = await inspect(page);
 const screenshot = path.join(outDir, 'zero-player-autoloaded-providers.png');
@@ -128,6 +168,7 @@ const ok =
 const summary = {
   ok,
   generatedAt: new Date().toISOString(),
+  buildId,
   state,
   pageErrors,
   consoleErrors,

@@ -14,11 +14,11 @@
   ];
 
   var LIMITS = {
-    liveLimit: 20000,
-    movieLimit: 500,
-    seriesLimit: 500,
+    liveLimit: 2200,
+    movieLimit: 1200,
+    seriesLimit: 800,
   };
-  var QUICKSTART_BUILD_ID = '20260528-provider-vault-direct28';
+  var QUICKSTART_BUILD_ID = '20260528-provider-vault-direct31';
   var PROVIDER_PLAYLIST_PREFIX = 'daveai-provider-';
   var COMBINED_PLAYLIST_ID = 'daveai-provider-combined-tagged';
   var DISPLAY_MODE_KEY = 'ipz_provider_display_mode';
@@ -44,7 +44,8 @@
       .slice(0, 80);
   }
 
-  function fetchJson(url) {
+  function fetchJson(url, attempt) {
+    attempt = Number(attempt || 0);
     return fetch(url, {
       cache: 'no-store',
       credentials: 'same-origin',
@@ -52,6 +53,15 @@
     }).then(function (res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
+    }).catch(function (err) {
+      if (attempt < 2) {
+        return new Promise(function (resolve) {
+          window.setTimeout(resolve, 500 * (attempt + 1));
+        }).then(function () {
+          return fetchJson(url, attempt + 1);
+        });
+      }
+      throw err;
     });
   }
 
@@ -74,6 +84,11 @@
 
   function providerPlaylistId(providerId) {
     return PROVIDER_PLAYLIST_PREFIX + providerId;
+  }
+
+  function isDaveAiProviderPlaylistId(playlistId) {
+    playlistId = String(playlistId || '');
+    return playlistId === COMBINED_PLAYLIST_ID || playlistId.indexOf(PROVIDER_PLAYLIST_PREFIX) === 0;
   }
 
   function providerById(providerId) {
@@ -198,7 +213,32 @@
     });
   }
 
-  function markPlaylistEnabled(playlistId) {
+  function activeDisplayMode() {
+    try {
+      return window.localStorage && window.localStorage.getItem(DISPLAY_MODE_KEY) === 'combined-tagged'
+        ? 'combined-tagged'
+        : 'separated';
+    } catch (e) {
+      return 'separated';
+    }
+  }
+
+  function getStoredChannelCount(playlistId) {
+    if (!window.Store || !window.Store.getPlaylists || !window.Store.getChannels) return Promise.resolve(0);
+    return window.Store.getPlaylists().then(function (playlists) {
+      playlists = Array.isArray(playlists) ? playlists : [];
+      if (!playlists.some(function (item) { return item && item.id === playlistId; })) return 0;
+      return window.Store.getChannels(playlistId).then(function (channels) {
+        return Array.isArray(channels) ? channels.length : 0;
+      }).catch(function () { return 0; });
+    }).catch(function () { return 0; });
+  }
+
+  function setActiveProviderPlaylists(playlistIds, defaultPlaylistId, displayMode) {
+    playlistIds = Array.isArray(playlistIds) ? playlistIds.filter(Boolean) : [];
+    defaultPlaylistId = defaultPlaylistId || playlistIds[0] || '';
+    displayMode = displayMode || 'separated';
+
     var enabledKeys = [
       'ipz_playlist_enabled_by_id',
       'ipz_playlist_enabled_by_id_premium',
@@ -206,7 +246,10 @@
     enabledKeys.forEach(function (key) {
       var map = readJson(key, {});
       if (!map || typeof map !== 'object' || Array.isArray(map)) map = {};
-      map[playlistId] = true;
+      Object.keys(map).forEach(function (id) {
+        if (isDaveAiProviderPlaylistId(id)) delete map[id];
+      });
+      playlistIds.forEach(function (id) { map[id] = true; });
       writeJson(key, map);
     });
 
@@ -217,16 +260,35 @@
     orderKeys.forEach(function (key) {
       var ids = readJson(key, []);
       if (!Array.isArray(ids)) ids = [];
-      ids = ids.filter(function (id) { return id !== playlistId; });
-      ids.unshift(playlistId);
-      writeJson(key, ids);
+      ids = ids.filter(function (id) { return !isDaveAiProviderPlaylistId(id); });
+      writeJson(key, playlistIds.concat(ids));
     });
 
     try {
-      window.localStorage.setItem('ipz_default_playlist_id', playlistId);
-      window.localStorage.setItem('ipz_provider_quickstart_last_playlist_id', playlistId);
+      window.localStorage.setItem('ipz_default_playlist_id', defaultPlaylistId);
+      window.localStorage.setItem('ipz_provider_quickstart_last_playlist_id', defaultPlaylistId);
       window.localStorage.setItem('ipz_provider_quickstart_hidden', '1');
+      window.localStorage.setItem(DISPLAY_MODE_KEY, displayMode);
     } catch (e) {}
+  }
+
+  function markProviderPlaylistsEnabled(providers, preferredDefaultId) {
+    var ids = (Array.isArray(providers) ? providers : []).map(function (provider) {
+      return providerPlaylistId(provider.id);
+    });
+    var defaultId = ids.indexOf(preferredDefaultId) >= 0 ? preferredDefaultId : ids[0];
+    if (defaultId) {
+      ids = [defaultId].concat(ids.filter(function (id) { return id !== defaultId; }));
+    }
+    setActiveProviderPlaylists(ids, defaultId, 'separated');
+  }
+
+  function markCombinedPlaylistEnabled() {
+    setActiveProviderPlaylists([COMBINED_PLAYLIST_ID], COMBINED_PLAYLIST_ID, 'combined-tagged');
+  }
+
+  function markPlaylistEnabled(playlistId) {
+    setActiveProviderPlaylists([playlistId], playlistId, 'separated');
   }
 
   function configuredProviders() {
@@ -425,6 +487,7 @@
         });
       });
     }, Promise.resolve()).then(function () {
+      markProviderPlaylistsEnabled(providers);
       try {
         window.localStorage.setItem(DISPLAY_MODE_KEY, 'separated');
         window.localStorage.setItem('ipz_provider_quickstart_hidden', '1');
@@ -460,7 +523,7 @@
           url: catalogUrl('apollo') + '&plus=xtremehd',
         }
       ).then(function () {
-        markPlaylistEnabled(COMBINED_PLAYLIST_ID);
+        markCombinedPlaylistEnabled();
         try {
           window.localStorage.setItem(DISPLAY_MODE_KEY, 'combined-tagged');
           window.localStorage.setItem('ipz_provider_quickstart_hidden', '1');
@@ -469,6 +532,62 @@
         if (options.reload !== false) setTimeout(function () { window.location.reload(); }, 900);
         return { mode: 'combined-tagged', channelCount: channels.length };
       });
+    });
+  }
+
+  function pageLooksEmptyAfterProviderLoad() {
+    var bodyText = '';
+    try { bodyText = document.body ? (document.body.innerText || '') : ''; } catch (e) {}
+    return /You have no playlists yet|No playlists imported/i.test(bodyText) ||
+      (/All channels\s+0\b/i.test(bodyText) && !/All channels\s+[1-9][0-9]*/i.test(bodyText));
+  }
+
+  function reconcileLoadedProviderState(providers, setStatus, options) {
+    options = options || {};
+    setStatus = typeof setStatus === 'function' ? setStatus : function () {};
+
+    if (!storeIsReady()) return Promise.resolve(false);
+    return getProviderPlaylistStatus(providers).then(function (status) {
+      if (!status.hasAllPlayable) return false;
+
+      return getStoredChannelCount(COMBINED_PLAYLIST_ID).then(function (combinedCount) {
+        var keepCombined = activeDisplayMode() === 'combined-tagged' && combinedCount > 0;
+        if (keepCombined) {
+          markCombinedPlaylistEnabled();
+        } else {
+          var currentDefault = '';
+          try { currentDefault = window.localStorage.getItem('ipz_default_playlist_id') || ''; } catch (e) {}
+          markProviderPlaylistsEnabled(providers, currentDefault);
+        }
+        try {
+          window.localStorage.setItem('ipz_provider_autoload_build_id', QUICKSTART_BUILD_ID);
+          window.localStorage.setItem('ipz_provider_quickstart_hidden', '1');
+        } catch (e) {}
+
+        if (pageLooksEmptyAfterProviderLoad()) {
+          var reloadKey = 'ipz_provider_reconcile_reload_' + QUICKSTART_BUILD_ID;
+          try {
+            if (window.sessionStorage && window.sessionStorage.getItem(reloadKey) === '1') {
+              setStatus('Provider playlists are saved. Use the playlist selector to switch Apollo or XtremeHD.');
+              return true;
+            }
+            if (window.sessionStorage) window.sessionStorage.setItem(reloadKey, '1');
+          } catch (e) {}
+          setStatus('Provider playlists are saved. Refreshing the player view...');
+          window.setTimeout(function () { window.location.reload(); }, options.delayMs || 450);
+        }
+        return true;
+      });
+    }).catch(function () {
+      return false;
+    });
+  }
+
+  function scheduleProviderReconciliation(providers) {
+    [700, 2200, 6000, 12000, 24000].forEach(function (delayMs) {
+      window.setTimeout(function () {
+        reconcileLoadedProviderState(providers, null, { delayMs: 250 });
+      }, delayMs);
     });
   }
 
@@ -575,6 +694,7 @@
       window.setTimeout(function () {
         setBusy(true);
         autoloadProviders(providers, setStatus).finally(function () {
+          reconcileLoadedProviderState(providers, setStatus, { delayMs: 250 });
           setBusy(false);
         });
       }, 250);
@@ -585,13 +705,17 @@
   ready(function () {
     configuredProviders().then(function (providers) {
       if (!providers.length) return;
+      scheduleProviderReconciliation(providers);
       getProviderPlaylistStatus(providers).then(function (status) {
         var hidden = false;
         try {
           hidden = window.localStorage && window.localStorage.getItem('ipz_provider_quickstart_hidden') === '1';
         } catch (e) {}
 
-        if (status.hasAllPlayable && hidden) return;
+        if (status.hasAllPlayable) {
+          reconcileLoadedProviderState(providers, null, { delayMs: 250 });
+          if (hidden) return;
+        }
 
         var autoloadDisabled = window.__IPZ_PROVIDER_PROOF_DISABLE_AUTOLOAD__ === true;
         var shouldAutoload = !status.hasAllPlayable && !autoloadDisabled;
@@ -604,6 +728,7 @@
     importProvider: importProvider,
     importSeparatedProviders: importSeparatedProviders,
     importCombinedTaggedProviders: importCombinedTaggedProviders,
+    reconcileLoadedProviderState: reconcileLoadedProviderState,
     configuredProviders: configuredProviders,
     getProviderPlaylistStatus: getProviderPlaylistStatus,
     combinedPlaylistId: COMBINED_PLAYLIST_ID,

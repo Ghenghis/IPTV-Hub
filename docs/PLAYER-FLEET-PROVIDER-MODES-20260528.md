@@ -60,6 +60,42 @@ Implementation notes:
 - `VideoPlayer.tsx` forces `/api/provider-vault/aac-hls` through HLS.js so a
   source `ext=ts` does not get misrouted into `mpegts.js`.
 
+## IPTV Player Zero Status
+
+Status: ACCEPTED for the 2026-05-28 direct31 provider repair.
+
+Live URL:
+
+```text
+https://apps.daveai.tech/iptv-player-zero/
+```
+
+Proof:
+
+```text
+deploy/apps/iptv-player-zero/PROOF-20260528.md
+C:\Users\Admin\Downloads\VPS\_visual_artifacts\zero-player-autoload-direct31-20260528T232800\summary.json
+C:\Users\Admin\Downloads\VPS\_visual_artifacts\zero-player-full-direct31-20260528T234000\summary.json
+C:\Users\Admin\Downloads\VPS\_visual_artifacts\zero-player-combined-direct31-20260528T233500\summary.json
+```
+
+Results:
+
+- Separated mode is the default: Apollo and XtremeHD are different playlists
+  with different provider IDs, names, groups, and stream URLs.
+- Combined Tagged mode is explicit: rows are prefixed with `[Apollo Group TV]`
+  or `[XtremeHD]`, grouped as `Provider / Category`, and keep quality metadata
+  when it is present.
+- Fast UI import loads 4,200 rows per provider so first load is usable. Full
+  catalogs are still available through Apollo/XtremeHD/Combined M3U8 export
+  links and provider-vault API data.
+- Apollo playback passed on `|UK| Syfy HD` via `/api/provider-vault/aac-hls`,
+  readyState `4`, unmuted, volume `1`, 1024x576.
+- XtremeHD playback passed on `USA AMC` via `/api/provider-vault/stream`,
+  readyState `4`, unmuted, volume `1`, 1920x1080.
+- No fatal screen, no paid/pro/Stripe copy, no non-English UI text, no
+  console/page errors in the accepted proofs.
+
 ## Fleet Carry-Forward
 
 Every remaining player repair should use this gate before being marked working:

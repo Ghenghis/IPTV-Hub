@@ -5,11 +5,18 @@ import path from 'node:path';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
-const outDir = 'C:/Users/Admin/Downloads/VPS/_visual_artifacts/zero-player-crash-recovery-proof-20260527';
+const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
+const outDir =
+  process.env.OUT_DIR ||
+  `C:/Users/Admin/Downloads/VPS/_visual_artifacts/zero-player-crash-recovery-proof-${stamp}`;
 const cookiePath =
+  process.env.COOKIE_PATH ||
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
-const buildId = '20260527-free-provider17';
-const appUrl = 'https://apps.daveai.tech/iptv-player-zero/?recovery_proof=' + Date.now();
+const appUrl =
+  (process.env.ZERO_PLAYER_URL || 'https://apps.daveai.tech/iptv-player-zero/') +
+  (String(process.env.ZERO_PLAYER_URL || '').includes('?') ? '&' : '?') +
+  'recovery_proof=' +
+  Date.now();
 
 async function authCookies() {
   const raw = JSON.parse(await fs.readFile(cookiePath, 'utf8'));
@@ -62,6 +69,13 @@ page.on('pageerror', (error) => pageErrors.push(String(error.message || error)))
 await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
 await page.waitForFunction(() => Boolean(window.__TAURI_INTERNALS__), { timeout: 30000 });
 
+const buildId = await page.evaluate(() => {
+  const stored = localStorage.getItem('ipz_daveai_hosted_build_id');
+  if (stored) return stored;
+  const scripts = Array.from(document.scripts).map((script) => script.src || '').join('\n');
+  return scripts.match(/v=([^&\s]+)/)?.[1] || 'unknown-build';
+});
+
 await page.evaluate(async (buildId) => {
   sessionStorage.removeItem('ipz_daveai_recovered_build');
   sessionStorage.removeItem('ipz_daveai_recovery_reason');
@@ -110,7 +124,7 @@ const summary = {
   ok:
     state.href.includes(`recovered=${buildId}`) &&
     state.recoveredBuild === buildId &&
-    /rendered fatal state/i.test(state.recoveryReason || '') &&
+    /rendered fatal state|hosted build changed/i.test(state.recoveryReason || '') &&
     !state.hasFatalCard &&
     !state.hasPaidText &&
     (state.hasProviderPanel || state.hasNoPlaylistsState),

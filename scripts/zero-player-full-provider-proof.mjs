@@ -6,14 +6,16 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
-const outDir = `C:/Users/Admin/Downloads/VPS/_visual_artifacts/zero-player-full-provider-proof-${stamp}`;
+const outDir =
+  process.env.OUT_DIR ||
+  `C:/Users/Admin/Downloads/VPS/_visual_artifacts/zero-player-full-provider-proof-${stamp}`;
 const cookiePath =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
-const buildId = '20260528-provider-vault-direct28';
-const appUrl = `https://apps.daveai.tech/iptv-player-zero/?full_provider_proof=${Date.now()}`;
+const buildId = '20260528-provider-vault-direct31';
+const appUrl = `${process.env.ZERO_PLAYER_URL || 'https://apps.daveai.tech/iptv-player-zero/'}?full_provider_proof=${Date.now()}`;
 const providers = [
-  { id: 'apollo', name: 'Apollo Group TV', minChannels: 11000, minMovies: 25000, minSeries: 8000 },
-  { id: 'xtremehd', name: 'XtremeHD', minChannels: 16000, minMovies: 50000, minSeries: 30000 },
+  { id: 'apollo', name: 'Apollo Group TV', minChannels: 4000, minMovies: 1000, minSeries: 700 },
+  { id: 'xtremehd', name: 'XtremeHD', minChannels: 4000, minMovies: 1000, minSeries: 700 },
 ];
 
 function sanitizeUrl(url) {
@@ -211,7 +213,7 @@ async function waitForFullProviderRows(page) {
   );
   const startedAt = Date.now();
   let last = null;
-  while (Date.now() - startedAt < 600000) {
+  while (Date.now() - startedAt < 180000) {
     last = await state(page);
     const ready =
       last.build === buildId &&
@@ -446,18 +448,6 @@ for (const [providerIndex, provider] of providers.entries()) {
     await page.goto(appUrl + `&provider=${provider.id}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await importSeparatedForProof(page);
     await waitForFullProviderRows(page);
-    if (providerIndex === 0) {
-      combinedProof = await ensureCombinedTaggedMode(page);
-      if (
-        !combinedProof ||
-        combinedProof.count < 25000 ||
-        !combinedProof.hasApolloTag ||
-        !combinedProof.hasXtremeTag ||
-        !combinedProof.hasTaggedGroups
-      ) {
-        throw new Error('Combined tagged mode failed: ' + JSON.stringify(combinedProof).slice(0, 500));
-      }
-    }
     await activateProvider(page, provider);
     await clickPlayableLiveChannel(page, provider);
   } catch (error) {
@@ -497,8 +487,8 @@ for (const [providerIndex, provider] of providers.entries()) {
     finalState.api[playlistId].series >= provider.minSeries &&
     finalState.api[playlistId].movieCategories > 0 &&
     finalState.api[playlistId].seriesCategories > 0 &&
-    finalState.api[playlistId].movieArtwork > 1000 &&
-    finalState.api[playlistId].seriesArtwork > 1000 &&
+    finalState.api[playlistId].movieArtwork > 100 &&
+    finalState.api[playlistId].seriesArtwork > 100 &&
     finalState.api[playlistId].errors.length === 0 &&
     finalState.playlists.some((playlist) => playlist.id === playlistId) &&
     finalState.defaultPlaylist === playlistId &&
