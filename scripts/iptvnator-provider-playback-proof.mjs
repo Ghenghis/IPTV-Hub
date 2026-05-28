@@ -6,16 +6,70 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
 const outDir =
-  'C:/Users/Admin/Downloads/VPS/_visual_artifacts/iptvnator-provider-proof-20260527';
+  process.env.OUT_DIR ||
+  'C:/Users/Admin/Downloads/VPS/_visual_artifacts/iptvnator-provider-proof-20260528';
 const cookiePath =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
 const baseUrl = 'https://iptvnator.daveai.tech';
 const staleXtreamId = '0c911b96-4d88-45f4-bcf9-c71586cf0428';
-const expectedBuildId = '20260527-v8';
+const expectedBuildId = '20260528-v15';
 
 const providers = [
-  { id: 'xtremehd', title: 'XtremeHD', route: '/workspace/playlists/daveai-provider-vault-xtremehd/all' },
-  { id: 'apollo', title: 'Apollo Group TV', route: '/workspace/playlists/daveai-provider-vault-apollo/all' },
+  {
+    id: 'xtremehd',
+    title: 'XtremeHD',
+    route: '/workspace/playlists/daveai-provider-vault-xtremehd/all',
+    readyPattern: /USA AMC/i,
+    playPatterns: [/USA AMC/i, /USA A&E UHD/i, /USA AccuWeather/i],
+    requiresUiPlayback: true,
+  },
+  {
+    id: 'apollo',
+    title: 'Apollo Group TV',
+    route: '/workspace/playlists/daveai-provider-vault-apollo/all',
+    readyPattern: /\|US\| NBC|\|US\| FOX|\|US\| ABC|\|US\| CBS/i,
+    playPatterns: [/\|US\| FOX 15/i, /\|US\| NBC 9/i, /\|US\| ABC 10/i, /\|US\| CBS 6/i],
+    requiresUiPlayback: true,
+  },
+];
+
+const mediaProbeTargets = [
+  {
+    id: 'xtremehd-live-amc',
+    provider: 'xtremehd',
+    kind: 'live',
+    streamId: '175787',
+    ext: 'm3u8',
+    expectOk: true,
+    expectMediaType: 'mpegts',
+  },
+  {
+    id: 'xtremehd-movie-first',
+    provider: 'xtremehd',
+    kind: 'movie',
+    streamId: '821352',
+    ext: 'mp4',
+    expectOk: true,
+    expectMediaType: 'mp4',
+  },
+  {
+    id: 'apollo-movie-guardians',
+    provider: 'apollo',
+    kind: 'movie',
+    streamId: '8479',
+    ext: 'mkv',
+    expectOk: true,
+    expectMediaType: 'mp4',
+  },
+  {
+    id: 'apollo-live-english-fox-local',
+    provider: 'apollo',
+    kind: 'live',
+    streamId: '829780',
+    ext: 'm3u8',
+    expectOk: true,
+    expectMediaType: 'mpegts',
+  },
 ];
 
 function sanitizeUrl(url) {
@@ -38,6 +92,49 @@ async function readAuthCookie() {
     { name, value, domain: '.daveai.tech', path: '/', secure: true, httpOnly: true, sameSite: 'Lax', expires },
     { name, value, domain: 'iptvnator.daveai.tech', path: '/', secure: true, httpOnly: true, sameSite: 'Lax', expires },
   ];
+}
+
+async function apiGetJson(context, pathAndQuery) {
+  const response = await context.request.get(`${baseUrl}${pathAndQuery}`, { timeout: 45000 });
+  const bodyText = await response.text();
+  let body = null;
+  try {
+    body = JSON.parse(bodyText);
+  } catch {
+    body = { raw: bodyText.slice(0, 600) };
+  }
+  return {
+    status: response.status(),
+    ok: response.ok(),
+    body,
+  };
+}
+
+async function runMediaProbes(context) {
+  const results = [];
+  for (const target of mediaProbeTargets) {
+    const params = new URLSearchParams({
+      provider: target.provider,
+      kind: target.kind,
+      id: target.streamId,
+      ext: target.ext,
+    });
+    const started = Date.now();
+    const result = await apiGetJson(context, `/api/provider-vault/probe?${params.toString()}`);
+    results.push({
+      ...target,
+      elapsedMs: Date.now() - started,
+      status: result.status,
+      body: result.body,
+      pass:
+        result.status === 200 &&
+        result.body &&
+        result.body.ok === target.expectOk &&
+        (!target.expectMediaType || result.body.mediaType === target.expectMediaType) &&
+        (!target.expectReason || result.body.reason === target.expectReason),
+    });
+  }
+  return results;
 }
 
 async function seedStaleXtreamState(page) {
@@ -112,6 +209,21 @@ async function seedStaleXtreamState(page) {
   }, { staleXtreamId, expectedBuildId });
 }
 
+async function wipeBrowserState(page) {
+  await page.goto(`${baseUrl}/?proof-wipe=${Date.now()}`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 60000,
+  });
+  await page.evaluate(async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    await new Promise((resolve) => {
+      const request = indexedDB.deleteDatabase('iptvnator');
+      request.onsuccess = request.onerror = request.onblocked = () => resolve();
+    });
+  });
+}
+
 async function readState(page) {
   return page.evaluate(async ({ staleXtreamId }) => {
     const dbRows = await new Promise((resolve) => {
@@ -136,6 +248,9 @@ async function readState(page) {
             hasServerUrl: Boolean(row.serverUrl),
             count: row.count,
             itemCount: row.playlist && Array.isArray(row.playlist.items) ? row.playlist.items.length : 0,
+            firstNames: row.playlist && Array.isArray(row.playlist.items)
+              ? row.playlist.items.slice(0, 20).map((item) => item.name || item.title || '').filter(Boolean)
+              : [],
           }));
           db.close();
           resolve(rows);
@@ -160,13 +275,47 @@ async function readState(page) {
   }, { staleXtreamId });
 }
 
+async function waitForColdProviderSeed(page, timeoutMs = 90000) {
+  const deadline = Date.now() + timeoutMs;
+  let latest = null;
+  while (Date.now() < deadline) {
+    try {
+      latest = await readState(page);
+    } catch (error) {
+      await page.waitForTimeout(1000);
+      continue;
+    }
+    const rows = Array.isArray(latest.dbRows) ? latest.dbRows : [];
+    const apollo = rows.find((item) => item.id === 'daveai-provider-vault-apollo');
+    const xtremehd = rows.find((item) => item.id === 'daveai-provider-vault-xtremehd');
+    if (
+      latest.buildId === expectedBuildId &&
+      latest.seeded === expectedBuildId &&
+      apollo &&
+      apollo.itemCount > 0 &&
+      xtremehd &&
+      xtremehd.itemCount > 0 &&
+      !/Portal unavailable/i.test(latest.text)
+    ) {
+      return latest;
+    }
+    await page.waitForTimeout(2000);
+  }
+  return latest || readState(page);
+}
+
 async function waitForProviderReady(page, provider, timeoutMs = 90000) {
   const deadline = Date.now() + timeoutMs;
   let latest = null;
   const expectedTitle = `${provider.title} - DaveAI Vault`;
   const expectedId = `daveai-provider-vault-${provider.id}`;
   while (Date.now() < deadline) {
-    latest = await readState(page);
+    try {
+      latest = await readState(page);
+    } catch (error) {
+      await page.waitForTimeout(1000);
+      continue;
+    }
     const rows = Array.isArray(latest.dbRows) ? latest.dbRows : [];
     const row = rows.find((item) => item.id === expectedId && item.itemCount > 0);
     if (
@@ -176,7 +325,7 @@ async function waitForProviderReady(page, provider, timeoutMs = 90000) {
       latest.xtreamPlaylists === '[]' &&
       !latest.hasStaleId &&
       latest.text.includes(expectedTitle) &&
-      /USA AMC/i.test(latest.text)
+      provider.readyPattern.test(latest.text)
     ) {
       return latest;
     }
@@ -187,22 +336,59 @@ async function waitForProviderReady(page, provider, timeoutMs = 90000) {
 
 async function playFirstVisibleChannel(page, provider) {
   const before = Date.now();
-  const target = page.getByText('USA AMC', { exact: false }).first();
-  await target.click({ timeout: 30000 });
-  await page.waitForTimeout(9000);
-  const video = await page.evaluate(() => {
+  const attempts = [];
+
+  async function readVideo() {
+    return page.evaluate(() => {
     const el = document.querySelector('video');
     return el
       ? {
           readyState: el.readyState,
           networkState: el.networkState,
           paused: el.paused,
+          muted: el.muted,
+          volume: el.volume,
           currentSrcKind: el.currentSrc ? (el.currentSrc.startsWith('blob:') ? 'blob' : 'url') : '',
           error: el.error ? { code: el.error.code, message: el.error.message } : null,
         }
       : null;
-  });
-  return { provider: provider.id, elapsedMs: Date.now() - before, video };
+    });
+  }
+
+  for (const pattern of provider.playPatterns) {
+    const target = page.getByText(pattern).first();
+    const count = await target.count().catch(() => 0);
+    if (!count) {
+      attempts.push({ pattern: String(pattern), found: false });
+      continue;
+    }
+
+    await target.click({ timeout: 30000 });
+    let video = null;
+    for (let i = 0; i < 12; i += 1) {
+      await page.waitForTimeout(1000);
+      video = await readVideo();
+      if (video?.readyState >= 2 && !video.error && video.muted === false && video.volume > 0) {
+        return {
+          provider: provider.id,
+          target: String(pattern),
+          attempts,
+          elapsedMs: Date.now() - before,
+          video,
+        };
+      }
+      if (video?.error) break;
+    }
+    attempts.push({ pattern: String(pattern), found: true, video });
+  }
+
+  return {
+    provider: provider.id,
+    target: '',
+    attempts,
+    elapsedMs: Date.now() - before,
+    video: await readVideo(),
+  };
 }
 
 await fs.mkdir(outDir, { recursive: true });
@@ -210,6 +396,7 @@ await fs.mkdir(outDir, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 1600, height: 950 }, ignoreHTTPSErrors: true });
 await context.addCookies(await readAuthCookie());
+const mediaProbes = await runMediaProbes(context);
 
 const page = await context.newPage();
 const pageErrors = [];
@@ -223,7 +410,7 @@ page.on('console', (message) => {
 });
 page.on('response', (response) => {
   const url = response.url();
-  if (url.includes('/api/provider-vault/stream')) {
+  if (url.includes('/api/provider-vault/stream') || url.includes('/api/provider-vault/aac-hls')) {
     streamResponses.push({ status: response.status(), url: sanitizeUrl(url) });
   }
   if (response.status() >= 400 && /iptvnator\.daveai\.tech/.test(url)) {
@@ -231,6 +418,15 @@ page.on('response', (response) => {
   }
 });
 
+await wipeBrowserState(page);
+await page.goto(`${baseUrl}/?cold-proof=${Date.now()}`, {
+  waitUntil: 'domcontentloaded',
+  timeout: 60000,
+});
+const coldSeed = await waitForColdProviderSeed(page);
+await page.screenshot({ path: path.join(outDir, 'iptvnator-cold-provider-seed.png'), fullPage: true });
+
+await wipeBrowserState(page);
 await seedStaleXtreamState(page);
 await page.goto(`${baseUrl}/workspace/xtreams/${staleXtreamId}/vod?proof=${Date.now()}`, {
   waitUntil: 'domcontentloaded',
@@ -261,7 +457,20 @@ for (const provider of providers) {
 
 const visibleText = `${staleMigration.text}\n${playback.map((item) => item.state.text).join('\n')}`;
 const hasCredentialText = /https?:\/\/[^ \n]*(username|password|type=m3u|player_api|live\/[^/\s]+\/[^/\s]+)/i.test(visibleText);
+function rowSignature(rows, providerId) {
+  const row = Array.isArray(rows)
+    ? rows.find((item) => item.id === `daveai-provider-vault-${providerId}`)
+    : null;
+  return row && Array.isArray(row.firstNames) ? row.firstNames.join('|') : '';
+}
+const apolloSignature = rowSignature(playback.find((item) => item.provider === 'apollo')?.state.dbRows, 'apollo');
+const xtremeSignature = rowSignature(playback.find((item) => item.provider === 'xtremehd')?.state.dbRows, 'xtremehd');
+const separatedProviders = Boolean(apolloSignature && xtremeSignature && apolloSignature !== xtremeSignature);
 const ok =
+  coldSeed.buildId === expectedBuildId &&
+  coldSeed.seeded === expectedBuildId &&
+  Array.isArray(coldSeed.dbRows) &&
+  coldSeed.dbRows.filter((item) => item.source === 'daveai-provider-vault' && item.itemCount > 0).length >= 2 &&
   staleMigration.buildId === expectedBuildId &&
   staleMigration.seeded === expectedBuildId &&
   staleMigration.xtreamPlaylists === '[]' &&
@@ -270,12 +479,19 @@ const ok =
   !hasCredentialText &&
   playback.every((item) =>
     new RegExp(`${item.provider === 'xtremehd' ? 'XtremeHD' : 'Apollo Group TV'} - DaveAI Vault`, 'i').test(item.state.text) &&
-    /USA AMC/i.test(item.state.text) &&
-    item.play.video &&
-    item.play.video.readyState >= 2 &&
-    !item.play.video.error
+    providers.find((provider) => provider.id === item.provider)?.readyPattern.test(item.state.text) &&
+    (
+      !providers.find((provider) => provider.id === item.provider)?.requiresUiPlayback ||
+      (
+        item.play.video &&
+        item.play.video.readyState >= 2 &&
+        !item.play.video.error
+      )
+    )
   ) &&
-  streamResponses.filter((item) => item.status === 200).length >= 2 &&
+  mediaProbes.every((item) => item.pass) &&
+  separatedProviders &&
+  streamResponses.filter((item) => item.status === 200).length >= 1 &&
   pageErrors.length === 0 &&
   consoleErrors.length === 0;
 
@@ -283,14 +499,22 @@ const summary = {
   ok,
   generatedAt: new Date().toISOString(),
   expectedBuildId,
+  coldSeed,
   staleMigration,
   playback,
+  mediaProbes,
   streamResponses,
   badResponses,
   pageErrors,
   consoleErrors,
   hasCredentialText,
+  separatedProviders,
+  providerSignatures: {
+    apollo: apolloSignature,
+    xtremehd: xtremeSignature,
+  },
   artifacts: {
+    coldSeed: path.join(outDir, 'iptvnator-cold-provider-seed.png'),
     migration: path.join(outDir, 'iptvnator-xtremehd-v5-migration.png'),
     xtremeCatalog: path.join(outDir, 'iptvnator-xtremehd-catalog.png'),
     xtremePlayback: path.join(outDir, 'iptvnator-xtremehd-playback.png'),

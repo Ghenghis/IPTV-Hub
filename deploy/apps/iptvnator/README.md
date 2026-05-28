@@ -61,8 +61,8 @@ playlists in IndexedDB:
 
 | Provider       | Playlist title                         | Browser data |
 | -------------- | -------------------------------------- | ------------ |
-| Apollo Group TV | `Apollo Group TV - DaveAI Vault`       | Safe `/api/provider-vault/stream` URLs only |
-| XtremeHD       | `XtremeHD - DaveAI Vault`              | Safe `/api/provider-vault/stream` URLs only |
+| Apollo Group TV | `Apollo Group TV - DaveAI Vault`       | Safe `/api/provider-vault/*` URLs only |
+| XtremeHD       | `XtremeHD - DaveAI Vault`              | Safe `/api/provider-vault/*` URLs only |
 
 The script also pins first-run language defaults to English and leaves a small
 “DaveAI Providers” refresh panel so the user can refresh either provider catalog
@@ -70,11 +70,16 @@ without typing credentials into IPTVnator. It does not modify the upstream
 Angular bundle and can be removed by deleting the injected script tag plus the
 override file.
 
-Current hosted bootstrap: `20260527-v6`. This version force-refreshes stale
-Xtream deep links into the safe DaveAI playlist route, keeps a watchdog active
-while old Angular state is booting, and prevents the legacy cleanup pass from
-deleting DaveAI vault playlists. Live proof is recorded in `PROOF-20260526.md`
-and the follow-up 2026-05-27 notes.
+Current hosted bootstrap: `20260528-v15`. This version force-refreshes stale
+Xtream deep links into the safe DaveAI playlist route, upgrades a browser
+IndexedDB database that exists without the `playlists` object store, keeps a
+watchdog active while old Angular state is booting, normalizes the upstream
+IndexedDB version-1 open path after a DaveAI repair, exposes Apollo live rows as
+HLS-shaped `ext=m3u8` URLs while transcoding the real TS source to H.264/AAC TS
+segments, requests the provider-vault `profile=english`
+catalog so Apollo/XtremeHD stay separate but English-first, and prevents the legacy
+cleanup pass from deleting DaveAI vault playlists. Live proof is recorded in
+`PROOF-20260526.md`, `PROOF-20260527.md`, and `PROOF-20260528.md`.
 
 ## Build & run (local)
 

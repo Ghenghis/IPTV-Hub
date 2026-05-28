@@ -8,7 +8,7 @@
 (function (window, document) {
   'use strict';
 
-  var BUILD_ID = '20260527-v8';
+  var BUILD_ID = '20260528-v15';
   var DB_NAME = 'iptvnator';
   var STORE_NAME = 'playlists';
   var SETTINGS_KEY = 'settings';
@@ -92,6 +92,7 @@
   function catalogUrl(providerId) {
     var params = new URLSearchParams({
       provider: providerId,
+      profile: 'english',
       liveLimit: String(LIMITS.liveLimit),
       movieLimit: String(LIMITS.movieLimit),
       seriesLimit: String(LIMITS.seriesLimit),
@@ -202,35 +203,70 @@
     }
   }
 
-  function openDb() {
-    return new Promise(function (resolve, reject) {
-      var request = window.indexedDB.open(DB_NAME);
-      request.onupgradeneeded = function () {
-        var db = request.result;
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          var store = db.createObjectStore(STORE_NAME, {
-            keyPath: '_id',
-            autoIncrement: false,
-          });
-          [
-            '_id',
-            'filename',
-            'title',
-            'count',
-            'playlist',
-            'importDate',
-            'lastUsage',
-            'favorites',
-            'recentlyViewed',
-            'autoRefresh',
-            'url',
-            'filePath',
-          ].forEach(function (name) {
+  function patchIndexedDbOpenForVersionSkew() {
+    try {
+      if (!window.indexedDB || !window.indexedDB.open || window.indexedDB.__daveaiOpenPatched) {
+        return;
+      }
+      var originalOpen = window.indexedDB.open.bind(window.indexedDB);
+      window.indexedDB.open = function (name, version) {
+        var isTargetDb = name === DB_NAME;
+        var request =
+          isTargetDb && Number(version) === 1
+            ? originalOpen(name)
+            : arguments.length > 1
+              ? originalOpen(name, version)
+              : originalOpen(name);
+
+        if (isTargetDb && request && request.addEventListener) {
+          request.addEventListener('upgradeneeded', function () {
             try {
-              store.createIndex(name, name, { unique: false });
+              ensurePlaylistStore(request.result);
             } catch (ignored) {}
           });
         }
+
+        return request;
+      };
+      window.indexedDB.__daveaiOpenPatched = true;
+    } catch (ignored) {}
+  }
+
+  function ensurePlaylistStore(db) {
+    if (db.objectStoreNames.contains(STORE_NAME)) return;
+    var store = db.createObjectStore(STORE_NAME, {
+      keyPath: '_id',
+      autoIncrement: false,
+    });
+    [
+      '_id',
+      'filename',
+      'title',
+      'count',
+      'playlist',
+      'importDate',
+      'lastUsage',
+      'favorites',
+      'recentlyViewed',
+      'autoRefresh',
+      'url',
+      'filePath',
+    ].forEach(function (name) {
+      try {
+        store.createIndex(name, name, { unique: false });
+      } catch (ignored) {}
+    });
+  }
+
+  function openDbAtVersion(version) {
+    return new Promise(function (resolve, reject) {
+      var request =
+        typeof version === 'number'
+          ? window.indexedDB.open(DB_NAME, version)
+          : window.indexedDB.open(DB_NAME);
+      request.onupgradeneeded = function () {
+        var db = request.result;
+        ensurePlaylistStore(db);
       };
       request.onsuccess = function () {
         var db = request.result;
@@ -244,6 +280,30 @@
       request.onerror = function () {
         reject(request.error || new Error('Could not open IPTVnator database'));
       };
+    });
+  }
+
+  function openDb() {
+    return openDbAtVersion().catch(function (error) {
+      if (
+        !error ||
+        String(error.message || error).indexOf('playlist store is unavailable') === -1
+      ) {
+        throw error;
+      }
+
+      return new Promise(function (resolve, reject) {
+        var probe = window.indexedDB.open(DB_NAME);
+        probe.onerror = function () {
+          reject(probe.error || error);
+        };
+        probe.onsuccess = function () {
+          var db = probe.result;
+          var nextVersion = Math.max(1, Number(db.version || 1)) + 1;
+          db.close();
+          openDbAtVersion(nextVersion).then(resolve, reject);
+        };
+      });
     });
   }
 
@@ -499,6 +559,19 @@
       provider.name + ' ' + type + ' ' + (index + 1)
     );
     var url = text(item && item.url, '');
+    if (provider.id === 'apollo' && type === 'live' && url.indexOf('/api/provider-vault/aac-hls?') === 0) {
+      try {
+        var parsedLiveUrl = new URL(url, window.location.href);
+        parsedLiveUrl.searchParams.set('ext', 'm3u8');
+        parsedLiveUrl.searchParams.set('sourceExt', 'ts');
+        parsedLiveUrl.searchParams.set('video', 'h264');
+        parsedLiveUrl.searchParams.set('segment', 'ts');
+        url = parsedLiveUrl.pathname + parsedLiveUrl.search;
+      } catch (ignored) {
+        url += (url.indexOf('?') === -1 ? '?' : '&') + 'ext=m3u8';
+        url += '&sourceExt=ts&video=h264&segment=ts';
+      }
+    }
     var logo = safeLogoUrl(text(
       item && (item.logo || item.stream_icon || (item.tvg && item.tvg.logo)),
       ''
@@ -928,6 +1001,10 @@
 
   disableHostedServiceWorker();
   forceEnglishSettings();
+  patchIndexedDbOpenForVersionSkew();
+  openDb().then(function (db) {
+    db.close();
+  }).catch(function () {});
   var preemptedLegacyProvider = preemptLegacyXtreamRoute();
   installLegacyXtreamRouteWatchdog(preemptedLegacyProvider);
 
