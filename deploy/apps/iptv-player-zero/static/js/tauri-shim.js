@@ -7,7 +7,7 @@
 (function (window) {
   'use strict';
 
-  var DAVEAI_HOSTED_BUILD_ID = '20260527-free-provider22';
+  var DAVEAI_HOSTED_BUILD_ID = '20260528-provider-vault-direct24';
 
   // ── Helper: emit event the React app listens to via Tauri events ──────────
   function emitTauriEvent(event, payload) {
@@ -150,7 +150,7 @@
           registrations.forEach(function (registration) {
             var scope = registration && registration.scope || '';
             if (/iptv-player-zero|apps\.daveai\.tech/i.test(scope)) {
-              registration.update().catch(function () {});
+              registration.unregister().catch(function () {});
             }
           });
         }).catch(function () {});
@@ -160,9 +160,12 @@
 
   function recoverHostedStateAfterFatalError(reason) {
     try {
-      if (window.sessionStorage.getItem('ipz_daveai_recovered_build') === DAVEAI_HOSTED_BUILD_ID) {
+      var attemptKey = 'ipz_daveai_runtime_recoveries_' + DAVEAI_HOSTED_BUILD_ID;
+      var attempts = Number(window.sessionStorage.getItem(attemptKey) || '0');
+      if (attempts >= 3) {
         return;
       }
+      window.sessionStorage.setItem(attemptKey, String(attempts + 1));
       window.sessionStorage.setItem('ipz_daveai_recovered_build', DAVEAI_HOSTED_BUILD_ID);
       window.sessionStorage.setItem('ipz_daveai_recovery_reason', String(reason || 'unknown').slice(0, 220));
     } catch (e) {}
@@ -674,6 +677,10 @@
 
       case 'play_live_channel': {
         var liveUrl = payload.url || payload.stream_url;
+        if (!liveUrl && XtreamClient.isProviderVaultPlaylist && XtreamClient.isProviderVaultPlaylist(payload.playlist_id) && (payload.stream_id || payload.channel_id)) {
+          var liveProvider = String(payload.playlist_id || '').replace(/^daveai-provider-/, '');
+          liveUrl = XtreamClient.providerVaultStreamUrl(liveProvider, 'live', payload.stream_id || payload.channel_id, payload.container_extension || payload.output || 'm3u8');
+        }
         if (!liveUrl && XtreamClient.getAuth(payload.playlist_id) && (payload.stream_id || payload.channel_id)) {
           var auth = XtreamClient.getAuth(payload.playlist_id);
           liveUrl = XtreamClient.buildStreamUrl(auth, payload.stream_id || payload.channel_id, payload.container_extension || payload.output || 'm3u8');
@@ -743,6 +750,10 @@
       // ── VOD ────────────────────────────────────────────────────────────────
       case 'play_vod': {
         var url = payload.stream_url || payload.url;
+        if (!url && XtreamClient.isProviderVaultPlaylist && XtreamClient.isProviderVaultPlaylist(payload.playlist_id)) {
+          var movieProvider = String(payload.playlist_id || '').replace(/^daveai-provider-/, '');
+          url = XtreamClient.providerVaultStreamUrl(movieProvider, 'movie', payload.stream_id || payload.movie_id || payload.vod_id, payload.container_extension || 'mp4');
+        }
         if (!url && XtreamClient.getAuth(payload.playlist_id)) {
           var auth = XtreamClient.getAuth(payload.playlist_id);
           url = XtreamClient.buildVodUrl(auth, payload.stream_id, payload.container_extension || 'mp4');
@@ -752,6 +763,10 @@
 
       case 'play_series_episode': {
         var url = payload.stream_url || payload.url;
+        if (!url && XtreamClient.isProviderVaultPlaylist && XtreamClient.isProviderVaultPlaylist(payload.playlist_id)) {
+          var seriesProvider = String(payload.playlist_id || '').replace(/^daveai-provider-/, '');
+          url = XtreamClient.providerVaultStreamUrl(seriesProvider, 'series', payload.stream_id || payload.episode_id || payload.id, payload.container_extension || 'mkv');
+        }
         if (!url && XtreamClient.getAuth(payload.playlist_id)) {
           var auth = XtreamClient.getAuth(payload.playlist_id);
           url = XtreamClient.buildSeriesUrl(auth, payload.stream_id, payload.container_extension || 'mkv');

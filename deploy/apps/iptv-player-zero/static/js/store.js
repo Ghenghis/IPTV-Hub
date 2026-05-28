@@ -106,6 +106,45 @@
     return tx(storeName, 'readonly').then(function (s) { return promReq(s.index(indexName).getAll(value)); });
   }
 
+  function deleteChannelsForPlaylist(playlistId) {
+    return tx('channels', 'readwrite').then(function (s) {
+      return new Promise(function (resolve, reject) {
+        var index = s.index('playlist_id');
+        var request = index.openCursor(IDBKeyRange.only(playlistId));
+        request.onerror = function (e) { reject(e.target.error); };
+        request.onsuccess = function (e) {
+          var cursor = e.target.result;
+          if (!cursor) {
+            resolve();
+            return;
+          }
+          cursor.delete();
+          cursor.continue();
+        };
+      });
+    });
+  }
+
+  function putChannelChunk(rows) {
+    return tx('channels', 'readwrite').then(function (s) {
+      return new Promise(function (resolve, reject) {
+        var pending = rows.length;
+        if (!pending) {
+          resolve();
+          return;
+        }
+        rows.forEach(function (row) {
+          var req = s.put(row);
+          req.onerror = function (e) { reject(e.target.error); };
+          req.onsuccess = function () {
+            pending -= 1;
+            if (pending === 0) resolve();
+          };
+        });
+      });
+    });
+  }
+
   function genId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   }
@@ -151,19 +190,22 @@
   // ── Channels ───────────────────────────────────────────────────────────────
   function saveChannels(playlistId, channels) {
     channels = Array.isArray(channels) ? channels : [];
-    return storeGetByIndex('channels', 'playlist_id', playlistId).then(function (existing) {
-      existing = Array.isArray(existing) ? existing : [];
-      return tx('channels', 'readwrite').then(function (s) {
-        existing.forEach(function (c) { s.delete(c.id); });
-        var order = 0;
-        channels.forEach(function (ch) {
-          ch.playlist_id = playlistId;
-          ch.id = ch.id || (playlistId + '_' + order);
-          ch.sort_order = order++;
-          s.put(ch);
-        });
-        return channels.length;
+    return deleteChannelsForPlaylist(playlistId).then(function () {
+      var rows = channels.map(function (ch, order) {
+        ch = ch && typeof ch === 'object' ? ch : {};
+        ch.playlist_id = playlistId;
+        ch.id = ch.id || (playlistId + '_' + order);
+        ch.sort_order = order;
+        return ch;
       });
+      var chunkSize = 1000;
+      var chain = Promise.resolve();
+      for (var start = 0; start < rows.length; start += chunkSize) {
+        (function (chunk) {
+          chain = chain.then(function () { return putChannelChunk(chunk); });
+        })(rows.slice(start, start + chunkSize));
+      }
+      return chain.then(function () { return channels.length; });
     });
   }
 

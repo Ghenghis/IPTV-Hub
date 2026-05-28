@@ -98,12 +98,13 @@
   var HLS_CONFIG = {
     enableWorker: true,
     lowLatencyMode: false,
-    // Buffer ahead: 60s normal, 120s for VOD
-    maxBufferLength: 60,
-    maxMaxBufferLength: 120,
-    // Start buffering 30s before playback
-    maxBufferSize: 60 * 1000 * 1000,  // 60 MB
+    // DaveTV hosted mode favors smooth playback over tiny buffers.
+    maxBufferLength: 180,
+    maxMaxBufferLength: 300,
+    maxBufferSize: 180 * 1000 * 1000,
+    backBufferLength: 90,
     maxBufferHole: 0.5,
+    startFragPrefetch: true,
     // Stall recovery
     highBufferWatchdogPeriod: 2,
     nudgeMaxRetry: 5,
@@ -127,11 +128,12 @@
 
   var HLS_LOW_LATENCY_CONFIG = Object.assign({}, HLS_CONFIG, {
     lowLatencyMode: true,
-    maxBufferLength: 8,
-    maxMaxBufferLength: 16,
-    maxBufferSize: 10 * 1000 * 1000,
-    liveSyncDurationCount: 3,
-    liveMaxLatencyDurationCount: 6,
+    maxBufferLength: 45,
+    maxMaxBufferLength: 90,
+    maxBufferSize: 60 * 1000 * 1000,
+    backBufferLength: 30,
+    liveSyncDurationCount: 5,
+    liveMaxLatencyDurationCount: 12,
   });
 
   function loadHls(url, video, options) {

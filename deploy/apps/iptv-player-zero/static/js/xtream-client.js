@@ -10,6 +10,17 @@
     return raw ? JSON.parse(raw) : null;
   }
 
+  var PROVIDER_PREFIX = 'daveai-provider-';
+
+  function providerIdFromPlaylist(playlistId) {
+    var id = String(playlistId || '');
+    return id.indexOf(PROVIDER_PREFIX) === 0 ? id.slice(PROVIDER_PREFIX.length) : '';
+  }
+
+  function isProviderVaultPlaylist(playlistId) {
+    return Boolean(providerIdFromPlaylist(playlistId));
+  }
+
   function normalizeBaseUrl(url) {
     var raw = (url || '').trim();
     if (!raw) return '';
@@ -45,6 +56,32 @@
     return /^https?:\/\//i.test(url)
       ? '/api/iptv-proxy?url=' + encodeURIComponent(url)
       : url;
+  }
+
+  function providerVaultApi(providerId, action, extra) {
+    var params = new URLSearchParams(Object.assign({ provider: providerId, action: action || '' }, extra || {}));
+    if (!action) params.delete('action');
+    return '/api/provider-vault/xtream-api?' + params.toString();
+  }
+
+  async function providerVaultFetch(providerId, action, extra) {
+    var resp = await fetch(providerVaultApi(providerId, action, extra), {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json,text/plain,*/*' },
+    });
+    if (!resp.ok) throw new Error('Provider vault HTTP ' + resp.status);
+    return resp.json();
+  }
+
+  function publicStreamUrl(providerId, kind, streamId, ext) {
+    var params = new URLSearchParams({
+      provider: providerId,
+      kind: kind,
+      id: String(streamId || ''),
+      ext: ext || (kind === 'live' ? 'm3u8' : kind === 'movie' ? 'mp4' : 'mkv'),
+    });
+    return '/api/provider-vault/stream?' + params.toString();
   }
 
   function buildUrl(auth, action, extra) {
@@ -130,44 +167,69 @@
     },
 
     getLiveCategories: function (playlistId) {
+      var providerId = providerIdFromPlaylist(playlistId);
+      if (providerId) return providerVaultFetch(providerId, 'get_live_categories');
       var auth = getAuth(playlistId);
       if (!auth) return Promise.resolve([]);
       return apiFetch(buildUrl(auth, 'get_live_categories'));
     },
     getLiveStreams: function (payload) {
+      var providerId = providerIdFromPlaylist(payload.playlist_id);
+      if (providerId) {
+        var pvExtra = payload.category_id ? { category_id: payload.category_id } : {};
+        return providerVaultFetch(providerId, 'get_live_streams', pvExtra);
+      }
       var auth = getAuth(payload.playlist_id);
       if (!auth) return Promise.resolve([]);
       var extra = payload.category_id ? { category_id: payload.category_id } : {};
       return apiFetch(buildUrl(auth, 'get_live_streams', extra));
     },
     getMovieCategories: function (playlistId) {
+      var providerId = providerIdFromPlaylist(playlistId);
+      if (providerId) return providerVaultFetch(providerId, 'get_vod_categories');
       var auth = getAuth(playlistId);
       if (!auth) return Promise.resolve([]);
       return apiFetch(buildUrl(auth, 'get_vod_categories'));
     },
     listMovies: function (payload) {
+      var providerId = providerIdFromPlaylist(payload.playlist_id);
+      if (providerId) {
+        var pvExtra = payload.category_id ? { category_id: payload.category_id } : {};
+        return providerVaultFetch(providerId, 'get_vod_streams', pvExtra);
+      }
       var auth = getAuth(payload.playlist_id);
       if (!auth) return Promise.resolve([]);
       var extra = payload.category_id ? { category_id: payload.category_id } : {};
       return apiFetch(buildUrl(auth, 'get_vod_streams', extra));
     },
     getMovieDetails: function (payload) {
+      var providerId = providerIdFromPlaylist(payload.playlist_id);
+      if (providerId) return providerVaultFetch(providerId, 'get_vod_info', { vod_id: payload.movie_id });
       var auth = getAuth(payload.playlist_id);
       if (!auth) return Promise.resolve(null);
       return apiFetch(buildUrl(auth, 'get_vod_info', { vod_id: payload.movie_id }));
     },
     getSeriesCategories: function (playlistId) {
+      var providerId = providerIdFromPlaylist(playlistId);
+      if (providerId) return providerVaultFetch(providerId, 'get_series_categories');
       var auth = getAuth(playlistId);
       if (!auth) return Promise.resolve([]);
       return apiFetch(buildUrl(auth, 'get_series_categories'));
     },
     listSeries: function (payload) {
+      var providerId = providerIdFromPlaylist(payload.playlist_id);
+      if (providerId) {
+        var pvExtra = payload.category_id ? { category_id: payload.category_id } : {};
+        return providerVaultFetch(providerId, 'get_series', pvExtra);
+      }
       var auth = getAuth(payload.playlist_id);
       if (!auth) return Promise.resolve([]);
       var extra = payload.category_id ? { category_id: payload.category_id } : {};
       return apiFetch(buildUrl(auth, 'get_series', extra));
     },
     getSeriesDetails: function (payload) {
+      var providerId = providerIdFromPlaylist(payload.playlist_id);
+      if (providerId) return providerVaultFetch(providerId, 'get_series_info', { series_id: payload.series_id });
       var auth = getAuth(payload.playlist_id);
       if (!auth) return Promise.resolve(null);
       return apiFetch(buildUrl(auth, 'get_series_info', { series_id: payload.series_id }));
@@ -179,6 +241,8 @@
     buildM3uUrl: buildM3uUrl,
     buildXmltvUrl: buildXmltvUrl,
     buildCatchupUrl: buildCatchupUrl,
+    isProviderVaultPlaylist: isProviderVaultPlaylist,
+    providerVaultStreamUrl: publicStreamUrl,
   };
 
 }(window));

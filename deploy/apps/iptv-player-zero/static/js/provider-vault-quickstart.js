@@ -14,11 +14,11 @@
   ];
 
   var LIMITS = {
-    liveLimit: 1200,
+    liveLimit: 20000,
     movieLimit: 500,
     seriesLimit: 500,
   };
-  var QUICKSTART_BUILD_ID = '20260527-free-provider22';
+  var QUICKSTART_BUILD_ID = '20260528-provider-vault-direct24';
   var PROVIDER_PLAYLIST_PREFIX = 'daveai-provider-';
 
   function ready(fn) {
@@ -311,9 +311,10 @@
           name: provider.name,
           url: catalogUrl(provider.id),
           path: playlistId + '.channels.json',
-          type: 'provider-vault',
+          type: 'xtream',
           source: 'daveai-provider-vault',
           provider_id: provider.id,
+          daveai_provider_vault: true,
           epg_url: '',
           created_at: Date.now(),
           updated_at: Date.now(),
