@@ -45,6 +45,34 @@ import { useTMDb } from '@/app/context/TMDbContext';
 import { useSubtitle } from '@/app/context/SubtitleContext';
 import { safeImagePath } from '@/app/lib/catalogFilters';
 
+function normalizeSeriesInfo(data: any): SeriesInfo | null {
+    if (!data || !data.info) return null;
+
+    const rawEpisodes = data.episodes && typeof data.episodes === 'object' && !Array.isArray(data.episodes)
+        ? data.episodes
+        : {};
+    const episodes = Object.fromEntries(
+        Object.entries(rawEpisodes)
+            .filter(([, value]) => Array.isArray(value))
+            .map(([season, value]) => [season, value as Episode[]])
+    );
+
+    return {
+        info: {
+            name: data.info.name || 'Series',
+            cover: safeImagePath(data.info.cover) || data.info.cover || '',
+            plot: data.info.plot || '',
+            cast: data.info.cast || '',
+            director: data.info.director || '',
+            genre: data.info.genre || '',
+            releaseDate: data.info.releaseDate || data.info.release_date || '',
+            rating: data.info.rating || '',
+            backdrop_path: Array.isArray(data.info.backdrop_path) ? data.info.backdrop_path : [],
+        },
+        episodes,
+    };
+}
+
 export default function WatchSeriesPage() {
     const { credentials } = useAuth();
     const { isFavorite, addFavorite, removeFavorite } = useFavorites();
@@ -91,9 +119,15 @@ export default function WatchSeriesPage() {
                 // Try cache first
                 const cached = await getCachedDetail(seriesId);
                 if (cached) {
-                    setSeries(cached);
+                    const normalized = normalizeSeriesInfo(cached);
+                    if (!normalized) {
+                        setError("Series details not found.");
+                        setLoading(false);
+                        return;
+                    }
+                    setSeries(normalized);
                     // Set initial season if available
-                    const seasons = Object.keys(cached.episodes || {});
+                    const seasons = Object.keys(normalized.episodes || {});
                     if (seasons.length > 0) {
                         setActiveSeason(seasons[0]);
                     }
@@ -112,12 +146,13 @@ export default function WatchSeriesPage() {
                 });
 
                 const data = await res.json();
-                if (data && data.info) {
-                    setSeries(data);
+                const normalized = normalizeSeriesInfo(data);
+                if (normalized) {
+                    setSeries(normalized);
                     // Lazy cache the detail
-                    await saveCachedDetail(seriesId, data);
+                    await saveCachedDetail(seriesId, normalized);
 
-                    const seasons = Object.keys(data.episodes || {});
+                    const seasons = Object.keys(normalized.episodes || {});
                     if (seasons.length > 0) {
                         setActiveSeason(seasons[0]);
                     }
@@ -182,14 +217,15 @@ export default function WatchSeriesPage() {
         if (searchParams.get('autoplay') === 'true' && series && !selectedEpisode) {
             const episodeId = searchParams.get('episode');
             console.log('[Series Auto-play] Looking for episode:', episodeId);
+            const episodeMap = series.episodes || {};
 
             if (episodeId && episodeId !== '') {
                 // Find the episode by ID
                 let foundEpisode = null;
                 let foundSeason = null;
 
-                for (const season in series.episodes) {
-                    const episode = series.episodes[season].find(ep => String(ep.id) === String(episodeId));
+                for (const season in episodeMap) {
+                    const episode = (episodeMap[season] || []).find(ep => String(ep.id) === String(episodeId));
                     if (episode) {
                         foundEpisode = episode;
                         foundSeason = season;
@@ -206,20 +242,20 @@ export default function WatchSeriesPage() {
                 } else {
                     console.warn('[Series Auto-play] Episode not found, using first episode of first season');
                     // Fallback: use first episode of first season
-                    const firstSeason = Object.keys(series.episodes)[0];
-                    if (firstSeason && series.episodes[firstSeason].length > 0) {
+                    const firstSeason = Object.keys(episodeMap)[0];
+                    if (firstSeason && episodeMap[firstSeason]?.length > 0) {
                         setActiveSeason(firstSeason);
-                        setSelectedEpisode(series.episodes[firstSeason][0]);
+                        setSelectedEpisode(episodeMap[firstSeason][0]);
                         router.replace(`/dashboard/watch/series/${seriesId}`);
                     }
                 }
             } else {
                 console.log('[Series Auto-play] No episode ID provided, using first episode');
                 // No episode ID, use first episode of first season
-                const firstSeason = Object.keys(series.episodes)[0];
-                if (firstSeason && series.episodes[firstSeason].length > 0) {
+                const firstSeason = Object.keys(episodeMap)[0];
+                if (firstSeason && episodeMap[firstSeason]?.length > 0) {
                     setActiveSeason(firstSeason);
-                    setSelectedEpisode(series.episodes[firstSeason][0]);
+                    setSelectedEpisode(episodeMap[firstSeason][0]);
                     router.replace(`/dashboard/watch/series/${seriesId}`);
                 }
             }
@@ -259,21 +295,26 @@ export default function WatchSeriesPage() {
     if (selectedEpisode) {
         const extension = String(selectedEpisode.container_extension || 'mp4').replace(/[^a-z0-9]/gi, '') || 'mp4';
         let streamUrl = '';
+        let fallbackStreamUrl: string | undefined;
         if (credentials?.providerId) {
-            streamUrl = `/api/provider-vault/stream?provider=${encodeURIComponent(credentials.providerId)}&kind=series&id=${encodeURIComponent(selectedEpisode.id)}&ext=${encodeURIComponent(extension)}`;
+            const provider = encodeURIComponent(credentials.providerId);
+            const id = encodeURIComponent(selectedEpisode.id);
+            const ext = encodeURIComponent(extension);
+            const directUrl = `/api/provider-vault/stream?provider=${provider}&kind=series&id=${id}&ext=${ext}`;
+            const transcodeUrl = `/api/provider-vault/transcode-hls?provider=${provider}&kind=series&id=${id}&ext=${ext}`;
+            const browserSafeDirect = /^(mp4|m4v|webm|mov|m3u8)$/i.test(extension);
+            streamUrl = browserSafeDirect ? directUrl : transcodeUrl;
+            fallbackStreamUrl = browserSafeDirect ? transcodeUrl : undefined;
         } else if (credentials?.hostUrl && credentials.username && credentials.password) {
             streamUrl = `${credentials.hostUrl.replace(/\/$/, '')}/series/${credentials.username}/${credentials.password}/${selectedEpisode.id}.${extension}`;
         }
-        const fallbackStreamUrl = credentials?.providerId
-            ? `/api/provider-vault/transcode-hls?provider=${encodeURIComponent(credentials.providerId)}&kind=series&id=${encodeURIComponent(selectedEpisode.id)}&ext=${encodeURIComponent(extension)}`
-            : undefined;
 
         // Navigation logic
         const allEpisodes: Episode[] = [];
-        Object.keys(series.episodes)
+        Object.keys(series.episodes || {})
             .sort((a, b) => Number(a) - Number(b))
             .forEach(season => {
-                allEpisodes.push(...series.episodes[season]);
+                allEpisodes.push(...(series.episodes[season] || []));
             });
 
         const currentIndex = allEpisodes.findIndex(e => e.id === selectedEpisode.id);
@@ -321,8 +362,9 @@ export default function WatchSeriesPage() {
         );
     }
 
-    const seasons = Object.keys(series.episodes || {}).sort((a, b) => Number(a) - Number(b));
-    const currentEpisodes = series.episodes[activeSeason] || [];
+    const episodeMap = series.episodes || {};
+    const seasons = Object.keys(episodeMap).sort((a, b) => Number(a) - Number(b));
+    const currentEpisodes = episodeMap[activeSeason] || [];
 
     return (
         <div className="min-h-screen bg-[#141414] text-white">

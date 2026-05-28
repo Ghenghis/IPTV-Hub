@@ -11,13 +11,22 @@ export default function WatchLivePage() {
     const router = useRouter();
     const streamId = params.streamId as string;
     const [streamUrl, setStreamUrl] = useState<string | null>(null);
+    const [fallbackUrl, setFallbackUrl] = useState<string | undefined>(undefined);
 
     useEffect(() => {
         if (!credentials || !streamId) return;
 
         if (credentials.providerId) {
-            const url = `/api/provider-vault/stream?provider=${encodeURIComponent(credentials.providerId)}&kind=live&id=${encodeURIComponent(streamId)}&ext=m3u8`;
-            setStreamUrl(url);
+            const provider = encodeURIComponent(credentials.providerId);
+            const id = encodeURIComponent(streamId);
+            if (credentials.providerId === 'apollo') {
+                setStreamUrl(`/api/provider-vault/transcode-hls?provider=${provider}&kind=live&id=${id}&ext=ts`);
+                setFallbackUrl(`/api/provider-vault/stream?provider=${provider}&kind=live&id=${id}&ext=ts`);
+                return;
+            }
+
+            setStreamUrl(`/api/provider-vault/stream?provider=${provider}&kind=live&id=${id}&ext=m3u8`);
+            setFallbackUrl(`/api/provider-vault/transcode-hls?provider=${provider}&kind=live&id=${id}&ext=ts`);
             return;
         }
 
@@ -29,6 +38,7 @@ export default function WatchLivePage() {
         const baseUrl = credentials.hostUrl.replace(/\/$/, '');
         const url = `${baseUrl}/${credentials.username}/${credentials.password}/${encodeURIComponent(streamId)}`;
         setStreamUrl(url);
+        setFallbackUrl(undefined);
     }, [credentials, streamId]);
 
     if (!streamUrl) {
@@ -45,6 +55,7 @@ export default function WatchLivePage() {
             <div className="relative flex-1 flex items-center justify-center">
                 <VideoPlayer
                     src={streamUrl}
+                    fallbackSrc={fallbackUrl}
                     autoPlay={true}
                     onBack={() => router.back()}
                     enterFullscreen={true}

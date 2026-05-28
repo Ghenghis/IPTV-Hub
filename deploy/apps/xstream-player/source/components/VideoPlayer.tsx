@@ -79,6 +79,29 @@ const preferEnglishNativeTracks = (video: HTMLVideoElement) => {
     }
 };
 
+const isHlsUrl = (url: string) => {
+    const lower = String(url || '').toLowerCase();
+    if (lower.includes('.m3u8') || lower.includes('/transcode-hls')) return true;
+    try {
+        const parsed = new URL(url, window.location.origin);
+        return parsed.searchParams.get('ext')?.toLowerCase() === 'm3u8'
+            || parsed.pathname.toLowerCase().includes('/transcode-hls');
+    } catch {
+        return false;
+    }
+};
+
+const isLiveStreamUrl = (url: string) => {
+    const lower = String(url || '').toLowerCase();
+    if (/\/live\//i.test(lower)) return true;
+    try {
+        const parsed = new URL(url, window.location.origin);
+        return parsed.searchParams.get('kind') === 'live';
+    } catch {
+        return false;
+    }
+};
+
 export default function VideoPlayer({
     src,
     poster,
@@ -479,9 +502,9 @@ export default function VideoPlayer({
         hasAppliedInitialTime.current = false;
 
         const activeSrc = playbackSrc;
-        const isHLS = activeSrc.toLowerCase().includes('.m3u8');
+        const isHLS = isHlsUrl(activeSrc);
         const isDirectVideo = /\.(mp4|mkv|avi|webm|mov)$/i.test(activeSrc.split('?')[0]);
-        const isLiveHls = isHLS && /\/live\//i.test(activeSrc);
+        const isLiveHls = isHLS && isLiveStreamUrl(activeSrc);
         const useHlsJs = isHLS && Hls.isSupported();
 
         let hls: Hls | undefined;
@@ -578,7 +601,8 @@ export default function VideoPlayer({
             });
 
             hls.on(Hls.Events.ERROR, (event, data) => {
-                console.error('[VideoPlayer] HLS Error:', data.type, data.details, data.fatal ? '(FATAL)' : '');
+                const logHlsIssue = data.fatal ? console.error : console.warn;
+                logHlsIssue('[VideoPlayer] HLS Error:', data.type, data.details, data.fatal ? '(FATAL)' : '(recoverable)');
                 if (data.fatal) {
                     if (fallbackSrc && activeSrc === fallbackSrc) {
                         hls?.destroy();
@@ -589,6 +613,13 @@ export default function VideoPlayer({
                     setError(`Stream error: ${data.details}. Retrying...`);
                     switch (data.type) {
                         case Hls.ErrorTypes.NETWORK_ERROR:
+                            if (/manifestLoadError|levelLoadError|fragLoadError/i.test(String(data.details || ''))) {
+                                if (tryPlaybackFallback(data.details || 'network hls error')) return;
+                                hls?.destroy();
+                                setError('This provider stream is unavailable right now. Try another title, episode, or provider.');
+                                setIsBuffering(false);
+                                return;
+                            }
                             hls?.startLoad();
                             break;
                         case Hls.ErrorTypes.MEDIA_ERROR:

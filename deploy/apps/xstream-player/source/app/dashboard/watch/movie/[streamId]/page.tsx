@@ -203,14 +203,19 @@ export default function WatchMoviePage() {
     if (isPlaying) {
         const extension = String(movie.movie_data.container_extension || 'mp4').replace(/[^a-z0-9]/gi, '') || 'mp4';
         let streamUrl = '';
+        let fallbackStreamUrl: string | undefined;
         if (credentials?.providerId) {
-            streamUrl = `/api/provider-vault/stream?provider=${encodeURIComponent(credentials.providerId)}&kind=movie&id=${encodeURIComponent(streamId)}&ext=${encodeURIComponent(extension)}`;
+            const provider = encodeURIComponent(credentials.providerId);
+            const id = encodeURIComponent(streamId);
+            const ext = encodeURIComponent(extension);
+            const directUrl = `/api/provider-vault/stream?provider=${provider}&kind=movie&id=${id}&ext=${ext}`;
+            const transcodeUrl = `/api/provider-vault/transcode-hls?provider=${provider}&kind=movie&id=${id}&ext=${ext}`;
+            const browserSafeDirect = /^(mp4|m4v|webm|mov|m3u8)$/i.test(extension);
+            streamUrl = browserSafeDirect ? directUrl : transcodeUrl;
+            fallbackStreamUrl = browserSafeDirect ? transcodeUrl : undefined;
         } else if (credentials?.hostUrl && credentials.username && credentials.password) {
             streamUrl = `${credentials.hostUrl.replace(/\/$/, '')}/movie/${credentials.username}/${credentials.password}/${streamId}.${extension}`;
         }
-        const fallbackStreamUrl = credentials?.providerId
-            ? `/api/provider-vault/transcode-hls?provider=${encodeURIComponent(credentials.providerId)}&kind=movie&id=${encodeURIComponent(streamId)}&ext=${encodeURIComponent(extension)}`
-            : undefined;
 
         return (
             <div className="fixed inset-0 bg-black z-50 flex flex-col">

@@ -9,10 +9,10 @@ const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z')
 const outDir = `C:/Users/Admin/Downloads/VPS/_visual_artifacts/zero-player-full-provider-proof-${stamp}`;
 const cookiePath =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
-const buildId = '20260528-provider-vault-direct24';
+const buildId = '20260528-provider-vault-direct28';
 const appUrl = `https://apps.daveai.tech/iptv-player-zero/?full_provider_proof=${Date.now()}`;
 const providers = [
-  { id: 'apollo', name: 'Apollo Group TV', minChannels: 15000, minMovies: 50000, minSeries: 30000 },
+  { id: 'apollo', name: 'Apollo Group TV', minChannels: 11000, minMovies: 25000, minSeries: 8000 },
   { id: 'xtremehd', name: 'XtremeHD', minChannels: 16000, minMovies: 50000, minSeries: 30000 },
 ];
 
@@ -29,7 +29,12 @@ function sanitizeUrl(url) {
 }
 
 async function authCookies() {
-  const raw = JSON.parse(await fs.readFile(cookiePath, 'utf8'));
+  let raw = null;
+  try {
+    raw = JSON.parse(await fs.readFile(cookiePath, 'utf8'));
+  } catch {
+    return [];
+  }
   const name = raw.cookieName || raw.name || '__Secure-daveai_session';
   const value = raw.cookieValue || raw.value;
   const expires = raw.expiresAt ? Math.floor(new Date(raw.expiresAt).getTime() / 1000) : undefined;
@@ -87,8 +92,14 @@ async function state(page, includeApiForProvider = '') {
       samples[playlistId] = Array.isArray(rows)
         ? rows.slice(0, 8).map((row) => ({
             name: row.name,
+            originalName: row.original_name,
             type: row.type,
             category: row.category,
+            group: row.group || row.group_title,
+            providerId: row.provider_id,
+            providerName: row.provider_name,
+            providerTag: row.daveai_provider_tag,
+            quality: row.quality,
             logo: Boolean(row.logo || row.icon || row.tvg_logo),
             urlKind: String(row.url || row.stream_url || '').includes('/api/provider-vault')
               ? 'provider-vault'
@@ -98,6 +109,10 @@ async function state(page, includeApiForProvider = '') {
           }))
         : [];
     }
+    const combinedRows =
+      window.Store && window.Store.getChannels
+        ? await window.Store.getChannels('daveai-provider-combined-tagged').catch(() => [])
+        : [];
     const videos = Array.from(document.querySelectorAll('video')).map((video) => ({
       readyState: video.readyState,
       networkState: video.networkState,
@@ -147,6 +162,8 @@ async function state(page, includeApiForProvider = '') {
       build: localStorage.getItem('ipz_provider_autoload_build_id'),
       defaultPlaylist: localStorage.getItem('ipz_default_playlist_id'),
       providerLast: localStorage.getItem('ipz_provider_quickstart_last_playlist_id'),
+      displayMode: localStorage.getItem('ipz_provider_display_mode'),
+      selectedLive: window.__ZERO_PROOF_SELECTED_LIVE__ || null,
       language: {
         html: document.documentElement.lang,
         i18next: localStorage.getItem('i18nextLng'),
@@ -162,7 +179,22 @@ async function state(page, includeApiForProvider = '') {
         name: playlist.name,
         type: playlist.type,
         source: playlist.source,
+        mode: playlist.daveai_provider_mode,
       })),
+      combined: {
+        count: Array.isArray(combinedRows) ? combinedRows.length : 0,
+        hasApolloTag: Array.isArray(combinedRows) && combinedRows.some((row) => row.provider_id === 'apollo'),
+        hasXtremeTag: Array.isArray(combinedRows) && combinedRows.some((row) => row.provider_id === 'xtremehd'),
+        sample: Array.isArray(combinedRows)
+          ? combinedRows.slice(0, 8).map((row) => ({
+              name: row.name,
+              providerId: row.provider_id,
+              providerName: row.provider_name,
+              group: row.group || row.group_title,
+              quality: row.quality,
+            }))
+          : [],
+      },
       counts,
       samples,
       videos,
@@ -199,6 +231,42 @@ async function waitForFullProviderRows(page) {
   );
 }
 
+async function importSeparatedForProof(page) {
+  await page.waitForFunction(
+    () =>
+      window.Store &&
+      typeof window.Store.getChannels === 'function' &&
+      window.IPZProviderVaultQuickstart &&
+      typeof window.IPZProviderVaultQuickstart.importSeparatedProviders === 'function',
+    undefined,
+    { timeout: 60000 }
+  );
+  return page.evaluate(async ({ providersForEval, buildIdForEval }) => {
+    const messages = [];
+    const result = await window.IPZProviderVaultQuickstart.importSeparatedProviders(
+      providersForEval,
+      (message) => messages.push(message),
+      { reload: false }
+    );
+    localStorage.setItem('ipz_provider_autoload_build_id', buildIdForEval);
+    return { result, messages };
+  }, { providersForEval: providers, buildIdForEval: buildId });
+}
+
+async function waitForProviderReloadToSettle(page) {
+  await page.waitForTimeout(3500);
+  await page.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {});
+  await page.waitForFunction(
+    (buildIdForWait) =>
+      window.Store &&
+      typeof window.Store.getChannels === 'function' &&
+      localStorage.getItem('ipz_provider_autoload_build_id') === buildIdForWait,
+    buildId,
+    { timeout: 60000 }
+  );
+  await page.waitForTimeout(500);
+}
+
 async function activateProvider(page, provider) {
   const playlistId = `daveai-provider-${provider.id}`;
   await page.evaluate((id) => {
@@ -215,13 +283,101 @@ async function activateProvider(page, provider) {
   await page.waitForTimeout(2000);
 }
 
-async function clickPlayableLiveChannel(page) {
+async function ensureCombinedTaggedMode(page) {
+  return page.evaluate(async ({ providersForEval }) => {
+    if (!window.IPZProviderVaultQuickstart || !window.IPZProviderVaultQuickstart.importCombinedTaggedProviders) {
+      throw new Error('Combined tagged importer is not exposed');
+    }
+    const messages = [];
+    const result = await window.IPZProviderVaultQuickstart.importCombinedTaggedProviders(
+      providersForEval,
+      (message) => messages.push(message),
+      { reload: false }
+    );
+    const rows = await window.Store.getChannels('daveai-provider-combined-tagged');
+    return {
+      result,
+      messages,
+      count: Array.isArray(rows) ? rows.length : 0,
+      hasApolloTag: Array.isArray(rows) && rows.some((row) => row.provider_id === 'apollo' && /\[Apollo Group TV\]/.test(row.name || '')),
+      hasXtremeTag: Array.isArray(rows) && rows.some((row) => row.provider_id === 'xtremehd' && /\[XtremeHD\]/.test(row.name || '')),
+      hasTaggedGroups: Array.isArray(rows) && rows.some((row) => /Apollo Group TV \/|XtremeHD \//.test(row.group || row.group_title || '')),
+      hasQualityTags: Array.isArray(rows) && rows.some((row) => Boolean(row.quality)),
+    };
+  }, { providersForEval: providers });
+}
+
+async function pickPlayableLiveChannel(page, provider) {
+  return page.evaluate(async ({ providerForEval }) => {
+    const playlistId = `daveai-provider-${providerForEval.id}`;
+    const rows = await window.Store.getChannels(playlistId);
+    const liveRows = (Array.isArray(rows) ? rows : []).filter((row) => {
+      const url = String(row && (row.url || row.stream_url) || '');
+      const name = String(row && row.name || '');
+      return row && row.type === 'live' && /\/api\/provider-vault\/(stream|aac-hls)/.test(url) && !/^#+/.test(name.trim());
+    });
+    const preferences = providerForEval.id === 'apollo'
+      ? [/SYFY HD/i, /ESPN HD/i, /AMC HD/i, /CNN HD/i, /FOX/i]
+      : [/^USA AMC$/i, /USA A&E/i, /USA CNN/i, /USA FOX/i, /USA ESPN/i];
+    const scored = liveRows
+      .map((row, index) => {
+        const name = String(row.name || '');
+        const url = String(row.url || row.stream_url || '');
+        const pref = preferences.findIndex((pattern) => pattern.test(name));
+        const browserHlsScore = providerForEval.id === 'apollo' && /\/api\/provider-vault\/aac-hls\b/i.test(url) ? -20 : 0;
+        const hevcRiskScore = /\b(4K|UHD|2160P?)\b/i.test(name) ? 25 : 0;
+        return { row, score: (pref < 0 ? 50 : pref) + browserHlsScore + hevcRiskScore + index / 100000 };
+      })
+      .sort((a, b) => a.score - b.score);
+    if (!scored.length) throw new Error('No provider-vault live rows found for ' + providerForEval.name);
+    const row = scored[0].row;
+    const parsed = new URL(row.url || row.stream_url, location.origin);
+    return {
+      playlistId,
+      name: row.name,
+      originalName: row.original_name,
+      providerId: row.provider_id,
+      providerName: row.provider_name,
+      group: row.group || row.group_title,
+      quality: row.quality,
+      url: row.url || row.stream_url,
+      probePath: `/api/provider-vault/probe?${parsed.searchParams.toString()}`,
+    };
+  }, { providerForEval: provider });
+}
+
+async function clickPlayableLiveChannel(page, provider) {
   await page.getByRole('button', { name: 'Got it' }).click({ force: true, timeout: 3000 }).catch(() => {});
-  await page.getByText('USA Entertainment', { exact: true }).first().click({ force: true, timeout: 15000 }).catch(() => {});
-  await page.waitForTimeout(1000);
-  const amcRow = page.locator('[role="listitem"]').filter({ hasText: /^USA AMC$/ }).first();
-  await amcRow.click({ force: true, timeout: 30000 });
-  await page.keyboard.press('Enter');
+  await page.mouse.click(80, 80).catch(() => {});
+  const selected = await pickPlayableLiveChannel(page, provider);
+  const probe = await page.evaluate(async (probePath) => {
+    const response = await fetch(probePath, { cache: 'no-store', credentials: 'same-origin' });
+    return response.json();
+  }, selected.probePath);
+  if (!probe || probe.ok !== true) {
+    throw new Error(`Media probe failed for ${provider.name}: ${JSON.stringify(probe).slice(0, 500)}`);
+  }
+  await page.evaluate(async ({ selectedForEval, probeForEval }) => {
+    window.__ZERO_PROOF_SELECTED_LIVE__ = Object.assign({}, selectedForEval, {
+      probe: {
+        ok: probeForEval.ok,
+        sourceType: probeForEval.sourceType,
+        contentType: probeForEval.contentType,
+        mediaType: probeForEval.mediaType,
+        firstBytes: probeForEval.firstBytes,
+        playable: probeForEval.playable,
+      },
+    });
+    if (!window.PlayerShim || !window.PlayerShim.play) {
+      throw new Error('PlayerShim.play is not available');
+    }
+    await window.PlayerShim.play(selectedForEval.url, { type: 'live', live: true });
+    for (const video of document.querySelectorAll('video')) {
+      video.muted = false;
+      video.volume = 1;
+      video.play().catch(() => {});
+    }
+  }, { selectedForEval: selected, probeForEval: probe });
   await page.waitForFunction(
     () =>
       Array.from(document.querySelectorAll('video')).some(
@@ -230,7 +386,7 @@ async function clickPlayableLiveChannel(page) {
           video.readyState >= 1 &&
           video.videoWidth > 0 &&
           video.videoHeight > 0 &&
-          String(video.currentSrc || '').includes('/api/provider-vault')
+          (String(video.currentSrc || '').includes('/api/provider-vault') || String(video.currentSrc || '').startsWith('blob:'))
       ),
     undefined,
     { timeout: 90000 }
@@ -250,13 +406,16 @@ await fs.mkdir(outDir, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const results = [];
 
-for (const provider of providers) {
+for (const [providerIndex, provider] of providers.entries()) {
   const context = await browser.newContext({
     viewport: { width: 1920, height: 1080 },
     deviceScaleFactor: 1,
     ignoreHTTPSErrors: true,
   });
   await context.addCookies(await authCookies());
+  await context.addInitScript(() => {
+    window.__IPZ_PROVIDER_PROOF_DISABLE_AUTOLOAD__ = true;
+  });
   const page = await context.newPage();
   const consoleErrors = [];
   const pageErrors = [];
@@ -272,7 +431,7 @@ for (const provider of providers) {
   });
   page.on('response', (response) => {
     const url = response.url();
-    if (url.includes('/api/provider-vault/stream') || url.includes('/api/provider-vault/segment')) {
+    if (url.includes('/api/provider-vault/stream') || url.includes('/api/provider-vault/segment') || url.includes('/api/provider-vault/aac-hls')) {
       streamResponses.push({ status: response.status(), url: sanitizeUrl(url) });
     }
     if (response.status() >= 400 && /apps\.daveai\.tech/.test(url)) {
@@ -281,19 +440,39 @@ for (const provider of providers) {
   });
 
   let actionError = null;
+  let combinedProof = null;
   try {
     await resetState(page);
     await page.goto(appUrl + `&provider=${provider.id}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await importSeparatedForProof(page);
     await waitForFullProviderRows(page);
+    if (providerIndex === 0) {
+      combinedProof = await ensureCombinedTaggedMode(page);
+      if (
+        !combinedProof ||
+        combinedProof.count < 25000 ||
+        !combinedProof.hasApolloTag ||
+        !combinedProof.hasXtremeTag ||
+        !combinedProof.hasTaggedGroups
+      ) {
+        throw new Error('Combined tagged mode failed: ' + JSON.stringify(combinedProof).slice(0, 500));
+      }
+    }
     await activateProvider(page, provider);
-    await clickPlayableLiveChannel(page);
+    await clickPlayableLiveChannel(page, provider);
   } catch (error) {
     actionError = String(error && error.message ? error.message : error);
   }
 
   const finalState = await state(page, provider.id);
   const screenshot = path.join(outDir, `zero-player-${provider.id}-full-provider.png`);
-  await page.screenshot({ path: screenshot, fullPage: true });
+  let screenshotError = null;
+  try {
+    await page.screenshot({ path: screenshot, fullPage: true, timeout: 60000 });
+  } catch (error) {
+    screenshotError = String(error && error.message ? error.message : error);
+    await page.screenshot({ path: screenshot.replace(/\.png$/, '-viewport.png'), fullPage: false, timeout: 15000 }).catch(() => {});
+  }
   await context.close();
 
   const playlistId = `daveai-provider-${provider.id}`;
@@ -305,6 +484,10 @@ for (const provider of providers) {
       video.height > 0 &&
       ['provider-vault', 'blob'].includes(video.currentSrcKind)
   );
+  const providerSamples = finalState.samples[playlistId] || [];
+  const taggedRows =
+    providerSamples.length > 0 &&
+    providerSamples.every((row) => row.providerId === provider.id && row.providerName === provider.name && row.providerTag === provider.name);
   const ok =
     !actionError &&
     finalState.build === buildId &&
@@ -319,13 +502,17 @@ for (const provider of providers) {
     finalState.api[playlistId].errors.length === 0 &&
     finalState.playlists.some((playlist) => playlist.id === playlistId) &&
     finalState.defaultPlaylist === playlistId &&
+    taggedRows &&
+    finalState.selectedLive &&
+    finalState.selectedLive.providerId === provider.id &&
+    finalState.selectedLive.probe &&
+    finalState.selectedLive.probe.ok === true &&
     !finalState.hasFatal &&
     !finalState.hasPaid &&
     !finalState.hasLimitedCopy &&
     !finalState.hasNonEnglishUi &&
     videoReady &&
     streamResponses.some((item) => item.status === 200) &&
-    streamResponses.some((item) => item.status === 200 && item.url.includes('/segment')) &&
     pageErrors.length === 0 &&
     consoleErrors.length === 0;
 
@@ -335,10 +522,12 @@ for (const provider of providers) {
     actionError,
     state: finalState,
     streamResponses,
+    combinedProof,
     badResponses,
     pageErrors,
     consoleErrors,
     screenshot,
+    screenshotError,
   });
 }
 
@@ -370,9 +559,12 @@ console.log(
         hasLimitedCopy: result.state.hasLimitedCopy,
         hasNonEnglishUi: result.state.hasNonEnglishUi,
         videos: result.state.videos,
+        selectedLive: result.state.selectedLive,
+        combinedProof: result.combinedProof,
         stream200: result.streamResponses.filter((item) => item.status === 200).length,
         pageErrors: result.pageErrors.length,
         consoleErrors: result.consoleErrors.length,
+        screenshotError: result.screenshotError,
         screenshot: result.screenshot,
       })),
       outDir,

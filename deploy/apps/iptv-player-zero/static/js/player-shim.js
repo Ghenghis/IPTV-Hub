@@ -207,7 +207,12 @@
   }
 
   function isHlsUrl(url) {
-    return /\.m3u8(\?|$)/i.test(url) || url.includes('/hls/') || url.includes('type=m3u8');
+    return (
+      /\.m3u8(\?|$)/i.test(url) ||
+      url.includes('/hls/') ||
+      url.includes('type=m3u8') ||
+      url.includes('/api/provider-vault/aac-hls')
+    );
   }
 
   var PlayerShim = {

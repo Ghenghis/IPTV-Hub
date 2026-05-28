@@ -66,11 +66,21 @@ async function fetchJson(page, url, body) {
 }
 
 async function firstCatalogItem(page, providerId, action) {
+  const catalog = await catalogItems(page, providerId, action, 8);
+  return {
+    status: catalog.status,
+    total: catalog.total,
+    count: catalog.items.length,
+    item: catalog.items[0],
+  };
+}
+
+async function catalogItems(page, providerId, action, limit = 12) {
   const response = await fetchJson(page, '/api/proxy', {
     providerId,
     action,
     page: 1,
-    limit: 8,
+    limit,
   });
   assert(response.ok, `${providerId} ${action} failed with ${response.status}`);
   const items = Array.isArray(response.json?.items) ? response.json.items : [];
@@ -78,8 +88,7 @@ async function firstCatalogItem(page, providerId, action) {
   return {
     status: response.status,
     total: response.json.total,
-    count: items.length,
-    item: items[0],
+    items,
   };
 }
 
@@ -124,7 +133,7 @@ async function proveProvider(browser, providerId) {
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('console', (msg) => {
     const text = msg.text();
-    if (['error', 'warning'].includes(msg.type()) && !/Autoplay|favicon|AbortError/i.test(text)) {
+    if (msg.type() === 'error' && !/Autoplay|favicon|AbortError/i.test(text)) {
       consoleErrors.push({ type: msg.type(), text: text.slice(0, 500) });
     }
   });
@@ -137,8 +146,8 @@ async function proveProvider(browser, providerId) {
     }
   });
 
-  await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 45_000 });
-  await page.waitForLoadState('domcontentloaded');
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+  await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
 
   const loginText = await page.locator('body').innerText({ timeout: 15_000 });
   for (const text of requiredEnglish) assert(loginText.includes(text), `Missing English text on login: ${text}`);
@@ -147,7 +156,12 @@ async function proveProvider(browser, providerId) {
   await page.screenshot({ path: path.join(OUT_DIR, `xstream-${providerId}-login.png`), fullPage: true });
 
   await page.getByRole('button', { name: `Use ${providerName}` }).click();
-  await page.waitForURL(/\/dashboard/, { timeout: 45_000 });
+  await page.waitForFunction(() => location.pathname.includes('/dashboard') || Boolean(localStorage.getItem('xstream_auth')), {
+    timeout: 60_000,
+  });
+  if (!page.url().includes('/dashboard')) {
+    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+  }
   await page.waitForLoadState('networkidle', { timeout: 45_000 }).catch(() => {});
   await page.waitForTimeout(1500);
 
@@ -182,39 +196,30 @@ async function proveProvider(browser, providerId) {
     assert(Array.isArray(response.json) && response.json.length > 0, `${providerId} ${label} returned no rows`);
   }
 
-  const live = await firstCatalogItem(page, providerId, 'get_live_streams');
+  const liveCatalog = await catalogItems(page, providerId, 'get_live_streams', 18);
   const movies = await firstCatalogItem(page, providerId, 'get_vod_streams');
   const series = await firstCatalogItem(page, providerId, 'get_series');
 
   await page.screenshot({ path: path.join(OUT_DIR, `xstream-${providerId}-dashboard.png`), fullPage: true });
 
-  const streamId = String(live.item.stream_id || live.item.id);
-  assert(streamId && streamId !== 'undefined', `${providerId} live stream id missing`);
-
   const streamResponses = [];
+  const transcodeResponses = [];
   const segmentResponses = [];
   page.on('response', (response) => {
     const url = response.url();
     if (url.includes('/api/provider-vault/stream')) {
       streamResponses.push({ status: response.status(), url });
     }
+    if (url.includes('/api/provider-vault/transcode-hls')) {
+      transcodeResponses.push({ status: response.status(), url });
+    }
     if (url.includes('/api/provider-vault/segment')) {
       segmentResponses.push({ status: response.status(), url });
     }
   });
 
-  await page.goto(`${BASE_URL}/dashboard/watch/live/${encodeURIComponent(streamId)}`, {
-    waitUntil: 'domcontentloaded',
-    timeout: 45_000,
-  });
-  await page.waitForSelector('video', { timeout: 30_000 });
-  await page.waitForFunction(() => {
-    const video = document.querySelector('video');
-    return Boolean(video && (video.readyState >= 2 || video.currentSrc));
-  }, { timeout: 45_000 });
-  await page.waitForTimeout(5000);
-
-  const videoState = await page.evaluate(() => {
+  async function readVideoState() {
+    return page.evaluate(() => {
     const video = document.querySelector('video');
     if (!video) return null;
     const buffered = [];
@@ -224,15 +229,82 @@ async function proveProvider(browser, providerId) {
     return {
       readyState: video.readyState,
       paused: video.paused,
+      muted: video.muted,
+      volume: video.volume,
+      width: video.videoWidth,
+      height: video.videoHeight,
       currentSrc: video.currentSrc,
       error: video.error ? { code: video.error.code, message: video.error.message } : null,
       currentTime: video.currentTime,
       buffered,
     };
-  });
-  assert(videoState?.readyState >= 2 || videoState?.currentSrc, `${providerId} video never prepared`);
+    });
+  }
+
+  const liveAttempts = [];
+  let selectedLive = null;
+  let videoState = null;
+  for (const item of liveCatalog.items.slice(0, 10)) {
+    const streamId = String(item.stream_id || item.id);
+    if (!streamId || streamId === 'undefined') continue;
+    const beforeStream = streamResponses.length;
+    const beforeTranscode = transcodeResponses.length;
+    const beforeSegment = segmentResponses.length;
+
+    await page.goto(`${BASE_URL}/dashboard/watch/live/${encodeURIComponent(streamId)}`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 45_000,
+    });
+    await page.waitForSelector('video', { timeout: 30_000 });
+    await page
+      .waitForFunction(() => {
+        const video = document.querySelector('video');
+        return Boolean(video && video.readyState >= 2 && video.videoWidth > 0 && !video.error);
+      }, { timeout: providerId === 'apollo' ? 75_000 : 45_000 })
+      .catch(() => undefined);
+    await page.waitForTimeout(2500);
+    const attemptState = await readVideoState();
+    const attempt = {
+      id: streamId,
+      name: item.name || item.title || '',
+      readyState: attemptState?.readyState || 0,
+      paused: attemptState?.paused,
+      muted: attemptState?.muted,
+      volume: attemptState?.volume,
+      width: attemptState?.width || 0,
+      height: attemptState?.height || 0,
+      error: attemptState?.error || null,
+      streamStatus: streamResponses.slice(beforeStream).map((response) => response.status),
+      transcodeStatus: transcodeResponses.slice(beforeTranscode).map((response) => response.status),
+      segmentStatus: segmentResponses.slice(beforeSegment).map((response) => response.status).slice(0, 10),
+    };
+    liveAttempts.push(attempt);
+    if (
+      attemptState?.readyState >= 2 &&
+      attemptState?.paused === false &&
+      attemptState?.muted === false &&
+      attemptState?.volume > 0 &&
+      attemptState?.width > 0 &&
+      attemptState?.height > 0 &&
+      !attemptState?.error
+    ) {
+      selectedLive = item;
+      videoState = attemptState;
+      break;
+    }
+  }
+
+  assert(selectedLive && videoState, `${providerId} no playable live candidate in first ${liveAttempts.length} attempts`);
+  assert(videoState?.readyState >= 2, `${providerId} video never prepared`);
+  assert(videoState?.paused === false, `${providerId} video did not autoplay`);
+  assert(videoState?.muted === false, `${providerId} video stayed muted`);
+  assert(videoState?.volume > 0, `${providerId} video volume was not enabled`);
+  assert(videoState?.width > 0 && videoState?.height > 0, `${providerId} video dimensions missing`);
   assert(!videoState?.error, `${providerId} video error ${JSON.stringify(videoState?.error)}`);
-  assert(streamResponses.some((response) => response.status >= 200 && response.status < 300), `${providerId} did not request provider-vault stream successfully`);
+  assert(
+    [...streamResponses, ...transcodeResponses].some((response) => response.status >= 200 && response.status < 300),
+    `${providerId} did not request provider-vault stream/transcode successfully`,
+  );
 
   await page.screenshot({ path: path.join(OUT_DIR, `xstream-${providerId}-playback.png`), fullPage: true });
 
@@ -264,19 +336,33 @@ async function proveProvider(browser, providerId) {
       series: seriesCategories.json.length,
     },
     catalogs: {
-      live: { count: live.count, total: live.total },
+      live: { count: liveCatalog.items.length, total: liveCatalog.total },
       movies: { count: movies.count, total: movies.total },
       series: { count: series.count, total: series.total },
     },
     playback: {
+      selectedLive: {
+        id: String(selectedLive.stream_id || selectedLive.id),
+        name: selectedLive.name || selectedLive.title || '',
+      },
+      liveAttempts,
       streamStatus: streamResponses.map((response) => response.status),
+      transcodeStatus: transcodeResponses.map((response) => response.status),
       segmentStatus: segmentResponses.map((response) => response.status).slice(0, 10),
       videoState: {
         readyState: videoState.readyState,
         paused: videoState.paused,
+        muted: videoState.muted,
+        volume: videoState.volume,
         error: videoState.error,
+        width: videoState.width,
+        height: videoState.height,
         bufferedRanges: videoState.buffered.length,
-        currentSrcIsVault: String(videoState.currentSrc || '').includes('/api/provider-vault/stream'),
+        currentSrcKind: String(videoState.currentSrc || '').startsWith('blob:')
+          ? 'blob-hls'
+          : String(videoState.currentSrc || '').includes('/api/provider-vault/')
+            ? 'provider-vault'
+            : 'other',
       },
     },
     diagnostics: {

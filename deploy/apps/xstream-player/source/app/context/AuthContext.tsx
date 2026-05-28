@@ -116,6 +116,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 server: serverInfo
             };
 
+            await db.clearCache();
             localStorage.setItem('xstream_auth', JSON.stringify(authData));
 
             setUser(userInfo);

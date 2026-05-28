@@ -7,6 +7,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import { NextRequest, NextResponse } from 'next/server';
 import {
     buildStreamUrl,
+    defaultStreamExtension,
     getProviderAccount,
     providerIdFromSearch,
     resolveWorkingAccount,
@@ -31,6 +32,8 @@ type Job = {
 const JOBS = new Map<string, Job>();
 const ROOT_DIR = path.join(os.tmpdir(), 'xstream-player-hls');
 const JOB_TTL_MS = 3 * 60 * 60 * 1000;
+const MANIFEST_READY_TIMEOUT_MS = 14_000;
+const STREAM_USER_AGENT = 'IPTV Smarters Pro';
 
 function cleanExt(raw?: string | null) {
     return String(raw || 'mp4').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'mp4';
@@ -80,7 +83,7 @@ function ffmpegArgs(sourceUrl: string, dir: string, manifestPath: string) {
         'warning',
         '-nostdin',
         '-user_agent',
-        'IPTV Smarters Pro',
+        STREAM_USER_AGENT,
         '-reconnect',
         '1',
         '-reconnect_streamed',
@@ -123,6 +126,24 @@ function ffmpegArgs(sourceUrl: string, dir: string, manifestPath: string) {
     ];
 }
 
+async function preflightSource(sourceUrl: string) {
+    const upstream = await fetch(sourceUrl, {
+        headers: { 'User-Agent': STREAM_USER_AGENT },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(8_000),
+    });
+    upstream.body?.cancel().catch(() => undefined);
+
+    if (!upstream.ok && upstream.status !== 206) {
+        throw new Error(`Provider stream preflight failed (${upstream.status})`);
+    }
+
+    const contentType = upstream.headers.get('content-type') || '';
+    if (/text\/html|application\/json/i.test(contentType)) {
+        throw new Error('Provider returned a non-video response for this stream');
+    }
+}
+
 async function ensureJob(provider: ProviderId, kind: StreamKind, id: string, ext: string) {
     await cleanupOldJobs();
     const key = jobKey(provider, kind, id, ext);
@@ -137,6 +158,7 @@ async function ensureJob(provider: ProviderId, kind: StreamKind, id: string, ext
 
     const account = await resolveWorkingAccount(parsedAccount);
     const sourceUrl = buildStreamUrl(account, kind, id, ext);
+    await preflightSource(sourceUrl);
     const dir = path.join(ROOT_DIR, key);
     const manifestPath = path.join(dir, 'index.m3u8');
 
@@ -213,12 +235,16 @@ async function readManifest(req: NextRequest, job: Job, provider: ProviderId, ki
         if (!(await fileExists(job.manifestPath))) return false;
         const body = await fsp.readFile(job.manifestPath, 'utf8').catch(() => '');
         return /seg_\d{5}\.ts/.test(body);
-    }, 30_000);
+    }, MANIFEST_READY_TIMEOUT_MS);
 
     if (!ready) {
-        const reason = job.failed || 'Transcode did not produce a playable manifest';
+        const detail = job.stderr.trim().split(/\r?\n/).slice(-4).join(' ');
+        const reason = job.failed || detail || 'Transcode did not produce a playable manifest';
+        job.failed = reason;
+        job.process?.kill('SIGTERM');
+        JOBS.delete(job.key);
         return new Response(reason, {
-            status: 502,
+            status: 424,
             headers: {
                 'Content-Type': 'text/plain; charset=utf-8',
                 'Cache-Control': 'no-store',
@@ -241,12 +267,13 @@ export async function GET(req: NextRequest) {
     const provider = providerIdFromSearch(req.nextUrl.searchParams.get('provider'));
     const kind = req.nextUrl.searchParams.get('kind');
     const id = cleanPart(req.nextUrl.searchParams.get('id'));
-    const ext = cleanExt(req.nextUrl.searchParams.get('ext'));
+    const rawExt = req.nextUrl.searchParams.get('ext');
     const segment = req.nextUrl.searchParams.get('segment');
 
-    if (!provider || !id || (kind !== 'movie' && kind !== 'series')) {
+    if (!provider || !id || (kind !== 'live' && kind !== 'movie' && kind !== 'series')) {
         return NextResponse.json({ error: 'Invalid transcode request' }, { status: 400 });
     }
+    const ext = cleanExt(defaultStreamExtension(provider, kind, rawExt));
 
     try {
         const job = await ensureJob(provider, kind, id, ext);
@@ -254,7 +281,7 @@ export async function GET(req: NextRequest) {
         return readManifest(req, job, provider, kind, id, ext);
     } catch (error: any) {
         return new Response(error?.message || 'Transcode failed', {
-            status: 502,
+            status: 424,
             headers: {
                 'Content-Type': 'text/plain; charset=utf-8',
                 'Cache-Control': 'no-store',

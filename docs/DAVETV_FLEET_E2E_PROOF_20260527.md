@@ -1,5 +1,10 @@
 # DaveTV Fleet E2E Proof — 2026-05-27
 
+> Superseded by `docs/DAVETV_FLEET_E2E_STATUS_20260528.md`.
+> User review on 2026-05-28 found this proof was too shallow: several players
+> rendered shells while provider data, artwork, audio, or playback was still
+> broken. Treat this file as historical evidence only, not current fleet truth.
+
 ## Result
 
 DaveTV provider playback and visual-card checks were rerun against the live VPS-hosted apps with Playwright.
@@ -52,4 +57,3 @@ The xstream-watch targeted rerun artifact, replacing the one non-app diagnostic 
 ## Notes
 
 The earlier xstream-watch failure was not a playback failure. All ten playback checks were already OK, but the proof counted a navigation-cancelled `/api/watch-progress/...` request as fatal while switching pages. The proof now ignores only that `net::ERR_ABORTED` navigation artifact and still fails on raw playback UI, page exceptions, console errors, missing provider-vault streams, or empty provider IDs.
-

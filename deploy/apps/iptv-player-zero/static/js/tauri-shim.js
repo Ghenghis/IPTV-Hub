@@ -7,7 +7,7 @@
 (function (window) {
   'use strict';
 
-  var DAVEAI_HOSTED_BUILD_ID = '20260528-provider-vault-direct24';
+  var DAVEAI_HOSTED_BUILD_ID = '20260528-provider-vault-direct28';
 
   // ── Helper: emit event the React app listens to via Tauri events ──────────
   function emitTauriEvent(event, payload) {

@@ -195,20 +195,21 @@ function providerSectionContexts(provider: { id: ProviderId; name: string; match
             contexts.push(text.slice(start, Math.min(end, start + 6500)));
         }
 
-    const filenameLooksProviderSpecific =
-      entry.basename.includes(provider.id) ||
-      provider.name.toLowerCase().split(/\s+/).some((part) => part.length >= 5 && entry.basename.includes(part));
-
-    if (filenameLooksProviderSpecific && exactProviderHits.length === 0) {
-      contexts.push(text);
-    }
-
     const filenameLooksOtherProviderSpecific = PROVIDERS
       .filter((item) => item.id !== provider.id)
       .some((item) => (
         entry.basename.includes(item.id) ||
         item.name.toLowerCase().split(/\s+/).some((part) => part.length >= 5 && entry.basename.includes(part))
       ));
+
+    const filenameLooksProviderSpecific =
+      entry.basename.includes(provider.id) ||
+      provider.name.toLowerCase().split(/\s+/).some((part) => part.length >= 5 && entry.basename.includes(part));
+
+    if (filenameLooksProviderSpecific && !filenameLooksOtherProviderSpecific && exactProviderHits.length === 0) {
+      contexts.push(text);
+    }
+
     const textMentionsOtherProvider = otherProviderMatches.some((match) => match.test(text));
     if (
       exactProviderHits.length === 0 &&
@@ -220,10 +221,6 @@ function providerSectionContexts(provider: { id: ProviderId; name: string; match
       contexts.push(text);
     }
   }
-
-    if (!contexts.length) {
-        contexts.push(combinedPrivateText());
-    }
 
     return contexts;
 }
@@ -391,8 +388,17 @@ export async function resolveRequestAccount(body: any) {
     throw new Error('Missing provider');
 }
 
+export function defaultStreamExtension(provider: ProviderId, kind: StreamKind, ext?: string | null) {
+    const requested = String(ext || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+    if (provider === 'apollo' && kind === 'live' && (!requested || requested === 'm3u8')) {
+        return 'ts';
+    }
+    if (requested) return requested;
+    return kind === 'live' ? 'm3u8' : 'mp4';
+}
+
 export function buildStreamUrl(account: ProviderAccount, kind: StreamKind, id: string, ext = 'm3u8') {
-    const safeExt = ext.replace(/[^a-z0-9]/gi, '') || (kind === 'movie' ? 'mp4' : 'm3u8');
+    const safeExt = defaultStreamExtension(account.id, kind, ext);
     const parts = [kind, account.username, account.password, `${id}.${safeExt}`].map(encodeURIComponent);
     return `${account.server}/${parts.join('/')}`;
 }

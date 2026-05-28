@@ -18,8 +18,10 @@
     movieLimit: 500,
     seriesLimit: 500,
   };
-  var QUICKSTART_BUILD_ID = '20260528-provider-vault-direct24';
+  var QUICKSTART_BUILD_ID = '20260528-provider-vault-direct28';
   var PROVIDER_PLAYLIST_PREFIX = 'daveai-provider-';
+  var COMBINED_PLAYLIST_ID = 'daveai-provider-combined-tagged';
+  var DISPLAY_MODE_KEY = 'ipz_provider_display_mode';
 
   function ready(fn) {
     if (document.readyState === 'loading') {
@@ -72,6 +74,31 @@
 
   function providerPlaylistId(providerId) {
     return PROVIDER_PLAYLIST_PREFIX + providerId;
+  }
+
+  function providerById(providerId) {
+    return PROVIDERS.find(function (provider) { return provider.id === providerId; }) || {
+      id: providerId,
+      name: text(providerId, 'Provider'),
+    };
+  }
+
+  function qualityFromName(value) {
+    var name = String(value || '').toUpperCase();
+    if (/\b(4K|UHD|2160P?)\b/.test(name)) return '4K';
+    if (/\b(2K|QHD|1440P?)\b/.test(name)) return '2K';
+    if (/\b(FHD|FULL HD|1080P?)\b/.test(name)) return '1080p';
+    if (/\b(HD|720P?)\b/.test(name)) return '720p';
+    if (/\b(SD|480P?)\b/.test(name)) return 'SD';
+    return '';
+  }
+
+  function exportUrl(providerId, format) {
+    var params = new URLSearchParams({
+      provider: providerId,
+      format: format,
+    });
+    return '/api/provider-vault/export?' + params.toString();
   }
 
   function storeIsReady() {
@@ -237,7 +264,9 @@
     return logo;
   }
 
-  function normalizeChannel(providerId, playlistId, item, type, index) {
+  function normalizeChannel(providerId, playlistId, item, type, index, options) {
+    options = options || {};
+    var provider = providerById(providerId);
     var name = text(item && item.name, type + ' ' + (index + 1));
     var logo = safeLogoUrl(
       (item && item.tvg && item.tvg.logo) ||
@@ -245,12 +274,16 @@
       (item && item.stream_icon) ||
       (item && item.cover)
     );
-    var groupTitle = text(
+    var rawGroupTitle = text(
       item && item.group && (item.group.title || item.group.name || item.group),
       type === 'live' ? 'Live TV' : type === 'movie' ? 'Movies' : 'Series'
     );
+    var quality = text(item && item.quality) || qualityFromName(name);
+    var groupTitle = options.combined ? (provider.name + ' / ' + rawGroupTitle) : rawGroupTitle;
+    var displayName = options.combined ? ('[' + provider.name + '] ' + name) : name;
     var idSeed = [
       playlistId,
+      providerId,
       type,
       index,
       safeId(name),
@@ -260,21 +293,58 @@
     return {
       id: idSeed,
       playlist_id: playlistId,
-      name: name,
+      name: displayName,
+      original_name: name,
       url: text(item && item.url),
       type: type,
       stream_type: type === 'live' ? 'live' : type === 'movie' ? 'movie' : 'series',
       category_id: safeId(groupTitle) || type,
       group: groupTitle,
       group_title: groupTitle,
-      tvg: Object.assign({}, item && item.tvg ? item.tvg : { name: name }, { name: name, logo: logo }),
+      raw_group: rawGroupTitle,
+      tvg: Object.assign({}, item && item.tvg ? item.tvg : { name: displayName }, { name: displayName, logo: logo }),
       http: item && item.http ? item.http : {},
       stream_icon: logo,
       logo: logo,
       raw: item && item.raw ? item.raw : '',
       provider_id: providerId,
+      provider_name: provider.name,
+      daveai_provider_tag: provider.name,
+      daveai_provider_vault: true,
+      quality: quality,
       source: 'daveai-provider-vault',
     };
+  }
+
+  function catalogToChannels(provider, playlistId, catalog, options) {
+    var live = Array.isArray(catalog && catalog.live) ? catalog.live : [];
+    var movies = Array.isArray(catalog && catalog.movies) ? catalog.movies : [];
+    var series = Array.isArray(catalog && catalog.series) ? catalog.series : [];
+    return []
+      .concat(live.map(function (item, index) { return normalizeChannel(provider.id, playlistId, item, 'live', index, options); }))
+      .concat(movies.map(function (item, index) { return normalizeChannel(provider.id, playlistId, item, 'movie', index, options); }))
+      .concat(series.map(function (item, index) { return normalizeChannel(provider.id, playlistId, item, 'series', index, options); }));
+  }
+
+  function saveProviderPlaylist(provider, playlistId, channels, options) {
+    options = options || {};
+    return window.Store.savePlaylist({
+      id: playlistId,
+      name: options.name || provider.name,
+      url: options.url || catalogUrl(provider.id),
+      path: playlistId + '.channels.json',
+      type: 'xtream',
+      source: 'daveai-provider-vault',
+      provider_id: options.providerId || provider.id,
+      provider_name: options.providerName || provider.name,
+      daveai_provider_vault: true,
+      daveai_provider_mode: options.combined ? 'combined-tagged' : 'separated',
+      epg_url: '',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    }).then(function () {
+      return window.Store.saveChannels(playlistId, channels);
+    });
   }
 
   function importProvider(provider, setStatus, options) {
@@ -296,31 +366,11 @@
     return fetchJson(catalogUrl(provider.id))
       .then(function (catalog) {
         var playlistId = providerPlaylistId(provider.id);
-        var live = Array.isArray(catalog.live) ? catalog.live : [];
-        var movies = Array.isArray(catalog.movies) ? catalog.movies : [];
-        var series = Array.isArray(catalog.series) ? catalog.series : [];
-        var channels = []
-          .concat(live.map(function (item, index) { return normalizeChannel(provider.id, playlistId, item, 'live', index); }))
-          .concat(movies.map(function (item, index) { return normalizeChannel(provider.id, playlistId, item, 'movie', index); }))
-          .concat(series.map(function (item, index) { return normalizeChannel(provider.id, playlistId, item, 'series', index); }));
+        var channels = catalogToChannels(provider, playlistId, catalog, { combined: false });
 
         if (!channels.length) throw new Error('Provider catalog returned no playable rows');
 
-        return window.Store.savePlaylist({
-          id: playlistId,
-          name: provider.name,
-          url: catalogUrl(provider.id),
-          path: playlistId + '.channels.json',
-          type: 'xtream',
-          source: 'daveai-provider-vault',
-          provider_id: provider.id,
-          daveai_provider_vault: true,
-          epg_url: '',
-          created_at: Date.now(),
-          updated_at: Date.now(),
-        }).then(function () {
-          return window.Store.saveChannels(playlistId, channels);
-        }).then(function () {
+        return saveProviderPlaylist(provider, playlistId, channels).then(function () {
           markPlaylistEnabled(playlistId);
         }).then(function () {
           setStatus('Imported ' + channels.length.toLocaleString() + ' safe entries for ' + provider.name + (shouldReload ? '. Reloading...' : '.'));
@@ -347,17 +397,7 @@
       }
     } catch (e) {}
 
-    setStatus('Setting up Apollo Group TV and XtremeHD...');
-    return providers.reduce(function (chain, provider) {
-      return chain.then(function () {
-        return importProvider(provider, setStatus, { reload: false, throwOnError: true }).then(function (result) {
-          if (!result || result.error || Number(result.channelCount || 0) <= 0) {
-            throw new Error('No playable rows saved for ' + provider.name);
-          }
-          return result;
-        });
-      });
-    }, Promise.resolve()).then(function () {
+    return importSeparatedProviders(providers, setStatus, { reload: false }).then(function () {
       try {
         if (window.localStorage) window.localStorage.setItem(key, QUICKSTART_BUILD_ID);
       } catch (e) {}
@@ -369,6 +409,66 @@
       } catch (e) {}
       setStatus('Provider setup paused: ' + (err && err.message ? err.message : 'try a provider button'), true);
       throw err;
+    });
+  }
+
+  function importSeparatedProviders(providers, setStatus, options) {
+    options = options || {};
+    setStatus('Loading Apollo and XtremeHD as separate playlists...');
+    return providers.reduce(function (chain, provider) {
+      return chain.then(function () {
+        return importProvider(provider, setStatus, { reload: false, throwOnError: true }).then(function (result) {
+          if (!result || result.error || Number(result.channelCount || 0) <= 0) {
+            throw new Error('No playable rows saved for ' + provider.name);
+          }
+          return result;
+        });
+      });
+    }, Promise.resolve()).then(function () {
+      try {
+        window.localStorage.setItem(DISPLAY_MODE_KEY, 'separated');
+        window.localStorage.setItem('ipz_provider_quickstart_hidden', '1');
+      } catch (e) {}
+      setStatus('Apollo and XtremeHD are loaded separately. Switching providers refreshes the active provider list.');
+      if (options.reload !== false) setTimeout(function () { window.location.reload(); }, 900);
+      return { mode: 'separated' };
+    });
+  }
+
+  function importCombinedTaggedProviders(providers, setStatus, options) {
+    options = options || {};
+    setStatus('Loading combined tagged Apollo + XtremeHD catalog...');
+    return Promise.all(providers.map(function (provider) {
+      return fetchJson(catalogUrl(provider.id)).then(function (catalog) {
+        return {
+          provider: provider,
+          channels: catalogToChannels(provider, COMBINED_PLAYLIST_ID, catalog, { combined: true }),
+        };
+      });
+    })).then(function (sections) {
+      var channels = sections.flatMap(function (section) { return section.channels; });
+      if (!channels.length) throw new Error('Combined catalog returned no playable rows');
+      return saveProviderPlaylist(
+        { id: 'combined', name: 'All Providers (Tagged)' },
+        COMBINED_PLAYLIST_ID,
+        channels,
+        {
+          combined: true,
+          name: 'All Providers (Tagged)',
+          providerId: 'combined',
+          providerName: 'Apollo + XtremeHD',
+          url: catalogUrl('apollo') + '&plus=xtremehd',
+        }
+      ).then(function () {
+        markPlaylistEnabled(COMBINED_PLAYLIST_ID);
+        try {
+          window.localStorage.setItem(DISPLAY_MODE_KEY, 'combined-tagged');
+          window.localStorage.setItem('ipz_provider_quickstart_hidden', '1');
+        } catch (e) {}
+        setStatus('Combined tagged playlist loaded. Every row keeps provider and quality tags.');
+        if (options.reload !== false) setTimeout(function () { window.location.reload(); }, 900);
+        return { mode: 'combined-tagged', channelCount: channels.length };
+      });
     });
   }
 
@@ -385,6 +485,13 @@
       '#ipz-provider-vault-panel button{border:0;border-radius:8px;padding:10px 9px;background:#2563eb;color:#fff;font-weight:800;cursor:pointer}',
       '#ipz-provider-vault-panel button:hover{background:#1d4ed8}',
       '#ipz-provider-vault-panel button:disabled{opacity:.58;cursor:wait}',
+      '#ipz-provider-vault-panel .ipz-provider-wide{grid-column:1/-1;background:#0f766e}',
+      '#ipz-provider-vault-panel .ipz-provider-wide:hover{background:#0d9488}',
+      '#ipz-provider-vault-panel .ipz-provider-combined{background:#7c3aed}',
+      '#ipz-provider-vault-panel .ipz-provider-combined:hover{background:#6d28d9}',
+      '#ipz-provider-vault-panel .ipz-provider-downloads{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}',
+      '#ipz-provider-vault-panel .ipz-provider-downloads a{border:1px solid rgba(148,163,184,.25);border-radius:8px;padding:8px 7px;color:#bfdbfe;text-decoration:none;text-align:center;font-weight:750;background:rgba(15,23,42,.7)}',
+      '#ipz-provider-vault-panel .ipz-provider-downloads a:hover{border-color:#60a5fa;color:#fff}',
       '#ipz-provider-vault-panel .ipz-provider-status{margin-top:10px;min-height:18px;color:#cbd5e1;font-size:12px}',
       '#ipz-provider-vault-panel .ipz-provider-status.error{color:#fecaca}',
       '#ipz-provider-vault-panel .ipz-provider-close{position:absolute;right:7px;top:5px;width:26px;height:26px;border-radius:999px;padding:0;background:transparent;color:#94a3b8;font-size:18px}',
@@ -395,9 +502,10 @@
     var panel = document.createElement('section');
     panel.id = 'ipz-provider-vault-panel';
     panel.setAttribute('aria-label', 'DaveAI provider quickstart');
-    panel.innerHTML = '<button type="button" class="ipz-provider-close" aria-label="Hide provider quickstart">&times;</button><h2>DaveAI Providers</h2><p>Load Apollo Group TV or XtremeHD without exposing credentials in the browser.</p><div class="ipz-provider-actions"></div><div class="ipz-provider-status" role="status"></div>';
+    panel.innerHTML = '<button type="button" class="ipz-provider-close" aria-label="Hide provider quickstart">&times;</button><h2>DaveAI Providers</h2><p>Separated mode keeps Apollo and XtremeHD as different playlists. Combined mode tags every row by provider and quality.</p><div class="ipz-provider-actions"></div><div class="ipz-provider-downloads"></div><div class="ipz-provider-status" role="status"></div>';
 
     var actions = panel.querySelector('.ipz-provider-actions');
+    var downloads = panel.querySelector('.ipz-provider-downloads');
     var status = panel.querySelector('.ipz-provider-status');
     var close = panel.querySelector('.ipz-provider-close');
 
@@ -413,18 +521,48 @@
       });
     }
 
-    providers.forEach(function (provider) {
+    function addAction(label, className, handler) {
       var button = document.createElement('button');
       button.type = 'button';
-      button.textContent = 'Load ' + provider.name;
+      button.textContent = label;
+      if (className) button.className = className;
       button.addEventListener('click', function () {
         if (button.disabled || panel.hasAttribute('aria-busy')) return;
         setBusy(true);
-        importProvider(provider, setStatus).finally(function () {
+        Promise.resolve().then(handler).finally(function () {
           setBusy(false);
         });
       });
       actions.appendChild(button);
+      return button;
+    }
+
+    addAction('Load Both Separately', 'ipz-provider-wide', function () {
+      return importSeparatedProviders(providers, setStatus);
+    });
+
+    addAction('Combined Tagged', 'ipz-provider-wide ipz-provider-combined', function () {
+      return importCombinedTaggedProviders(providers, setStatus);
+    });
+
+    providers.forEach(function (provider) {
+      addAction('Load ' + provider.name, '', function () {
+        return importProvider(provider, setStatus);
+      });
+    });
+
+    [
+      ['Apollo M3U8', exportUrl('apollo', 'm3u8')],
+      ['XtremeHD M3U8', exportUrl('xtremehd', 'm3u8')],
+      ['Combined M3U8', exportUrl('combined', 'm3u8')],
+      ['Combined CSV', exportUrl('combined', 'csv')],
+    ].forEach(function (item) {
+      var link = document.createElement('a');
+      link.href = item[1];
+      link.textContent = item[0];
+      link.target = '_blank';
+      link.rel = 'noopener';
+      downloads.appendChild(link);
     });
 
     close.addEventListener('click', function () {
@@ -455,7 +593,8 @@
 
         if (status.hasAllPlayable && hidden) return;
 
-        var shouldAutoload = !status.hasAllPlayable;
+        var autoloadDisabled = window.__IPZ_PROVIDER_PROOF_DISABLE_AUTOLOAD__ === true;
+        var shouldAutoload = !status.hasAllPlayable && !autoloadDisabled;
         createPanel(providers, { autoload: shouldAutoload });
       });
     });
@@ -463,7 +602,10 @@
 
   window.IPZProviderVaultQuickstart = {
     importProvider: importProvider,
+    importSeparatedProviders: importSeparatedProviders,
+    importCombinedTaggedProviders: importCombinedTaggedProviders,
     configuredProviders: configuredProviders,
     getProviderPlaylistStatus: getProviderPlaylistStatus,
+    combinedPlaylistId: COMBINED_PLAYLIST_ID,
   };
 }(window, document));

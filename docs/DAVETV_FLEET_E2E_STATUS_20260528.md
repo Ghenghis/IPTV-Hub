@@ -1,0 +1,65 @@
+# DaveTV Fleet E2E Status - 2026-05-28
+
+This file replaces the older 2026-05-27 fleet proof as the working truth for
+the stricter player-by-player repair pass.
+
+## Acceptance Standard
+
+A player is not `ACCEPTED` until Playwright proves all of these against the live
+hosted app:
+
+- Apollo Group TV and XtremeHD are separate providers, not one merged stale list.
+- If combined browsing exists, every row/card is tagged with provider identity.
+- Live, movie, and series catalog data populate with names, categories, counts,
+  and usable artwork or controlled fallbacks.
+- At least one live stream, one movie, and one series episode play through the
+  provider vault with `paused=false`, `muted=false`, `volume>0`, advancing
+  `currentTime`, and decoded audio bytes where Chromium exposes them.
+- Dead upstream streams show a friendly unavailable state, not raw demuxer,
+  chunk-load, format, or JavaScript errors.
+- The UI stays English-only and does not expose provider credentials.
+- Screenshots and JSON summaries are saved under
+  `C:\Users\Admin\Downloads\VPS\_visual_artifacts\...`.
+
+## Current Matrix
+
+| Player | Current status | Strict proof | Notes |
+| --- | --- | --- | --- |
+| IPTV Player Zero | `ACCEPTED` | `zero-player-full-provider-proof-20260528T171224Z` | Separate Apollo/XtremeHD plus combined tagged mode, free/unlocked UI, live playback, movie/series data, artwork counts. |
+| xstream-player | `ACCEPTED` | `xstream-provider-accept-rerun-20260528T122558`; `xstream-random-2026-accept-20260528T121712`; `xstream-series-accept-rerun-20260528T122558`; `xstream-visual-quality-proof-20260528T121147` | Separate Apollo/XtremeHD, live/movie/series playback with sound, visual cards accepted. Combined tagged browsing is not yet implemented. |
+| IPTVnator | `NEXT_FIX` | Pending stricter rerun | User saw XtremeHD portal unavailable/stale route. Existing edits are not accepted yet. |
+| Smart IPTV Web | `REVALIDATE` | Pending stricter rerun | User saw movie/playback connection and possible sound issues. |
+| Nuvio | `REVALIDATE` | Pending stricter rerun | User saw skeleton cards and no sound labels. |
+| IPTV Restream | `REVALIDATE` | Pending stricter rerun | User saw player spinner/no sound concern. |
+| Stalker UI | `REVALIDATE` | Pending stricter rerun | User saw many movie cards without artwork. |
+| Extreme InfiniTV | `REVALIDATE` | Pending stricter rerun | User saw empty movie catalog/no playlist selected. |
+| Wizju IPTV Player | `REVALIDATE` | Pending stricter rerun | Needs full data/artwork/audio proof under stricter standard. |
+| Open TV | `REVALIDATE` | Pending stricter rerun | Needs full data/artwork/audio proof under stricter standard. |
+| IPTV Stream | `REVALIDATE` | Pending stricter rerun | Needs full data/artwork/audio proof under stricter standard. |
+| TVapp | `REVALIDATE` | Pending stricter rerun | Needs full data/artwork/audio proof under stricter standard. |
+| YnoTV | `REVALIDATE` | Pending stricter rerun | Needs full data/artwork/audio proof under stricter standard. |
+
+## Provider Feature Target
+
+Each player should support as much of this as its architecture allows:
+
+- Separate provider mode: Apollo-only and XtremeHD-only refresh the catalog from
+  that provider.
+- Combined mode: show both providers in one catalog, with provider badges on
+  cards/rows and no stale cross-provider cache.
+- Quality tags: infer and display HD/FHD/UHD/4K/HEVC/H265/720p/1080p/1440p/2K
+  from names and metadata when provider data exposes it.
+- Catalog exports: provider-specific and combined downloads in M3U, M3U8, JSON,
+  and CSV where feasible.
+- Playback polish: same-origin provider-vault URLs, browser-safe live wrappers
+  for Apollo when needed, large but sane buffers, fast start, unmuted playback,
+  and friendly unavailable states for dead upstream media.
+
+## Next Order
+
+1. Commit and push the accepted Zero Player and XStream work only.
+2. Finish IPTVnator because it has active, user-visible XtremeHD load failures.
+3. Re-run Smart/Nuvio/Restream/Stalker/Extreme/Wizju/Open/Stream/TVapp/YnoTV
+   under the stricter data/artwork/audio test standard.
+4. Add combined tagged browsing and catalog export features player-by-player,
+   starting with XStream after IPTVnator is stable.

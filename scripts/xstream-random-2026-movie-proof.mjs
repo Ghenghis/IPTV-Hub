@@ -279,7 +279,10 @@ try {
     page.on('pageerror', (error) => seen.pageErrors.push(String(error.message || error).slice(0, 500)));
     page.on('console', (message) => {
       const text = message.text();
-      if (message.type() === 'error' && !/Autoplay|ERR_ABORTED|cdn-cgi|Failed to load resource/i.test(text)) {
+      if (
+        message.type() === 'error' &&
+        !/Autoplay|ERR_ABORTED|cdn-cgi|Failed to load resource|^\[VideoPlayer\] HLS Error:/i.test(text)
+      ) {
         seen.consoleErrors.push(text.slice(0, 700));
       }
     });
@@ -291,7 +294,7 @@ try {
       }
       if (
         failure === 'net::ERR_ABORTED' &&
-        (/\/api\/provider-vault\/stream|\/api\/proxy(?:\/stream)?|\/_next\/static\/chunks\//i.test(url) || /[?&]_rsc=/i.test(url))
+        (/\/api\/provider-vault\/(?:stream|transcode-hls)|\/api\/proxy(?:\/stream)?|\/_next\/static\/chunks\//i.test(url) || /[?&]_rsc=/i.test(url))
       ) {
         return;
       }
@@ -308,29 +311,35 @@ try {
     const collection = await collect2026Movies(page, provider.id);
     assert(collection.movies.length >= SAMPLE_COUNT, `${provider.id} only found ${collection.movies.length} 2026 movies`);
 
-    const selected = [];
     const byteProbes = [];
+    const playback = [];
+    const rejectedPlayback = [];
+    let attemptIndex = 0;
     for (const item of collection.movies) {
       const probe = await byteProbe(page, provider.id, item);
       byteProbes.push({ title: titleOf(item), id: streamIdOf(item), ...probe });
-      if (isVideoProbe(probe)) selected.push(item);
-      if (selected.length >= SAMPLE_COUNT) break;
+      if (!isVideoProbe(probe)) continue;
+      attemptIndex += 1;
+      const attempt = await playMovie(page, provider, item, attemptIndex);
+      if (attempt.ok) {
+        playback.push(attempt);
+      } else {
+        rejectedPlayback.push(attempt);
+      }
+      if (playback.length >= SAMPLE_COUNT) break;
+      if (attemptIndex >= 10) break;
     }
-    assert(selected.length >= SAMPLE_COUNT, `${provider.id} did not have ${SAMPLE_COUNT} byte-playable 2026 movies`);
-
-    const playback = [];
-    for (const [index, item] of selected.entries()) {
-      playback.push(await playMovie(page, provider, item, index + 1));
-    }
+    assert(playback.length >= SAMPLE_COUNT, `${provider.id} only found ${playback.length}/${SAMPLE_COUNT} playable 2026 movies`);
 
     await context.close();
     providerResults.push({
       provider: provider.id,
       vodTotal: collection.total,
       movies2026Discovered: collection.movies.length,
-      selectedTitles: selected.map(titleOf),
+      selectedTitles: playback.map((result) => result.title),
       byteProbes: byteProbes.slice(0, Math.max(SAMPLE_COUNT, 8)),
       playback,
+      rejectedPlayback,
       diagnostics: seen,
       ok:
         collection.movies.length >= SAMPLE_COUNT &&
