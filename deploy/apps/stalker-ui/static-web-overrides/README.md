@@ -13,6 +13,8 @@ hosted DaveAI version remains reproducible from IPTV-Hub.
 
 - `src/services/providerVault.ts` — DaveTV provider-vault adapter for Apollo
   Group TV and XtremeHD catalog + safe stream URLs.
+- `index.html` — hosted browser entry with inline `webapis`/`tizen` stubs so
+  the app does not request a TV-only `$WEBAPIS` script on the web domain.
 - `src/services/api.ts` — same-origin API base for hosted deployment.
 - `src/services/services.ts` — provider-vault first, legacy Stalker API fallback,
   and empty EPG shim when provider-vault mode is active.

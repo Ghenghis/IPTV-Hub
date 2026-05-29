@@ -68,6 +68,7 @@ function safeId(value: unknown, fallback = 'item'): string {
 function catalogUrl(providerId: ProviderId): string {
   const params = new URLSearchParams({
     provider: providerId,
+    profile: 'english',
     liveLimit: String(LIMITS.liveLimit),
     movieLimit: String(LIMITS.movieLimit),
     seriesLimit: String(LIMITS.seriesLimit),
@@ -131,6 +132,10 @@ function groupTitle(provider: Provider, kind: ContentKind, item: VaultItem): str
   )}`
 }
 
+function isMarkerTitle(value: unknown): boolean {
+  return /^#{2,}.*#{2,}$/.test(text(value))
+}
+
 function normalizeItem(provider: Provider, item: VaultItem, kind: ContentKind, index: number): MediaItem {
   const title = text(
     item.name ?? item.title ?? item.stream_display_name ?? item.tvg?.name,
@@ -186,7 +191,7 @@ function interleaveItems<T>(lists: T[][]): T[] {
 }
 
 export function isProviderVaultUrl(url: string | null | undefined): boolean {
-  return text(url).startsWith('/api/provider-vault/stream')
+  return text(url).startsWith('/api/provider-vault/')
 }
 
 export function passthroughStreamUrl(url: string): { raw: string; proxied: string } {
@@ -224,7 +229,9 @@ export async function getVaultMovies(params: Record<string, unknown>): Promise<{
   const providerId = String(params.category).split(':')[0] as ProviderId
   const selected = catalogs.filter(({ provider }) => provider.id === providerId)
   const movies = selected.flatMap(({ provider, catalog }) =>
-    (catalog.movies || []).map((item, index) => normalizeItem(provider, item, 'movie', index)),
+    (catalog.movies || [])
+      .filter((item) => !isMarkerTitle(item.name ?? item.title ?? item.stream_display_name ?? item.tvg?.name))
+      .map((item, index) => normalizeItem(provider, item, 'movie', index)),
   )
   const data = filterSearch(movies, String(params.search || ''))
   return { data, page: 1, total_items: data.length, isPortal: false }
@@ -238,7 +245,9 @@ export async function getVaultSeries(params: Record<string, unknown>): Promise<{
   const catalogs = await catalogsByProvider()
   const allSeries = interleaveItems(
     catalogs.map(({ provider, catalog }) =>
-      (catalog.series || []).map((item, index) => normalizeItem(provider, item, 'series', index)),
+      (catalog.series || [])
+        .filter((item) => !isMarkerTitle(item.name ?? item.title ?? item.stream_display_name ?? item.tvg?.name))
+        .map((item, index) => normalizeItem(provider, item, 'series', index)),
     ),
   )
 
@@ -259,7 +268,9 @@ export async function getVaultChannels(): Promise<{ data: MediaItem[]; page: num
   const catalogs = await catalogsByProvider()
   const channels = interleaveItems(
     catalogs.map(({ provider, catalog }) =>
-      (catalog.live || []).map((item, index) => normalizeItem(provider, item, 'live', index)),
+      (catalog.live || [])
+        .filter((item) => !isMarkerTitle(item.name ?? item.title ?? item.stream_display_name ?? item.tvg?.name))
+        .map((item, index) => normalizeItem(provider, item, 'live', index)),
     ),
   )
   return { data: channels, page: 1, total_items: channels.length }
@@ -270,6 +281,7 @@ export async function getVaultGroups(): Promise<{ data: ChannelGroup[]; page: nu
   const groups = new Map<string, ChannelGroup>()
   for (const { provider, catalog } of catalogs) {
     for (const item of catalog.live || []) {
+      if (isMarkerTitle(item.name ?? item.title ?? item.stream_display_name ?? item.tvg?.name)) continue
       const title = groupTitle(provider, 'live', item)
       groups.set(safeId(title), { id: safeId(title), title })
     }
