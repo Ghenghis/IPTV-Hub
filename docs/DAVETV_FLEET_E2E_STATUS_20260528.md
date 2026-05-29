@@ -34,7 +34,7 @@ hosted app:
 | Stalker UI | `BLOCKED_APP` | `stalker-ui-strict-after7-20260528231701` | English catalog/profile and Apollo playback repaired, but XtremeHD strict audio failed and provider switching/autoplay remains brittle. See `docs/STALKER_UI_STRICT_GATE_BLOCKED_20260529.md`. |
 | Extreme InfiniTV | `ACCEPTED` | `extreme-infinitv-proof-final-20260529T053621` | English Apollo/XtremeHD catalogs, marker filtering, Apollo HLS-shaped fallback, and live playback proof for both providers with unmuted video. |
 | Wizju IPTV Player | `ACCEPTED` | `wizju-strict-20260529T055341` | English Apollo/XtremeHD catalogs, provider-vault URL normalization, marker filtering, 3,800 persisted rows per provider, and live playback proof for both providers with unmuted video. |
-| Open TV | `REVALIDATE` | Pending stricter rerun | Needs full data/artwork/audio proof under stricter standard. |
+| Open TV | `ACCEPTED` | `open-tv-strict-20260529065531` | Combined tagged Apollo/XtremeHD grid, English provider profile, marker filtering, provider-vault HLS normalization, and unmuted playback proof with decoded audio for both providers. |
 | IPTV Stream | `REVALIDATE` | Pending stricter rerun | Needs full data/artwork/audio proof under stricter standard. |
 | TVapp | `REVALIDATE` | Pending stricter rerun | Needs full data/artwork/audio proof under stricter standard. |
 | YnoTV | `REVALIDATE` | Pending stricter rerun | Needs full data/artwork/audio proof under stricter standard. |

@@ -14,8 +14,8 @@ const OUT_DIR =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/open-tv-provider-playback-proof-20260527';
 
 const providers = [
-  { id: 'apollo', label: 'Apollo Group TV' },
-  { id: 'xtremehd', label: 'XtremeHD' },
+  { id: 'apollo', label: 'Apollo Group TV', rowPattern: /\|US\||\bUSA\b/i },
+  { id: 'xtremehd', label: 'XtremeHD', rowPattern: /\bUSA\b/i, playbackPattern: /USA American Heroes/i },
 ];
 
 function sanitizeUrl(rawUrl) {
@@ -93,7 +93,11 @@ async function runProvider(browser, provider) {
       timeout: 60000,
     });
 
-    const providerTile = page.locator('app-channel-tile').filter({ hasText: provider.label }).first();
+    let providerTile = page.locator('app-channel-tile').filter({ hasText: provider.label });
+    if (provider.playbackPattern) {
+      providerTile = providerTile.filter({ hasText: provider.playbackPattern });
+    }
+    providerTile = providerTile.first();
     await providerTile.waitFor({ timeout: 70000 });
     const firstChannel = (await providerTile.innerText()).replace(/\s+/g, ' ').trim();
 
@@ -105,7 +109,22 @@ async function runProvider(browser, provider) {
     await providerTile.click({ timeout: 15000 });
     await page.waitForFunction(() => {
       const video = document.querySelector('video');
-      return Boolean(video && video.readyState >= 2 && video.videoWidth > 0);
+      try {
+        if (video) {
+          video.muted = false;
+          video.volume = 1;
+          if (video.paused) void video.play?.();
+        }
+      } catch {}
+      return Boolean(
+        video &&
+        video.readyState >= 2 &&
+        video.videoWidth > 0 &&
+        video.currentTime > 1 &&
+        Number(video.webkitAudioDecodedByteCount || 0) > 0 &&
+        video.muted === false &&
+        video.volume > 0,
+      );
     }, { timeout: 70000 });
     await page.waitForTimeout(3000);
 
@@ -123,9 +142,12 @@ async function runProvider(browser, provider) {
           readyState: video?.readyState ?? 0,
           networkState: video?.networkState ?? 0,
           paused: video?.paused ?? null,
+          muted: video?.muted ?? null,
+          volume: Number(video?.volume ?? 0),
           currentTime: Number(video?.currentTime ?? 0),
           width: video?.videoWidth ?? 0,
           height: video?.videoHeight ?? 0,
+          audioBytes: Number(video?.webkitAudioDecodedByteCount ?? 0),
           currentSrcIsBlob: Boolean(video?.currentSrc?.startsWith('blob:')),
         },
       };
@@ -133,6 +155,7 @@ async function runProvider(browser, provider) {
 
     const providerStreams = seen.providerResponses.filter((response) =>
       response.url.includes(`/api/provider-vault/stream?provider=${provider.id}`) ||
+      response.url.includes(`/api/provider-vault/aac-hls?provider=${provider.id}`) ||
       response.url.includes('/api/provider-vault/segment'),
     );
 
@@ -144,9 +167,16 @@ async function runProvider(browser, provider) {
       seen,
       checks: {
         english: /All|Categories|Livestreams|Movies|Provider vault|Close/i.test(state.body),
-        firstChannelCurated: /USA AMC/i.test(firstChannel),
+        firstChannelCurated: provider.rowPattern.test(firstChannel) && !/####|\|AR\||\|FR\||\|MULTI\|/i.test(firstChannel),
         providerVisible: firstChannel.includes(provider.label),
-        videoReady: state.video.readyState >= 2 && state.video.width > 0 && state.video.height > 0,
+        videoReady:
+          state.video.readyState >= 2 &&
+          state.video.width > 0 &&
+          state.video.height > 0 &&
+          state.video.currentTime > 1 &&
+          state.video.audioBytes > 0 &&
+          state.video.muted === false &&
+          state.video.volume > 0,
         sameOriginPlayback: providerStreams.some((response) => response.status === 200),
         noRawCredentials: !/(username=|password=|server url|xtreme codes password)/i.test(state.body),
         noConsoleErrors: seen.consoleErrors.length === 0,
@@ -163,7 +193,10 @@ async function runProvider(browser, provider) {
 
 await fs.mkdir(OUT_DIR, { recursive: true });
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  args: ['--autoplay-policy=no-user-gesture-required'],
+});
 const results = [];
 try {
   for (const provider of providers) {
