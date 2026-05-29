@@ -97,6 +97,7 @@
   function vaultCatalogUrl(providerId) {
     var params = new URLSearchParams({
       provider: providerId,
+      profile: 'english',
       liveLimit: String(BUCKETS.live.limit),
       movieLimit: String(BUCKETS.movie.limit),
       seriesLimit: String(BUCKETS.series.limit),
@@ -133,6 +134,13 @@
     if (bucket === 'live') return Array.isArray(catalog.live) ? catalog.live : [];
     if (bucket === 'movie') return Array.isArray(catalog.movies) ? catalog.movies : [];
     return Array.isArray(catalog.series) ? catalog.series : [];
+  }
+
+  function isPlayableCatalogItem(item) {
+    var name = safeText(item && item.name, '');
+    if (!name) return false;
+    if (/^#{2,}.*#{2,}$/.test(name)) return false;
+    return true;
   }
 
   function safeText(value, fallback) {
@@ -217,9 +225,11 @@
     var skip = Math.max(0, Number(match.skip || 0));
     return fetchCatalog(catalog.provider.id).then(function (data) {
       var metas = bucketItems(data, catalog.bucket)
+        .map(function (item, index) { return { item: item, index: index }; })
+        .filter(function (entry) { return isPlayableCatalogItem(entry.item); })
         .slice(skip, skip + 100)
-        .map(function (item, offset) {
-          return itemMeta(catalog.provider, catalog.bucket, item, skip + offset);
+        .map(function (entry) {
+          return itemMeta(catalog.provider, catalog.bucket, entry.item, entry.index);
         });
       return jsonResponse({ metas: metas });
     }).catch(function () {
@@ -245,7 +255,7 @@
     return fetchCatalog(parsed.provider.id).then(function (data) {
       var item = bucketItems(data, parsed.bucket)[parsed.index];
       var url = safeText(item && item.url, '');
-      if (!url || url.indexOf('/api/provider-vault/stream') !== 0) {
+      if (!url || url.indexOf('/api/provider-vault/') !== 0) {
         return jsonResponse({ streams: [] });
       }
       var meta = itemMeta(parsed.provider, parsed.bucket, item, parsed.index);

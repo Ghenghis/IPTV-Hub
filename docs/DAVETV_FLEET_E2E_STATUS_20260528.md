@@ -29,7 +29,7 @@ hosted app:
 | xstream-player | `ACCEPTED` | `xstream-combined-only-20260528T200111`; `xstream-separated-only-20260528T200704`; `xstream-live-playback-strict-20260528T202536`; `xstream-movie-playback-20260528T201124`; `xstream-series-playback-20260528T211000` | Separate Apollo/XtremeHD, combined tagged browsing, live/movie/series cards, live/movie/series playback with decoded audio, route/chunk repairs. |
 | IPTVnator | `ACCEPTED` | `iptvnator-strict-v15-*` | Separate Apollo/XtremeHD, English profile, safe Apollo HLS-shaped fallback, XtremeHD route fixed, unmuted UI playback proof. |
 | Smart IPTV Web | `ACCEPTED` | `smart-iptv-web-strict-20260528T152122` | Apollo/XtremeHD/Combined Tagged modes, English profile, HLS route classification fixed, live playback readyState 4 unmuted. |
-| Nuvio | `REVALIDATE` | Pending stricter rerun | User saw skeleton cards and no sound labels. |
+| Nuvio | `BLOCKED_APP` | `nuvio-play-debug-20260529Tnow` | English catalog and marker filtering repaired, but Nuvio direct Play creates a video element without requesting the provider-vault stream. See `docs/NUVIO_STRICT_GATE_BLOCKED_20260529.md`. |
 | IPTV Restream | `REVALIDATE` | Pending stricter rerun | User saw player spinner/no sound concern. |
 | Stalker UI | `REVALIDATE` | Pending stricter rerun | User saw many movie cards without artwork. |
 | Extreme InfiniTV | `REVALIDATE` | Pending stricter rerun | User saw empty movie catalog/no playlist selected. |
@@ -58,8 +58,8 @@ Each player should support as much of this as its architecture allows:
 ## Next Order
 
 1. Commit and push the accepted XStream strict-proof slice.
-2. Re-run Nuvio/Restream/Stalker/Extreme/Wizju/Open/Stream/TVapp/YnoTV under
-   the stricter data/artwork/audio test standard.
+2. Re-run Restream/Stalker/Extreme/Wizju/Open/Stream/TVapp/YnoTV under the
+   stricter data/artwork/audio test standard.
 3. Apply one focused repair pass per player. If the player still fails, mark it
    `BLOCKED_APP` or `BLOCKED_UPSTREAM` with artifact paths and move to the next
    player instead of looping.

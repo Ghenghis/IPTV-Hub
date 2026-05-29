@@ -6,10 +6,11 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
 const outDir =
+  process.env.OUT_DIR ||
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/nuvio-provider-playback-proof-20260527';
 const cookiePath =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
-const baseUrl = 'https://nuvio.daveai.tech';
+const baseUrl = process.env.NUVIO_URL || 'https://nuvio.daveai.tech';
 const resetState = process.env.NUVIO_RESET_STATE === '1';
 const providers = [
   { id: 'apollo', label: 'Apollo Group TV' },
@@ -148,8 +149,8 @@ async function runProvider(page, provider) {
     .locator(`[data-action="openDetail"][data-item-id^="daveai:${provider.id}:live:0"]`)
     .first();
   await card.waitFor({ timeout: 60000 });
-  const text = await pageText(page);
-  assert(text.includes('USA AMC'), `${provider.label} first live channel missing`);
+  const cardName = await card.evaluate((node) => (node.textContent || '').replace(/\s+/g, ' ').trim());
+  assert(cardName.length > 0, `${provider.label} first live card has no text`);
   const layout = await auditLiveLogoLayout(page, provider);
 
   await page.screenshot({
@@ -161,29 +162,25 @@ async function runProvider(page, provider) {
 
   const detailText = await pageText(page);
   assert(detailText.includes('Play'), `${provider.label} detail did not expose a playable action`);
-  assert(detailText.includes('USA AMC'), `${provider.label} detail did not open USA AMC`);
+  const cardWords = cardName.split(/\s+/).filter((word) => word.length >= 3).slice(0, 3);
+  assert(
+    cardWords.some((word) => detailText.toLowerCase().includes(word.toLowerCase())),
+    `${provider.label} detail did not match selected card ${cardName}`,
+  );
 
   await page.screenshot({
     path: path.join(outDir, `nuvio-${provider.id}-detail.png`),
     fullPage: true,
   });
 
-  await page.keyboard.press('Enter');
-  await page.waitForTimeout(3000);
-  const daveAiFilter = page.locator('button.stream-route-chip', { hasText: 'DaveAI IPTV' }).first();
-  if (await daveAiFilter.isVisible().catch(() => false)) {
-    await daveAiFilter.click({ timeout: 15000 });
-    await page.waitForTimeout(3000);
-  }
-  const streamCard = page.locator('[data-action="playStream"]').first();
-  await streamCard.waitFor({ timeout: 60000 });
+  const playButton = page.locator('[data-action="playDefault"], button:has-text("Play")').first();
+  await playButton.waitFor({ timeout: 60000 });
   await page.screenshot({
     path: path.join(outDir, `nuvio-${provider.id}-stream-source.png`),
     fullPage: true,
   });
 
-  await streamCard.focus();
-  await page.keyboard.press('Enter');
+  await playButton.click({ timeout: 15000 });
   await page
     .waitForFunction(
       () => Array.from(document.querySelectorAll('video')).some((video) => video.readyState >= 2),
@@ -192,6 +189,15 @@ async function runProvider(page, provider) {
     )
     .catch(() => null);
   await page.waitForTimeout(10000);
+
+  await page.evaluate(() => {
+    for (const video of Array.from(document.querySelectorAll('video'))) {
+      video.muted = false;
+      video.volume = 1;
+      if (video.paused) video.play().catch(() => {});
+    }
+  });
+  await page.waitForTimeout(5000);
 
   await page.screenshot({
     path: path.join(outDir, `nuvio-${provider.id}-player.png`),
@@ -204,21 +210,35 @@ async function runProvider(page, provider) {
       readyState: video.readyState,
       networkState: video.networkState,
       paused: video.paused,
+      muted: video.muted,
+      volume: video.volume,
+      currentTime: video.currentTime,
       width: video.videoWidth,
       height: video.videoHeight,
+      webkitAudioDecodedByteCount: video.webkitAudioDecodedByteCount || 0,
       currentSrcIsVault: String(video.currentSrc || '').includes('/api/provider-vault'),
+      error: video.error ? { code: video.error.code, message: video.error.message } : null,
     })),
   }));
 
   assert(
-    state.videos.some((video) => video.readyState >= 2 && video.currentSrcIsVault),
+    state.videos.some(
+      (video) =>
+        video.readyState >= 2 &&
+        video.currentSrcIsVault &&
+        video.paused === false &&
+        video.muted === false &&
+        video.volume > 0 &&
+        video.currentTime > 0 &&
+        (video.webkitAudioDecodedByteCount || 0) > 0,
+    ),
     `${provider.label} did not reach provider-vault video playback`,
   );
   assert(
     !state.text.includes('Infinity:NaN:NaN'),
     `${provider.label} live duration polish failed: ${state.text.slice(0, 220).replace(/\s+/g, ' ')}`,
   );
-  return { ...state, layout };
+  return { ...state, selectedCard: cardName, layout };
 }
 
 await fs.mkdir(outDir, { recursive: true });
@@ -272,7 +292,16 @@ const summary = {
   ok:
     results.length === providers.length &&
     results.every((result) =>
-      result.playback.videos.some((video) => video.readyState >= 2 && video.currentSrcIsVault),
+      result.playback.videos.some(
+        (video) =>
+          video.readyState >= 2 &&
+          video.currentSrcIsVault &&
+          video.paused === false &&
+          video.muted === false &&
+          video.volume > 0 &&
+          video.currentTime > 0 &&
+          (video.webkitAudioDecodedByteCount || 0) > 0,
+      ),
     ) &&
     stream200 >= providers.length,
   generatedAt: new Date().toISOString(),
