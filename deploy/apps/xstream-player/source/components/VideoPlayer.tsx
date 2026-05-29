@@ -125,6 +125,7 @@ const resolvePlaybackClock = (
     video: HTMLVideoElement,
     previousDuration: number,
     knownDuration = 0,
+    options: { rollingTranscodeVod?: boolean } = {},
 ) => {
     const current = Number.isFinite(video.currentTime) ? Math.max(0, video.currentTime) : 0;
     const rawDuration = video.duration;
@@ -135,6 +136,10 @@ const resolvePlaybackClock = (
 
     if (isPositiveFinite(knownDuration)) {
         return { duration: Math.max(knownDuration, current), reliable: true };
+    }
+
+    if (options.rollingTranscodeVod) {
+        return { duration: 0, reliable: false };
     }
 
     const bufferedEnd = readTimeRangeEnd(video.buffered);
@@ -730,7 +735,9 @@ export default function VideoPlayer({
         };
 
         const handleTimeUpdate = () => {
-            const clock = resolvePlaybackClock(video, durationRef.current, knownDurationRef.current);
+            const clock = resolvePlaybackClock(video, durationRef.current, knownDurationRef.current, {
+                rollingTranscodeVod: !isLiveHls && activeSrc.includes('/api/provider-vault/transcode-hls'),
+            });
             durationRef.current = clock.duration;
             durationReliableRef.current = clock.reliable;
             setDuration(clock.duration);
@@ -756,7 +763,9 @@ export default function VideoPlayer({
         const handleLoadedMetadata = () => {
             console.log('[VideoPlayer] Metadata loaded. readyState:', video.readyState);
             preferEnglishNativeTracks(video);
-            const clock = resolvePlaybackClock(video, durationRef.current, knownDurationRef.current);
+            const clock = resolvePlaybackClock(video, durationRef.current, knownDurationRef.current, {
+                rollingTranscodeVod: !isLiveHls && activeSrc.includes('/api/provider-vault/transcode-hls'),
+            });
             durationRef.current = clock.duration;
             durationReliableRef.current = clock.reliable;
             setDuration(clock.duration);

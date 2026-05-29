@@ -136,13 +136,16 @@ export default function WatchSeriesPage() {
         if (selectedEpisode) {
             const progress = getProgress(selectedEpisode.id);
             if (progress && progress.progress > 10) {
+                const knownDuration = episodeDurationSeconds(selectedEpisode);
+                const duration = Math.max(progress.duration || 0, knownDuration);
                 // Check if progress is near the end (more than 95%)
-                const percentage = (progress.progress / progress.duration) * 100;
-                if (percentage > 95) {
-                    return 0;
-                } else {
-                    return progress.progress;
+                if (duration > progress.progress + 1) {
+                    const percentage = (progress.progress / duration) * 100;
+                    if (percentage > 95) {
+                        return 0;
+                    }
                 }
+                return progress.progress;
             }
         }
         return 0;
@@ -302,11 +305,12 @@ export default function WatchSeriesPage() {
 
     const handleProgress = (currentTime: number, duration: number) => {
         if (!series || !selectedEpisode) return;
+        const knownDuration = episodeDurationSeconds(selectedEpisode);
         updateProgress({
             streamId: selectedEpisode.id, // We use episode ID as the primary key for progress
             type: 'series',
             progress: currentTime,
-            duration: duration,
+            duration: Math.max(duration, knownDuration),
             timestamp: Date.now(),
             name: `${series.info.name} - Ep ${selectedEpisode.episode_num}`,
             image: series.info.cover,
@@ -515,9 +519,11 @@ export default function WatchSeriesPage() {
                     <div className="grid gap-4">
                         {currentEpisodes.map((ep) => {
                             const progress = getProgress(ep.id);
-                            const duration = progress?.duration || 0;
+                            const knownDuration = episodeDurationSeconds(ep);
                             const currentTime = progress?.progress || 0;
-                            const percent = duration > 0 ? (currentTime / duration) * 100 : 0;
+                            const duration = Math.max(progress?.duration || 0, knownDuration);
+                            const hasCredibleDuration = duration > currentTime + 1;
+                            const percent = hasCredibleDuration ? (currentTime / duration) * 100 : 0;
 
                             return (
                                 <button
@@ -564,7 +570,7 @@ export default function WatchSeriesPage() {
                                     </div>
 
                                     {/* Progress Bar */}
-                                    {progress && duration > 0 && currentTime > 0 && (
+                                    {progress && hasCredibleDuration && currentTime > 0 && (
                                         <div className="absolute bottom-0 left-0 w-full h-1.5 bg-gray-600/80">
                                             <div
                                                 className="h-full bg-red-600 transition-all duration-500"

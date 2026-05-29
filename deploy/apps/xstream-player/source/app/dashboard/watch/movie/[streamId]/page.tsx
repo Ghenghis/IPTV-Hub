@@ -83,15 +83,17 @@ export default function WatchMoviePage() {
         if (!progressLoaded) return 0;
         const progress = getProgress(streamId);
         if (progress && progress.progress > 10) {
+            const knownDuration = movie ? parseDurationSeconds(movie.info.duration) : 0;
+            const duration = Math.max(progress.duration || 0, knownDuration);
             // Check if progress is near the end (more than 95%)
-            if (progress.duration > 0) {
-                const percentage = (progress.progress / progress.duration) * 100;
+            if (duration > progress.progress + 1) {
+                const percentage = (progress.progress / duration) * 100;
                 if (percentage > 95) return 0;
             }
             return progress.progress;
         }
         return 0;
-    }, [streamId, getProgress, progressLoaded]);
+    }, [streamId, getProgress, progressLoaded, movie?.info.duration]);
 
     useEffect(() => {
         if (!credentials || !streamId) return;
@@ -201,11 +203,12 @@ export default function WatchMoviePage() {
 
     const handleProgress = (currentTime: number, duration: number) => {
         if (!movie) return;
+        const knownDuration = parseDurationSeconds(movie.info.duration);
         updateProgress({
             streamId: movie.movie_data.stream_id,
             type: 'movie',
             progress: currentTime,
-            duration: duration,
+            duration: Math.max(duration, knownDuration),
             timestamp: Date.now(),
             name: movie.info.name,
             image: movie.info.movie_image

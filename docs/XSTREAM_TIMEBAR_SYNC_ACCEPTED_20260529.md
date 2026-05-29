@@ -11,16 +11,15 @@ duration. The same bad duration could also poison watch-progress percentages.
 - `VideoPlayer` now prefers known movie/episode metadata duration when present.
 - Provider-vault HLS/transcode rolling-manifest durations are treated as
   unreliable instead of being shown as a false VOD total.
-- Seek/progress UI is clamped so the red bar and range input cannot exceed
-  100%.
 - Watch-progress persistence normalizes clocks so `duration >= progress`.
-- Movie and series watch pages pass known duration into the player.
+- Movie and series watch pages save known movie/episode duration with progress
+  so stale short transcode windows cannot poison resume rows.
 
 ## Live Proof
 
 Artifact directory:
 
-`C:\Users\Admin\Downloads\VPS\_visual_artifacts\xstream-timebar-sync-20260529T033505`
+`C:\Users\Admin\Downloads\VPS\_visual_artifacts\xstream-timebar-sync-20260529062732`
 
 Proof command:
 
@@ -30,18 +29,23 @@ Result: `ok: true`
 
 Verified cases:
 
-- Apollo movie `/dashboard/watch/movie/817595`
-  - UI: `08:43 / 1:41:00`
-  - `data-current-time`: `523.896`
-  - `data-duration`: `6060`
-  - progress percent: `8.65`
+- Apollo movie `/dashboard/watch/movie/8479`
+  - UI did not show fake `/ 00:10`
+  - video currentTime: `31.930`
+  - range max: `9002`
+  - progress percent: `0.35`
+  - video readyState `4`, muted `false`, volume `1`, decoded audio present
+- XtremeHD movie `/dashboard/watch/movie/2016459`
+  - UI did not show fake `/ 00:10`
+  - video currentTime: `13.710`
+  - range max: `6060`
+  - progress percent: `0.22`
   - video readyState `4`, muted `false`, volume `1`, decoded audio present
 - Apollo series `/dashboard/watch/series/10553`
-  - UI: `00:12 / 1:03:51`
-  - `data-current-time`: `12.739`
-  - `data-duration`: `3831`
-  - progress percent: `0.33`
+  - UI did not show fake `/ 00:10`
+  - video currentTime: `13.635`
+  - range max: `3831`
+  - progress percent: `0.35`
   - video readyState `4`, muted `false`, volume `1`, decoded audio present
 
-No page errors, console errors, or failed requests were recorded after filtering
-known non-playback background sync aborts.
+No page errors or console errors were recorded.

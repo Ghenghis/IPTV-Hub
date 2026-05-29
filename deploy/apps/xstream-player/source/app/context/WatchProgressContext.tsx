@@ -44,12 +44,22 @@ const normalizeProgressClock = (progress: WatchProgress, existing?: WatchProgres
     };
 };
 
+const normalizeProgressMap = (value: unknown): Record<string, WatchProgress> => {
+    if (!value || typeof value !== 'object') return {};
+    return Object.fromEntries(
+        Object.entries(value as Record<string, WatchProgress>).map(([key, progress]) => [
+            key,
+            normalizeProgressClock(progress),
+        ]),
+    );
+};
+
 export const WatchProgressProvider = ({ children }: { children: ReactNode }) => {
     const [progressMap, setProgressMap] = useState<Record<string, WatchProgress>>(() => {
         if (typeof window !== 'undefined') {
             try {
                 const saved = localStorage.getItem('xstream_watch_progress');
-                return saved ? JSON.parse(saved) : {};
+                return saved ? normalizeProgressMap(JSON.parse(saved)) : {};
             } catch (e) {
                 return {};
             }
@@ -66,7 +76,7 @@ export const WatchProgressProvider = ({ children }: { children: ReactNode }) => 
             try {
                 const res = await fetch('/api/watch-progress');
                 if (res.ok) {
-                    const data = await res.json();
+                    const data = normalizeProgressMap(await res.json());
                     setProgressMap(data);
                     localStorage.setItem('xstream_watch_progress', JSON.stringify(data));
                 }
