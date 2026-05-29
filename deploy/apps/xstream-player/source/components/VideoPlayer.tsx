@@ -220,6 +220,8 @@ export default function VideoPlayer({
     const durationRef = useRef(0);
     const durationReliableRef = useRef(false);
     const knownDurationRef = useRef(knownDuration);
+    const mediaTimeOffsetRef = useRef(0);
+    const mediaTimeOffsetLockedRef = useRef(false);
 
     useEffect(() => {
         fallbackAttemptedRef.current = false;
@@ -449,13 +451,15 @@ export default function VideoPlayer({
         const time = clampToDuration(parseFloat(e.target.value), durationRef.current);
         setCurrentTime(time);
         if (videoRef.current) {
-            videoRef.current.currentTime = time;
+            videoRef.current.currentTime = time + mediaTimeOffsetRef.current;
         }
     }, []);
 
     const skip = useCallback((seconds: number) => {
         if (videoRef.current) {
-            videoRef.current.currentTime = clampToDuration(videoRef.current.currentTime + seconds, durationRef.current);
+            const viewerTime = clampToDuration(videoRef.current.currentTime - mediaTimeOffsetRef.current, durationRef.current);
+            const targetTime = clampToDuration(viewerTime + seconds, durationRef.current);
+            videoRef.current.currentTime = targetTime + mediaTimeOffsetRef.current;
             showSkipFeedback(seconds);
         }
     }, [showSkipFeedback]);
@@ -478,7 +482,7 @@ export default function VideoPlayer({
     const jumpToPercent = useCallback((percent: number) => {
         if (videoRef.current && duration > 0) {
             const targetTime = clampToDuration((percent / 100) * duration, duration);
-            videoRef.current.currentTime = targetTime;
+            videoRef.current.currentTime = targetTime + mediaTimeOffsetRef.current;
         }
     }, [duration]);
 
@@ -579,6 +583,8 @@ export default function VideoPlayer({
         setDurationReliable(false);
         durationRef.current = 0;
         durationReliableRef.current = false;
+        mediaTimeOffsetRef.current = 0;
+        mediaTimeOffsetLockedRef.current = false;
         setIsBuffering(true);
         setIsMetadataLoaded(false);
         hasAppliedInitialTime.current = false;
@@ -592,10 +598,33 @@ export default function VideoPlayer({
         let hls: Hls | undefined;
         let playRequested = false;
 
+        const primeMediaTimeOffset = (rawCurrentTime: number, reliableDuration: number) => {
+            if (mediaTimeOffsetLockedRef.current || isLiveHls || !isPositiveFinite(reliableDuration)) return;
+            if (!Number.isFinite(rawCurrentTime) || rawCurrentTime < 0.25) return;
+
+            const expectedViewerTime = initialSeekForActiveSrcRef.current;
+            const drift = rawCurrentTime - expectedViewerTime;
+
+            // Some provider-vault VOD/HLS streams expose the source media PTS as
+            // HTMLMediaElement.currentTime. Normalize that large source offset
+            // away so the user sees elapsed playback time, not provider PTS.
+            if (drift > 30 && rawCurrentTime < reliableDuration - 5) {
+                mediaTimeOffsetRef.current = Math.max(0, drift);
+                mediaTimeOffsetLockedRef.current = true;
+                return;
+            }
+
+            if (rawCurrentTime < 30 || Math.abs(drift) < 30) {
+                mediaTimeOffsetRef.current = 0;
+                mediaTimeOffsetLockedRef.current = true;
+            }
+        };
+
         const applyInitialSeek = () => {
             if (seekTarget > 0 && !hasAppliedInitialTime.current) {
+                if (useHlsJs && !isLiveHls && !mediaTimeOffsetLockedRef.current) return;
                 console.log('[VideoPlayer] Seeking to initial time:', seekTarget);
-                video.currentTime = seekTarget;
+                video.currentTime = seekTarget + mediaTimeOffsetRef.current;
                 hasAppliedInitialTime.current = true;
             }
         };
@@ -723,8 +752,8 @@ export default function VideoPlayer({
 
         const updateBufferedFromVideo = () => {
             if (!video.buffered.length) return;
-            const end = video.buffered.end(video.buffered.length - 1);
-            const t = video.currentTime;
+            const end = Math.max(0, video.buffered.end(video.buffered.length - 1) - mediaTimeOffsetRef.current);
+            const t = Math.max(0, video.currentTime - mediaTimeOffsetRef.current);
             const d = durationReliableRef.current ? durationRef.current : 0;
             if (Number.isFinite(d) && d > 0) {
                 setBufferedPercent(Math.min(100, Math.max(0, (end / d) * 100)));
@@ -742,10 +771,14 @@ export default function VideoPlayer({
             durationReliableRef.current = clock.reliable;
             setDuration(clock.duration);
             setDurationReliable(clock.reliable);
+            if (clock.reliable && Number.isFinite(clock.duration)) {
+                primeMediaTimeOffset(video.currentTime, clock.duration);
+                applyInitialSeek();
+            }
 
             const nextCurrentTime = clock.reliable
-                ? clampToDuration(video.currentTime, clock.duration)
-                : (Number.isFinite(video.currentTime) ? Math.max(0, video.currentTime) : 0);
+                ? clampToDuration(video.currentTime - mediaTimeOffsetRef.current, clock.duration)
+                : (Number.isFinite(video.currentTime) ? Math.max(0, video.currentTime - mediaTimeOffsetRef.current) : 0);
             if (!isSeekingRef.current) {
                 setCurrentTime(nextCurrentTime);
             }

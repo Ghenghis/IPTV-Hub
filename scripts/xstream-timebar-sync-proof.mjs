@@ -53,13 +53,13 @@ async function addAuthCookie(context) {
 }
 
 async function login(page, providerButton) {
-  await page.goto(`${BASE}/?timebar=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  await page.goto(`${BASE}/?timebar=${Date.now()}&codexProof=1`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.getByRole('button', { name: providerButton }).click({ timeout: 30_000 });
   await page.waitForURL(/\/dashboard/, { timeout: 90_000 });
 }
 
 async function startPlayback(page, testCase) {
-  await page.goto(`${BASE}${testCase.url}?timebar=${Date.now()}`, {
+  await page.goto(`${BASE}${testCase.url}?timebar=${Date.now()}&codexProof=1`, {
     waitUntil: 'domcontentloaded',
     timeout: 60_000,
   });
@@ -106,10 +106,18 @@ async function inspectPlayback(page) {
     const video = document.querySelector('video');
     const range = document.querySelector('input[data-testid="video-progress-range"]');
     const fill = document.querySelector('[data-testid="video-progress-fill"]');
+    const timeDisplay = document.querySelector('[data-testid="video-time-display"]');
     const text = document.body.innerText || '';
 
     return {
-      timebarText: text.match(/\d{1,2}:\d{2}(?=\s*\/)|\/\s*\d{1,2}:\d{2}|\/\s*\d+:\d{2}:\d{2}/g) || [],
+      timebarText: timeDisplay?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      timeDisplay: timeDisplay
+        ? {
+            currentTime: Number(timeDisplay.getAttribute('data-current-time') || 0),
+            duration: Number(timeDisplay.getAttribute('data-duration') || 0),
+            reliable: timeDisplay.getAttribute('data-duration-reliable') === 'true',
+          }
+        : null,
       hasFakeTenSecondDuration: /\/\s*00:10\b|\/\s*0:10\b/.test(text),
       video: video
         ? {
@@ -173,6 +181,8 @@ try {
     assert(state.video.muted === false && state.video.volume > 0, `${testCase.name} is muted`);
     assert(state.video.audioBytes > 0, `${testCase.name} decoded no audio bytes`);
     assert(state.range?.max >= testCase.minDuration, `${testCase.name} range max too small: ${state.range?.max}`);
+    assert(state.timeDisplay?.reliable === true, `${testCase.name} time display is not reliable`);
+    assert(state.timeDisplay?.duration >= testCase.minDuration, `${testCase.name} displayed duration too small: ${state.timeDisplay?.duration}`);
     assert(!state.hasFakeTenSecondDuration, `${testCase.name} still shows fake 10-second duration`);
     assert((state.progressPercent || 0) < 20, `${testCase.name} progress bar is implausibly full early`);
 

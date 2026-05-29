@@ -77,9 +77,12 @@ export default function WatchMoviePage() {
     const [subtitleUrl, setSubtitleUrl] = useState<string | null>(null);
     const [showSubtitlePanel, setShowSubtitlePanel] = useState(false);
     const [tmdbId, setTmdbId] = useState<number | undefined>(undefined);
+    const searchParams = useSearchParams();
+    const isProofMode = searchParams.get('codexProof') === '1';
 
     // Calculate resumeTime synchronously based on progressLoaded
     const resumeTime = useMemo(() => {
+        if (isProofMode) return 0;
         if (!progressLoaded) return 0;
         const progress = getProgress(streamId);
         if (progress && progress.progress > 10) {
@@ -93,7 +96,7 @@ export default function WatchMoviePage() {
             return progress.progress;
         }
         return 0;
-    }, [streamId, getProgress, progressLoaded, movie?.info.duration]);
+    }, [streamId, getProgress, progressLoaded, movie?.info.duration, isProofMode]);
 
     useEffect(() => {
         if (!credentials || !streamId) return;
@@ -172,7 +175,6 @@ export default function WatchMoviePage() {
     }, [streamId, getSavedSubtitle]);
 
     // Auto-play from continue watching
-    const searchParams = useSearchParams();
     useEffect(() => {
         if (searchParams.get('autoplay') === 'true' && movie && !isPlaying && progressLoaded) {
             setIsPlaying(true);
@@ -203,6 +205,7 @@ export default function WatchMoviePage() {
 
     const handleProgress = (currentTime: number, duration: number) => {
         if (!movie) return;
+        if (isProofMode) return;
         const knownDuration = parseDurationSeconds(movie.info.duration);
         updateProgress({
             streamId: movie.movie_data.stream_id,

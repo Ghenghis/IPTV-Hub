@@ -130,9 +130,12 @@ export default function WatchSeriesPage() {
     const [subtitleUrl, setSubtitleUrl] = useState<string | null>(null);
     const [showSubtitlePanel, setShowSubtitlePanel] = useState(false);
     const [parentTmdbId, setParentTmdbId] = useState<number | undefined>(undefined);
+    const searchParams = useSearchParams();
+    const isProofMode = searchParams.get('codexProof') === '1';
 
     // Calculate resumeTime synchronously based on selected episode
     const resumeTime = useMemo(() => {
+        if (isProofMode) return 0;
         if (selectedEpisode) {
             const progress = getProgress(selectedEpisode.id);
             if (progress && progress.progress > 10) {
@@ -149,7 +152,7 @@ export default function WatchSeriesPage() {
             }
         }
         return 0;
-    }, [selectedEpisode?.id, getProgress]);
+    }, [selectedEpisode?.id, getProgress, isProofMode]);
 
     useEffect(() => {
         if (!credentials || !seriesId) return;
@@ -253,7 +256,6 @@ export default function WatchSeriesPage() {
 
 
     // Auto-play from continue watching
-    const searchParams = useSearchParams();
     useEffect(() => {
         if (searchParams.get('autoplay') === 'true' && series && !selectedEpisode) {
             const episodeId = searchParams.get('episode');
@@ -305,6 +307,7 @@ export default function WatchSeriesPage() {
 
     const handleProgress = (currentTime: number, duration: number) => {
         if (!series || !selectedEpisode) return;
+        if (isProofMode) return;
         const knownDuration = episodeDurationSeconds(selectedEpisode);
         updateProgress({
             streamId: selectedEpisode.id, // We use episode ID as the primary key for progress
