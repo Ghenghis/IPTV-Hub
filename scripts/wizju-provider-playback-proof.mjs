@@ -14,8 +14,18 @@ const OUT_DIR =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/wizju-provider-playback-proof-20260527';
 
 const PROVIDERS = [
-  { id: 'apollo', name: 'Apollo Group TV', sourceId: 'daveai-vault-apollo' },
-  { id: 'xtremehd', name: 'XtremeHD', sourceId: 'daveai-vault-xtremehd' },
+  {
+    id: 'apollo',
+    name: 'Apollo Group TV',
+    sourceId: 'daveai-vault-apollo',
+    rowPattern: /\|US\||USA/i,
+  },
+  {
+    id: 'xtremehd',
+    name: 'XtremeHD',
+    sourceId: 'daveai-vault-xtremehd',
+    rowPattern: /USA/i,
+  },
 ];
 
 function assert(condition, message) {
@@ -151,7 +161,8 @@ async function runProvider(page, provider, seen) {
 
   const text = await bodyText(page);
   assert(text.includes(`Source: ${provider.name}`), `${provider.name} source did not load`);
-  assert(text.includes('USA AMC'), `${provider.name} did not show USA AMC`);
+  assert(provider.rowPattern.test(text), `${provider.name} did not show curated English rows`);
+  assert(!/####|\|AR\||\|MULTI\||Bem-vindo|Conectar/i.test(text), `${provider.name} showed raw or non-English provider rows`);
   assert(!/No media|No results|Something went wrong|Application Error/i.test(text), `${provider.name} rendered an error state`);
 
   const snapshot = await dbSnapshot(page);
@@ -161,8 +172,8 @@ async function runProvider(page, provider, seen) {
     `${provider.name} source not persisted as active`,
   );
   assert(
-    snapshot.samples.some((item) => item.sourceId === provider.sourceId && item.url?.startsWith('/api/provider-vault/stream')),
-    `${provider.name} samples do not use safe provider-vault stream URLs`,
+    snapshot.samples.some((item) => item.sourceId === provider.sourceId && item.url?.startsWith('/api/provider-vault/')),
+    `${provider.name} samples do not use safe provider-vault URLs`,
   );
 
   await page.screenshot({
@@ -175,8 +186,8 @@ async function runProvider(page, provider, seen) {
   await page.waitForTimeout(2_000);
 
   const detailText = await bodyText(page);
-  assert(detailText.includes('USA AMC'), `${provider.name} media detail did not open USA AMC`);
-  assert(detailText.includes('/api/provider-vault/stream?'), `${provider.name} detail source is not provider-vault`);
+  assert(provider.rowPattern.test(detailText), `${provider.name} media detail did not open curated provider row`);
+  assert(detailText.includes('/api/provider-vault/'), `${provider.name} detail source is not provider-vault`);
   assert(!/player_api|username=|password=|\/live\/[^/\s]+\/[^/\s]+/i.test(detailText), `${provider.name} leaked raw provider URL text`);
 
   await page.screenshot({
@@ -186,10 +197,34 @@ async function runProvider(page, provider, seen) {
 
   await page.getByRole('button', { name: /Play Now|Play/i }).first().click({ timeout: 20_000 });
   await page.waitForSelector('video', { timeout: 30_000 });
+  await page.evaluate(() => {
+    const video = document.querySelector('video');
+    if (!video) return;
+    try {
+      video.muted = false;
+      video.volume = 1;
+      void video.play?.();
+    } catch {}
+  });
   await page
     .waitForFunction(() => {
       const video = document.querySelector('video');
-      return Boolean(video && video.readyState >= 2 && !video.error);
+      try {
+        if (video) {
+          video.muted = false;
+          video.volume = 1;
+          if (video.paused) void video.play?.();
+        }
+      } catch {}
+      return Boolean(
+        video &&
+        video.readyState >= 2 &&
+        video.videoWidth >= 640 &&
+        video.currentTime > 1 &&
+        video.muted === false &&
+        video.volume > 0 &&
+        !video.error
+      );
     }, null, { timeout: 75_000 });
   await page.waitForTimeout(5_000);
 
@@ -204,6 +239,9 @@ async function runProvider(page, provider, seen) {
       readyState: el.readyState,
       networkState: el.networkState,
       paused: el.paused,
+      muted: el.muted,
+      volume: el.volume,
+      currentTime: el.currentTime,
       currentSrcKind: el.currentSrc?.startsWith('blob:') ? 'blob' : 'url',
       width: el.videoWidth,
       height: el.videoHeight,
@@ -215,10 +253,12 @@ async function runProvider(page, provider, seen) {
   assert(video?.readyState >= 2, `${provider.name} video never became playable`);
   assert(!video.error, `${provider.name} video error: ${JSON.stringify(video.error)}`);
   assert(video.width >= 640 && video.height >= 360, `${provider.name} video dimensions too small`);
+  assert(video.currentTime > 1, `${provider.name} video time did not advance`);
+  assert(video.muted === false && video.volume > 0, `${provider.name} video is muted`);
   assert(
     seen.providerResponses.some((response) =>
       response.status === 200 &&
-      response.url.includes('/api/provider-vault/stream') &&
+      (response.url.includes('/api/provider-vault/stream') || response.url.includes('/api/provider-vault/aac-hls')) &&
       response.url.includes(`provider=${provider.id}`),
     ),
     `${provider.name} did not request provider-vault stream successfully`,
@@ -250,7 +290,10 @@ async function runProvider(page, provider, seen) {
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  args: ['--autoplay-policy=no-user-gesture-required'],
+});
 const context = await browser.newContext({
   viewport: { width: 1600, height: 1000 },
   ignoreHTTPSErrors: true,

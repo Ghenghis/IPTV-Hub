@@ -3,8 +3,9 @@ import type { StorableMediaItem } from '@/types/indexeddb'
 import { getDB } from '@/services/indexedDb/indexedDbService'
 import { MediaItemsStorageV2 } from '@/services/indexedDb/mediaItemsStorageV2'
 
-const BUILD_ID = '20260526-wizju-provider-vault-v1'
+const BUILD_ID = '20260529-wizju-provider-vault-v2'
 const SEED_MARKER = 'wizju_daveai_provider_vault_seeded'
+const VAULT_PROFILE = 'english'
 
 const LIMITS = {
   liveLimit: 1200,
@@ -74,6 +75,7 @@ function safeId(value: unknown, fallback = 'item'): string {
 function catalogUrl(providerId: ProviderId): string {
   const params = new URLSearchParams({
     provider: providerId,
+    profile: VAULT_PROFILE,
     liveLimit: String(LIMITS.liveLimit),
     movieLimit: String(LIMITS.movieLimit),
     seriesLimit: String(LIMITS.seriesLimit),
@@ -100,6 +102,26 @@ function streamUrl(providerId: ProviderId, kind: 'live' | 'movie' | 'series', it
     ext,
   })
   return `/api/provider-vault/stream?${params.toString()}`
+}
+
+function normalizeVaultUrl(url: string): string {
+  if (!url.includes('/api/provider-vault/aac-hls?')) return url
+  try {
+    const parsed = new URL(url, window.location.origin)
+    const sourceExt = parsed.searchParams.get('sourceExt') || parsed.searchParams.get('ext') || 'ts'
+    parsed.searchParams.set('ext', 'm3u8')
+    parsed.searchParams.set('sourceExt', sourceExt)
+    parsed.searchParams.set('video', 'h264')
+    parsed.searchParams.set('segment', 'ts')
+    return `${parsed.pathname}${parsed.search}`
+  } catch {
+    const joiner = url.includes('?') ? '&' : '?'
+    return `${url}${joiner}ext=m3u8&sourceExt=ts&video=h264&segment=ts`
+  }
+}
+
+function isMarkerName(value: string): boolean {
+  return /^#{2,}/.test(value.trim())
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -160,8 +182,9 @@ function normalizeItem(
     item.name ?? item.title ?? item.stream_display_name ?? item.tvg?.name,
     `${provider.name} ${kind} ${index + 1}`,
   )
-  const url = text(item.url, '') || streamUrl(provider.id, kind, item)
-  if (!url) return null
+  if (isMarkerName(title)) return null
+  const url = normalizeVaultUrl(text(item.url, '') || streamUrl(provider.id, kind, item))
+  if (!url || !url.startsWith('/api/provider-vault/')) return null
 
   const category = categoryFor(kind, item, provider)
   const logo = text(item.logo ?? item.stream_icon ?? item.cover ?? item.tvg?.logo, '')
