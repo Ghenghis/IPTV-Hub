@@ -75,6 +75,17 @@
   }
 
   function publicStreamUrl(providerId, kind, streamId, ext) {
+    providerId = String(providerId || '').toLowerCase();
+    kind = String(kind || '');
+    if (providerId === 'apollo' && kind === 'live') {
+      var hlsParams = new URLSearchParams({
+        provider: providerId,
+        kind: kind,
+        id: String(streamId || ''),
+        ext: 'ts',
+      });
+      return '/api/provider-vault/aac-hls?' + hlsParams.toString();
+    }
     var params = new URLSearchParams({
       provider: providerId,
       kind: kind,

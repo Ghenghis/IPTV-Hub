@@ -11,7 +11,7 @@ const outDir =
   `C:/Users/Admin/Downloads/VPS/_visual_artifacts/zero-player-full-provider-proof-${stamp}`;
 const cookiePath =
   'C:/Users/Admin/Downloads/VPS/_visual_artifacts/apps-provider-ready-sweep-20260526/auth-cookie.json';
-const buildId = '20260528-provider-vault-direct31';
+const buildId = '20260529-provider-vault-direct32';
 const appUrl = `${process.env.ZERO_PLAYER_URL || 'https://apps.daveai.tech/iptv-player-zero/'}?full_provider_proof=${Date.now()}`;
 const providers = [
   { id: 'apollo', name: 'Apollo Group TV', minChannels: 4000, minMovies: 1000, minSeries: 700 },

@@ -18,7 +18,7 @@
     movieLimit: 1200,
     seriesLimit: 800,
   };
-  var QUICKSTART_BUILD_ID = '20260528-provider-vault-direct31';
+  var QUICKSTART_BUILD_ID = '20260529-provider-vault-direct32';
   var PROVIDER_PLAYLIST_PREFIX = 'daveai-provider-';
   var COMBINED_PLAYLIST_ID = 'daveai-provider-combined-tagged';
   var DISPLAY_MODE_KEY = 'ipz_provider_display_mode';
@@ -309,6 +309,7 @@
   function catalogUrl(providerId) {
     var params = new URLSearchParams({
       provider: providerId,
+      profile: 'english',
       liveLimit: String(LIMITS.liveLimit),
       movieLimit: String(LIMITS.movieLimit),
       seriesLimit: String(LIMITS.seriesLimit),

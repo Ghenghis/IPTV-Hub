@@ -25,7 +25,7 @@ hosted app:
 
 | Player | Current status | Strict proof | Notes |
 | --- | --- | --- | --- |
-| IPTV Player Zero | `ACCEPTED` | `zero-player-autoload-direct31-20260528T232800`; `zero-player-full-direct31-20260528T234000`; `zero-player-combined-direct31-20260528T233500` | Separate Apollo/XtremeHD plus explicit combined tagged mode, free/unlocked UI, stale fatal recovery, fast provider import, live playback with unmuted video. |
+| IPTV Player Zero | `ACCEPTED` | `zero-player-autoload-direct32-20260529T090842`; `zero-player-full-direct32-20260529T090945` | Separate Apollo/XtremeHD, English provider profile, free/unlocked UI, stale fatal recovery, fast provider import, Apollo safe-HLS live playback, XtremeHD HLS live playback, both unmuted with zero console/page errors. See `deploy/apps/iptv-player-zero/PROOF-20260529.md`. |
 | xstream-player | `ACCEPTED` | `xstream-combined-only-20260528T200111`; `xstream-separated-only-20260528T200704`; `xstream-live-playback-strict-20260528T202536`; `xstream-movie-playback-20260528T201124`; `xstream-series-playback-20260528T211000`; `xstream-timebar-offset-proof-20260529081032` | Separate Apollo/XtremeHD, combined tagged browsing, live/movie/series cards, live/movie/series playback with decoded audio, route/chunk repairs, source-timestamp-normalized VOD controls, and proof-mode guard against verification-run watch-progress pollution. |
 | IPTVnator | `ACCEPTED` | `iptvnator-strict-v15-*` | Separate Apollo/XtremeHD, English profile, safe Apollo HLS-shaped fallback, XtremeHD route fixed, unmuted UI playback proof. |
 | Smart IPTV Web | `ACCEPTED` | `smart-iptv-web-strict-20260528T152122` | Apollo/XtremeHD/Combined Tagged modes, English profile, HLS route classification fixed, live playback readyState 4 unmuted. |
