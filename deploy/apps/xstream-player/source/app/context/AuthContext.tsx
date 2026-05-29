@@ -30,6 +30,8 @@ interface AuthState {
         password?: string;
         hostUrl?: string;
         providerId?: string;
+        providerMode?: 'separated' | 'combined-tagged';
+        providerIds?: string[];
     } | null;
     isAuthenticated: boolean;
     login: (serverUrl: string, user: string, pass: string, providerId?: string) => Promise<void>;

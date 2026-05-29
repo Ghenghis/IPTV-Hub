@@ -1,20 +1,27 @@
 import { openDB, IDBPDatabase } from 'idb';
 
 const DB_NAME = 'xstream_player_db';
-const DB_VERSION = 11;
+const DB_VERSION = 13;
 
 export interface CachedCategory {
     category_id: string;
+    raw_category_id?: string;
     category_name: string;
     parent_id: number;
     type: 'live' | 'movie' | 'series';
+    provider_id?: string;
+    provider_name?: string;
 }
 
 export interface CachedStream {
     id: string | number;
+    raw_id?: string;
     category_id: string;
+    raw_category_id?: string;
     name: string;
     type: 'live' | 'movie' | 'series';
+    provider_id?: string;
+    provider_name?: string;
     icon?: string;
     rating?: string;
     added?: string;
@@ -81,7 +88,7 @@ export const initDB = async (): Promise<IDBPDatabase> => {
 
                 // Clear old data when upgrading so direct-image and
                 // mixed-language catalog entries are replaced by safe data.
-                if (oldVersion < 11) {
+                if (oldVersion < 13) {
                     streamStore.clear();
                     if (db.objectStoreNames.contains('categories')) {
                         transaction.objectStore('categories').clear();

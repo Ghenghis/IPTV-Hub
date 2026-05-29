@@ -25,10 +25,10 @@ hosted app:
 
 | Player | Current status | Strict proof | Notes |
 | --- | --- | --- | --- |
-| IPTV Player Zero | `ACCEPTED` | `zero-player-full-provider-proof-20260528T171224Z` | Separate Apollo/XtremeHD plus combined tagged mode, free/unlocked UI, live playback, movie/series data, artwork counts. |
-| xstream-player | `ACCEPTED` | `xstream-provider-accept-rerun-20260528T122558`; `xstream-random-2026-accept-20260528T121712`; `xstream-series-accept-rerun-20260528T122558`; `xstream-visual-quality-proof-20260528T121147` | Separate Apollo/XtremeHD, live/movie/series playback with sound, visual cards accepted. Combined tagged browsing is not yet implemented. |
-| IPTVnator | `NEXT_FIX` | Pending stricter rerun | User saw XtremeHD portal unavailable/stale route. Existing edits are not accepted yet. |
-| Smart IPTV Web | `REVALIDATE` | Pending stricter rerun | User saw movie/playback connection and possible sound issues. |
+| IPTV Player Zero | `ACCEPTED` | `zero-player-autoload-direct31-20260528T232800`; `zero-player-full-direct31-20260528T234000`; `zero-player-combined-direct31-20260528T233500` | Separate Apollo/XtremeHD plus explicit combined tagged mode, free/unlocked UI, stale fatal recovery, fast provider import, live playback with unmuted video. |
+| xstream-player | `ACCEPTED` | `xstream-combined-only-20260528T200111`; `xstream-separated-only-20260528T200704`; `xstream-live-playback-strict-20260528T202536`; `xstream-movie-playback-20260528T201124`; `xstream-series-playback-20260528T211000` | Separate Apollo/XtremeHD, combined tagged browsing, live/movie/series cards, live/movie/series playback with decoded audio, route/chunk repairs. |
+| IPTVnator | `ACCEPTED` | `iptvnator-strict-v15-*` | Separate Apollo/XtremeHD, English profile, safe Apollo HLS-shaped fallback, XtremeHD route fixed, unmuted UI playback proof. |
+| Smart IPTV Web | `ACCEPTED` | `smart-iptv-web-strict-20260528T152122` | Apollo/XtremeHD/Combined Tagged modes, English profile, HLS route classification fixed, live playback readyState 4 unmuted. |
 | Nuvio | `REVALIDATE` | Pending stricter rerun | User saw skeleton cards and no sound labels. |
 | IPTV Restream | `REVALIDATE` | Pending stricter rerun | User saw player spinner/no sound concern. |
 | Stalker UI | `REVALIDATE` | Pending stricter rerun | User saw many movie cards without artwork. |
@@ -57,9 +57,11 @@ Each player should support as much of this as its architecture allows:
 
 ## Next Order
 
-1. Commit and push the accepted Zero Player and XStream work only.
-2. Finish IPTVnator because it has active, user-visible XtremeHD load failures.
-3. Re-run Smart/Nuvio/Restream/Stalker/Extreme/Wizju/Open/Stream/TVapp/YnoTV
-   under the stricter data/artwork/audio test standard.
-4. Add combined tagged browsing and catalog export features player-by-player,
-   starting with XStream after IPTVnator is stable.
+1. Commit and push the accepted XStream strict-proof slice.
+2. Re-run Nuvio/Restream/Stalker/Extreme/Wizju/Open/Stream/TVapp/YnoTV under
+   the stricter data/artwork/audio test standard.
+3. Apply one focused repair pass per player. If the player still fails, mark it
+   `BLOCKED_APP` or `BLOCKED_UPSTREAM` with artifact paths and move to the next
+   player instead of looping.
+4. Add combined tagged browsing and catalog export features only after the
+   player passes separated provider playback.

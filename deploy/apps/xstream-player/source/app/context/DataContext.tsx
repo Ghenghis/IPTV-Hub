@@ -6,6 +6,16 @@ import * as db from '../lib/db';
 import { getDeviceProfile } from '../lib/deviceProfile';
 import { streamSyncStreams } from '../lib/streamSync';
 import { categoryIdSet, filterEnglishCategories, isAllowedCatalogItem, safeImagePath } from '../lib/catalogFilters';
+import {
+    VaultProviderId,
+    categoryIdForStorage,
+    cleanDisplayTitle,
+    isCombinedCredentials,
+    providerLabel,
+    selectedProviderIds,
+    streamIdForStorage,
+    tagCategoryName,
+} from '../lib/providerMode';
 
 interface DataContextType {
     isSyncing: boolean;
@@ -28,7 +38,14 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
  * Extract only necessary fields from raw API items.
  * This eliminates storing the full raw JSON blob (~70% storage reduction).
  */
-function mapItemToSlimStream(item: any, type: 'live' | 'movie' | 'series'): db.CachedStream {
+function mapItemToSlimStream(
+    item: any,
+    type: 'live' | 'movie' | 'series',
+    providerId?: VaultProviderId,
+    combinedMode = false,
+): db.CachedStream {
+    const rawId = String(item.stream_id || item.series_id);
+    const rawCategoryId = String(item.category_id);
     const icon = safeImagePath(item.stream_icon || item.cover);
     const cover = safeImagePath(item.cover || item.stream_icon);
     const backdropPath = Array.isArray(item.backdrop_path)
@@ -36,9 +53,13 @@ function mapItemToSlimStream(item: any, type: 'live' | 'movie' | 'series'): db.C
         : item.backdrop_path;
 
     return {
-        id: String(item.stream_id || item.series_id),
-        category_id: String(item.category_id),
-        name: item.name || '',
+        id: streamIdForStorage(rawId, type, providerId, combinedMode),
+        raw_id: rawId,
+        category_id: categoryIdForStorage(rawCategoryId, type, providerId, combinedMode),
+        raw_category_id: rawCategoryId,
+        provider_id: providerId,
+        provider_name: providerId ? providerLabel(providerId) : undefined,
+        name: cleanDisplayTitle(item.name || ''),
         type,
         icon,
         rating: item.rating || undefined,
@@ -101,9 +122,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         progressStart: number,
         progressWeight: number,
         signal: AbortSignal,
-        allowedCategoryIds?: Set<string>
+        allowedCategoryIds?: Set<string>,
+        providerId?: VaultProviderId,
+        combinedMode = false,
     ) => {
         if (!credentials) return;
+        const requestCredentials = providerId ? { providerId } : credentials;
 
         const profile = getDeviceProfile();
         const pageSize = profile.syncPageSize;
@@ -122,7 +146,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    ...credentials,
+                    ...requestCredentials,
                     action,
                     page,
                     limit: pageSize
@@ -140,7 +164,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 if (result.items.length > 0) {
                     const batch = result.items
                         .filter((item: any) => isAllowedCatalogItem(item, type, allowedCategoryIds))
-                        .map((item: any) => mapItemToSlimStream(item, type));
+                        .map((item: any) => mapItemToSlimStream(item, type, providerId, combinedMode));
                     await db.saveStreams(batch);
                     processed += batch.length;
                 }
@@ -166,7 +190,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                         const batch = result
                             .slice(i, i + pageSize)
                             .filter((item: any) => isAllowedCatalogItem(item, type, allowedCategoryIds))
-                            .map((item: any) => mapItemToSlimStream(item, type));
+                            .map((item: any) => mapItemToSlimStream(item, type, providerId, combinedMode));
                         await db.saveStreams(batch);
                         if (profile.yieldBetweenBatches) {
                             await yieldToEventLoop();
@@ -192,9 +216,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         action: string,
         progressStart: number,
         progressWeight: number,
-        signal: AbortSignal
+        signal: AbortSignal,
+        providerId?: VaultProviderId,
+        combinedMode = false,
     ) => {
         if (!credentials) return;
+        const requestCredentials = providerId ? { providerId } : credentials;
 
         try {
             if (signal.aborted) return;
@@ -207,7 +234,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             const catRes = await fetch('/api/proxy', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...credentials, action: catAction }),
+                body: JSON.stringify({ ...requestCredentials, action: catAction }),
                 signal
             });
             const categories = await catRes.json();
@@ -218,7 +245,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             const allowedCategoryIds = categoryIdSet(filteredCategories);
 
             if (filteredCategories.length > 0) {
-                await db.saveCategories(filteredCategories);
+                await db.saveCategories(filteredCategories.map((category: any) => ({
+                    ...category,
+                    category_id: categoryIdForStorage(category.category_id, type, providerId, combinedMode),
+                    raw_category_id: String(category.category_id),
+                    category_name: tagCategoryName(category.category_name || '', providerId, combinedMode),
+                    provider_id: providerId,
+                    provider_name: providerId ? providerLabel(providerId) : undefined,
+                    type,
+                })));
             }
 
             if (signal.aborted) return;
@@ -230,9 +265,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 await streamSyncStreams({
                     type,
                     action,
-                    credentials,
+                    credentials: requestCredentials,
                     signal,
-                    mapItem: mapItemToSlimStream,
+                    mapItem: (item: any) => mapItemToSlimStream(item, type, providerId, combinedMode),
                     shouldIncludeItem: (item) => isAllowedCatalogItem(item, type, allowedCategoryIds),
                     onProgress: (processed, total) => {
                         const fraction = total > 0 ? processed / total : 1;
@@ -242,7 +277,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 });
             } else {
                 // Fallback to paginated sync
-                await fetchStreamsPaginated(type, action, progressStart, progressWeight, signal, allowedCategoryIds);
+                await fetchStreamsPaginated(type, action, progressStart, progressWeight, signal, allowedCategoryIds, providerId, combinedMode);
             }
 
         } catch (error: unknown) {
@@ -282,7 +317,28 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         try {
             const profile = getDeviceProfile();
 
-            if (profile.parallelSync && profile.useStreaming) {
+            if (isCombinedCredentials(credentials)) {
+                console.log('[Sync] Running combined tagged sync');
+                const work = selectedProviderIds(credentials).flatMap((providerId) => ([
+                    { providerId, type: 'live' as const, action: 'get_live_streams' },
+                    { providerId, type: 'movie' as const, action: 'get_vod_streams' },
+                    { providerId, type: 'series' as const, action: 'get_series' },
+                ]));
+                const weight = work.length ? 100 / work.length : 100;
+                for (let index = 0; index < work.length; index += 1) {
+                    if (controller.signal.aborted) break;
+                    const item = work[index];
+                    await fetchAllDataByType(
+                        item.type,
+                        item.action,
+                        index * weight,
+                        weight,
+                        controller.signal,
+                        item.providerId,
+                        true,
+                    );
+                }
+            } else if (profile.parallelSync && profile.useStreaming) {
                 // Parallel sync for medium+ devices
                 console.log('[Sync] Running parallel sync (live + vod)');
                 // Create intermediate progress trackers

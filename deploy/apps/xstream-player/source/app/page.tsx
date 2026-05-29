@@ -6,10 +6,11 @@ import { useRouter } from 'next/navigation';
 import { Play, Server, User, Lock, AlertCircle } from 'lucide-react';
 
 interface VaultProvider {
-  id: 'apollo' | 'xtremehd';
+  id: 'apollo' | 'xtremehd' | 'combined-tagged';
   name: string;
   configured: boolean;
   supports: string[];
+  mode?: 'separated' | 'combined-tagged';
 }
 
 export default function LoginPage() {
@@ -79,6 +80,18 @@ export default function LoginPage() {
   };
 
   const configuredProviders = providers.filter((provider) => provider.configured);
+  const providerButtons: VaultProvider[] = configuredProviders.length >= 2
+    ? [
+        ...configuredProviders,
+        {
+          id: 'combined-tagged',
+          name: 'Combined Tagged',
+          configured: true,
+          supports: ['xtream', 'tagged'],
+          mode: 'combined-tagged',
+        },
+      ]
+    : configuredProviders;
 
   if (isLoading) {
     return (
@@ -115,9 +128,9 @@ export default function LoginPage() {
           </div>
         )}
 
-        {configuredProviders.length > 0 && (
+        {providerButtons.length > 0 && (
           <div className="mb-8 grid gap-3">
-            {configuredProviders.map((provider) => (
+            {providerButtons.map((provider) => (
               <button
                 key={provider.id}
                 type="button"
@@ -131,9 +144,14 @@ export default function LoginPage() {
                 ) : (
                   <Play size={18} fill="currentColor" />
                 )}
-                Use {provider.name}
+                {provider.id === 'combined-tagged' ? 'Use Apollo + XtremeHD (Tagged)' : `Use ${provider.name}`}
               </button>
             ))}
+            {configuredProviders.length >= 2 && (
+              <p className="text-xs leading-5 text-gray-500">
+                Combined mode lists both providers together, but every row keeps its Apollo or XtremeHD source tag.
+              </p>
+            )}
             <div className="flex items-center gap-3 text-xs uppercase tracking-widest text-gray-600">
               <span className="h-px flex-1 bg-white/10"></span>
               Manual login

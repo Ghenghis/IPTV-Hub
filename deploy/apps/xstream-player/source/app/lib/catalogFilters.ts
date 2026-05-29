@@ -90,6 +90,7 @@ const NON_ENGLISH_SIGNALS = [
     /\bSAUDI\b/i,
     /\bSYRIA(N)?\b/i,
     /\bMULTI[\s-]*(LANG|SUB)\b/i,
+    /(^|\s|\|)MULTI(\s|\||$)/i,
     /\bTRANSLATED?\b/i,
     /\bKUNG[\s-]*FU\b/i,
     /\bLOCAL\b/i,
@@ -168,7 +169,7 @@ export function isAllowedCatalogItem(
     allowedCategoryIds?: Set<string>,
 ) {
     const categoryId = String(item.category_id || '');
-    if (allowedCategoryIds) return allowedCategoryIds.has(categoryId);
+    if (allowedCategoryIds && !allowedCategoryIds.has(categoryId)) return false;
     return isEnglishCatalogName(item.name || '', type);
 }
 

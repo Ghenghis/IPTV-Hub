@@ -15,6 +15,8 @@ interface Movie {
     rating: string;
     added: string;
     container_extension: string;
+    provider_id?: string;
+    provider_name?: string;
 }
 
 import { useData } from '../../../context/DataContext';
@@ -22,11 +24,13 @@ import SortControls, { SortOption } from '@/components/SortControls';
 import { useSortPreference } from '@/app/hooks/useSortPreference';
 import { useInfiniteScroll } from '@/app/hooks/useInfiniteScroll';
 import { useMemo } from 'react';
-import { safeImagePath } from '@/app/lib/catalogFilters';
+import { isAllowedCatalogItem, safeImagePath } from '@/app/lib/catalogFilters';
+import { categoryProviderContext, cleanDisplayTitle, decodeRouteId, providerLabel, streamIdForStorage } from '@/app/lib/providerMode';
 
 export default function MovieList() {
     const { credentials } = useAuth();
     const { categoryId } = useParams();
+    const routeCategoryId = useMemo(() => decodeRouteId(categoryId as string), [categoryId]);
     const { getCachedStreams, getCachedCategories } = useData();
 
     const [movies, setMovies] = useState<Movie[]>([]);
@@ -36,19 +40,19 @@ export default function MovieList() {
     const [sort, setSort] = useSortPreference('movies', 'added');
 
     useEffect(() => {
-        if (!credentials || !categoryId) return;
+        if (!credentials || !routeCategoryId) return;
 
         const loadData = async () => {
             try {
                 // Fetch category name
                 const categories = await getCachedCategories('movie');
-                const category = categories.find(c => c.category_id === categoryId);
+                const category = categories.find(c => c.category_id === routeCategoryId);
                 if (category) {
                     setCategoryName(category.category_name);
                 }
 
                 // Try cache first
-                const cached = await getCachedStreams(categoryId as string, 'movie');
+                const cached = await getCachedStreams(routeCategoryId, 'movie');
                 if (cached && cached.length > 0) {
                     setMovies(cached.map(s => ({
                         stream_id: s.id,
@@ -57,28 +61,39 @@ export default function MovieList() {
                         rating: s.rating || '',
                         added: s.added || '',
                         container_extension: s.container_extension || '',
+                        provider_id: s.provider_id,
+                        provider_name: s.provider_name,
                     })));
                     setLoading(false);
                     return;
                 }
 
                 // Fallback to fetch
+                const providerContext = categoryProviderContext(credentials, routeCategoryId);
                 const res = await fetch('/api/proxy', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         ...credentials,
+                        ...(providerContext.providerId ? { providerId: providerContext.providerId } : {}),
                         action: 'get_vod_streams',
-                        category_id: categoryId
+                        category_id: providerContext.rawCategoryId
                     })
                 });
 
                 const data = await res.json();
                 if (Array.isArray(data)) {
-                    setMovies(data.map((movie) => ({
-                        ...movie,
-                        stream_icon: safeImagePath(movie.stream_icon || movie.cover) || '',
-                    })));
+                    setMovies(data
+                        .filter((movie) => isAllowedCatalogItem(movie, 'movie'))
+                        .map((movie) => ({
+                            ...movie,
+                            stream_id: streamIdForStorage(movie.stream_id, 'movie', providerContext.providerId || undefined, providerContext.combinedMode),
+                            name: cleanDisplayTitle(movie.name || ''),
+                            category_id: routeCategoryId,
+                            provider_id: providerContext.providerId || undefined,
+                            provider_name: providerContext.providerId ? providerLabel(providerContext.providerId) : undefined,
+                            stream_icon: safeImagePath(movie.stream_icon || movie.cover) || '',
+                        })));
                 } else {
                     setMovies([]);
                 }
@@ -90,7 +105,7 @@ export default function MovieList() {
         };
 
         loadData();
-    }, [credentials, categoryId, getCachedStreams, getCachedCategories]);
+    }, [credentials, routeCategoryId, getCachedStreams, getCachedCategories]);
 
     const sortedMovies = useMemo(() => {
         return [...movies].sort((a, b) => {
@@ -174,6 +189,11 @@ export default function MovieList() {
                                             <span className="uppercase">{movie.container_extension}</span>
                                             <span>ID: {movie.stream_id}</span>
                                         </div>
+                                        {movie.provider_name && (
+                                            <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-blue-300/80">
+                                                {movie.provider_name}
+                                            </div>
+                                        )}
                                     </div>
                                 </Link>
                             ))}

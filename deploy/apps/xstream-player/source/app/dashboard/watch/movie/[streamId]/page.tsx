@@ -33,6 +33,7 @@ import { useData } from '@/app/context/DataContext';
 import { useTMDb } from '@/app/context/TMDbContext';
 import { useSubtitle } from '@/app/context/SubtitleContext';
 import { safeImagePath } from '@/app/lib/catalogFilters';
+import { itemProviderId, rawItemId } from '@/app/lib/providerMode';
 
 export default function WatchMoviePage() {
     const { credentials } = useAuth();
@@ -44,6 +45,8 @@ export default function WatchMoviePage() {
     const params = useParams();
     const router = useRouter();
     const streamId = params.streamId as string;
+    const rawStreamId = rawItemId(streamId);
+    const providerId = itemProviderId(credentials, streamId);
     const isDetailLoading = loadingDetails[`movie-${streamId}`];
 
     const [movie, setMovie] = useState<MovieInfo | null>(null);
@@ -87,8 +90,9 @@ export default function WatchMoviePage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         ...credentials,
+                        ...(providerId ? { providerId } : {}),
                         action: 'get_vod_info',
-                        vod_id: streamId
+                        vod_id: rawStreamId
                     })
                 });
 
@@ -109,7 +113,7 @@ export default function WatchMoviePage() {
         };
 
         loadMovieInfo();
-    }, [credentials, streamId, getCachedDetail, saveCachedDetail]);
+    }, [credentials, streamId, rawStreamId, providerId, getCachedDetail, saveCachedDetail]);
 
     // Resolve TMDB ID for better subtitle matching
     useEffect(() => {
@@ -204,9 +208,9 @@ export default function WatchMoviePage() {
         const extension = String(movie.movie_data.container_extension || 'mp4').replace(/[^a-z0-9]/gi, '') || 'mp4';
         let streamUrl = '';
         let fallbackStreamUrl: string | undefined;
-        if (credentials?.providerId) {
-            const provider = encodeURIComponent(credentials.providerId);
-            const id = encodeURIComponent(streamId);
+        if (providerId) {
+            const provider = encodeURIComponent(providerId);
+            const id = encodeURIComponent(rawStreamId);
             const ext = encodeURIComponent(extension);
             const directUrl = `/api/provider-vault/stream?provider=${provider}&kind=movie&id=${id}&ext=${ext}`;
             const transcodeUrl = `/api/provider-vault/transcode-hls?provider=${provider}&kind=movie&id=${id}&ext=${ext}`;

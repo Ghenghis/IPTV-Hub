@@ -17,17 +17,21 @@ interface Stream {
     epg_channel_id: string;
     added: string;
     category_id: string;
+    provider_id?: string;
+    provider_name?: string;
 }
 
 import { useData } from '../../../context/DataContext';
 import SortControls, { SortOption } from '@/components/SortControls';
 import { useSortPreference } from '@/app/hooks/useSortPreference';
 import { useInfiniteScroll } from '@/app/hooks/useInfiniteScroll';
-import { safeImagePath } from '@/app/lib/catalogFilters';
+import { isAllowedCatalogItem, safeImagePath } from '@/app/lib/catalogFilters';
+import { categoryProviderContext, cleanDisplayTitle, decodeRouteId, providerLabel, streamIdForStorage } from '@/app/lib/providerMode';
 
 export default function LiveStreams() {
     const { credentials } = useAuth();
     const { categoryId } = useParams();
+    const routeCategoryId = useMemo(() => decodeRouteId(categoryId as string), [categoryId]);
     const { getCachedStreams, getCachedCategories } = useData();
 
     const [streams, setStreams] = useState<Stream[]>([]);
@@ -38,19 +42,19 @@ export default function LiveStreams() {
     const [sort, setSort] = useSortPreference('live', 'added');
 
     useEffect(() => {
-        if (!credentials || !categoryId) return;
+        if (!credentials || !routeCategoryId) return;
 
         const loadData = async () => {
             try {
                 // Fetch category name
                 const categories = await getCachedCategories('live');
-                const category = categories.find(c => c.category_id === categoryId);
+                const category = categories.find(c => c.category_id === routeCategoryId);
                 if (category) {
                     setCategoryName(category.category_name);
                 }
 
                 // Try cache first
-                const cached = await getCachedStreams(categoryId as string, 'live');
+                const cached = await getCachedStreams(routeCategoryId, 'live');
                 if (cached && cached.length > 0) {
                     setStreams(cached.map(s => ({
                         stream_id: s.id,
@@ -60,27 +64,38 @@ export default function LiveStreams() {
                         added: s.added || '',
                         category_id: s.category_id,
                         stream_type: s.stream_type || '',
+                        provider_id: s.provider_id,
+                        provider_name: s.provider_name,
                     })));
                     setLoading(false);
                     return;
                 }
 
+                const providerContext = categoryProviderContext(credentials, routeCategoryId);
                 const res = await fetch('/api/proxy', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         ...credentials,
+                        ...(providerContext.providerId ? { providerId: providerContext.providerId } : {}),
                         action: 'get_live_streams',
-                        category_id: categoryId
+                        category_id: providerContext.rawCategoryId
                     })
                 });
 
                 const data = await res.json();
                 if (Array.isArray(data)) {
-                    setStreams(data.map((stream) => ({
-                        ...stream,
-                        stream_icon: safeImagePath(stream.stream_icon) || '',
-                    })));
+                    setStreams(data
+                        .filter((stream) => isAllowedCatalogItem(stream, 'live'))
+                        .map((stream) => ({
+                            ...stream,
+                            stream_id: streamIdForStorage(stream.stream_id, 'live', providerContext.providerId || undefined, providerContext.combinedMode),
+                            name: cleanDisplayTitle(stream.name || ''),
+                            category_id: routeCategoryId,
+                            provider_id: providerContext.providerId || undefined,
+                            provider_name: providerContext.providerId ? providerLabel(providerContext.providerId) : undefined,
+                            stream_icon: safeImagePath(stream.stream_icon) || '',
+                        })));
                 } else {
                     setStreams([]);
                 }
@@ -92,7 +107,7 @@ export default function LiveStreams() {
         };
 
         loadData();
-    }, [credentials, categoryId, getCachedStreams, getCachedCategories]);
+    }, [credentials, routeCategoryId, getCachedStreams, getCachedCategories]);
 
     const sortedStreams = useMemo(() => {
         return [...streams].sort((a, b) => {
@@ -168,6 +183,11 @@ export default function LiveStreams() {
                                             {stream.name}
                                         </h4>
                                         <p className="text-xs text-gray-600 truncate">ID: {stream.stream_id}</p>
+                                        {stream.provider_name && (
+                                            <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-red-300/80">
+                                                {stream.provider_name}
+                                            </p>
+                                        )}
                                     </div>
                                 </Link>
                             ))}

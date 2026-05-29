@@ -132,7 +132,9 @@ export async function streamSyncStreams(options: StreamSyncOptions): Promise<voi
                     try {
                         const parsed = JSON.parse(buffer);
                         if (parsed.type === 'item') {
-                            batch.push(mapItem(parsed.data, type));
+                            if (!shouldIncludeItem || shouldIncludeItem(parsed.data, type)) {
+                                batch.push(mapItem(parsed.data, type));
+                            }
                         }
                     } catch (e) {
                         // Ignore trailing empty lines

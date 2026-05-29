@@ -400,7 +400,7 @@ export default function HeroSection({ type = 'all' }: HeroSectionProps) {
                         key={idx}
                         onClick={(e) => { e.stopPropagation(); setCurrentIndex(idx); }}
                         className="px-2 py-3 flex items-center justify-center"
-                        aria-label={`Ir para slide ${idx + 1}`}
+                        aria-label={`Go to slide ${idx + 1}`}
                         aria-current={idx === currentIndex ? 'true' : undefined}
                     >
                         <span

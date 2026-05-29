@@ -96,6 +96,45 @@ Results:
 - No fatal screen, no paid/pro/Stripe copy, no non-English UI text, no
   console/page errors in the accepted proofs.
 
+## XStream Player Status
+
+Status: ACCEPTED for the 2026-05-28 provider-mode and playback repair.
+
+Live URL:
+
+```text
+https://xstream-player.daveai.tech
+```
+
+Proof:
+
+```text
+docs/XSTREAM_PROVIDER_MODE_E2E_PROOF_20260528.md
+C:\Users\Admin\Downloads\VPS\_visual_artifacts\xstream-combined-only-20260528T200111\summary.json
+C:\Users\Admin\Downloads\VPS\_visual_artifacts\xstream-separated-only-20260528T200704\summary.json
+C:\Users\Admin\Downloads\VPS\_visual_artifacts\xstream-live-playback-strict-20260528T202536\summary.json
+C:\Users\Admin\Downloads\VPS\_visual_artifacts\xstream-movie-playback-20260528T201124\summary.json
+C:\Users\Admin\Downloads\VPS\_visual_artifacts\xstream-series-playback-20260528T211000\summary.json
+```
+
+Results:
+
+- Apollo Group TV and XtremeHD separate modes each populate live, movie, and
+  series cards without credential leakage.
+- Combined Tagged mode loads both providers in one catalog using composite IDs
+  such as `apollo:live:*` and `xtremehd:movie:*`; routes decode those IDs before
+  querying IndexedDB or playback endpoints.
+- Live playback passed for both providers with visible video, unmuted volume
+  `1`, and decoded audio bytes. The strict gate skips known-dead or no-audio
+  provider rows instead of falsely accepting them.
+- Movie playback passed for both providers with blob HLS/transcode playback,
+  decoded audio, and no console/page errors.
+- Series episode playback passed for both providers after episode rows were
+  made explicit `Play episode ...` controls. Apollo played `|EN| Villainous`;
+  XtremeHD played `Aarya (2020)`.
+- Card audits passed for live/movie/series. Provider artwork is used where it
+  exists, and controlled fallbacks are used for logo-less live rows.
+
 ## Fleet Carry-Forward
 
 Every remaining player repair should use this gate before being marked working:

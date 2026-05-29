@@ -44,6 +44,7 @@ import { useData } from '@/app/context/DataContext';
 import { useTMDb } from '@/app/context/TMDbContext';
 import { useSubtitle } from '@/app/context/SubtitleContext';
 import { safeImagePath } from '@/app/lib/catalogFilters';
+import { itemProviderId, rawItemId } from '@/app/lib/providerMode';
 
 function normalizeSeriesInfo(data: any): SeriesInfo | null {
     if (!data || !data.info) return null;
@@ -83,6 +84,8 @@ export default function WatchSeriesPage() {
     const params = useParams();
     const router = useRouter();
     const seriesId = params.seriesId as string;
+    const rawSeriesId = rawItemId(seriesId);
+    const providerId = itemProviderId(credentials, seriesId);
     const isDetailLoading = loadingDetails[`series-${seriesId}`];
 
     const [series, setSeries] = useState<SeriesInfo | null>(null);
@@ -140,8 +143,9 @@ export default function WatchSeriesPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         ...credentials,
+                        ...(providerId ? { providerId } : {}),
                         action: 'get_series_info',
-                        series_id: seriesId
+                        series_id: rawSeriesId
                     })
                 });
 
@@ -168,7 +172,7 @@ export default function WatchSeriesPage() {
         };
 
         loadSeriesInfo();
-    }, [credentials, seriesId, getCachedDetail, saveCachedDetail]);
+    }, [credentials, seriesId, rawSeriesId, providerId, getCachedDetail, saveCachedDetail]);
 
     // Resolve TMDB ID for better subtitle matching
     useEffect(() => {
@@ -296,8 +300,8 @@ export default function WatchSeriesPage() {
         const extension = String(selectedEpisode.container_extension || 'mp4').replace(/[^a-z0-9]/gi, '') || 'mp4';
         let streamUrl = '';
         let fallbackStreamUrl: string | undefined;
-        if (credentials?.providerId) {
-            const provider = encodeURIComponent(credentials.providerId);
+        if (providerId) {
+            const provider = encodeURIComponent(providerId);
             const id = encodeURIComponent(selectedEpisode.id);
             const ext = encodeURIComponent(extension);
             const directUrl = `/api/provider-vault/stream?provider=${provider}&kind=series&id=${id}&ext=${ext}`;
@@ -484,6 +488,7 @@ export default function WatchSeriesPage() {
                                 <button
                                     key={ep.id}
                                     type="button"
+                                    aria-label={`Play episode ${ep.episode_num}: ${ep.title || series.info.name}`}
                                     onClick={() => setSelectedEpisode(ep)}
                                     data-focusable="true"
                                     tabIndex={0}

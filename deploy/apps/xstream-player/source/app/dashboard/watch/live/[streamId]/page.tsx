@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/app/context/AuthContext';
 import VideoPlayer from '@/components/VideoPlayer';
+import { itemProviderId, rawItemId } from '@/app/lib/providerMode';
 
 export default function WatchLivePage() {
     const { credentials } = useAuth();
@@ -16,10 +17,11 @@ export default function WatchLivePage() {
     useEffect(() => {
         if (!credentials || !streamId) return;
 
-        if (credentials.providerId) {
-            const provider = encodeURIComponent(credentials.providerId);
-            const id = encodeURIComponent(streamId);
-            if (credentials.providerId === 'apollo') {
+        const providerId = itemProviderId(credentials, streamId);
+        if (providerId) {
+            const provider = encodeURIComponent(providerId);
+            const id = encodeURIComponent(rawItemId(streamId));
+            if (providerId === 'apollo') {
                 setStreamUrl(`/api/provider-vault/transcode-hls?provider=${provider}&kind=live&id=${id}&ext=ts`);
                 setFallbackUrl(`/api/provider-vault/stream?provider=${provider}&kind=live&id=${id}&ext=ts`);
                 return;

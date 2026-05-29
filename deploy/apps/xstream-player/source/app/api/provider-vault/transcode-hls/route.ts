@@ -32,7 +32,8 @@ type Job = {
 const JOBS = new Map<string, Job>();
 const ROOT_DIR = path.join(os.tmpdir(), 'xstream-player-hls');
 const JOB_TTL_MS = 3 * 60 * 60 * 1000;
-const MANIFEST_READY_TIMEOUT_MS = 14_000;
+const LIVE_MANIFEST_READY_TIMEOUT_MS = 18_000;
+const VOD_MANIFEST_READY_TIMEOUT_MS = 45_000;
 const STREAM_USER_AGENT = 'IPTV Smarters Pro';
 
 function cleanExt(raw?: string | null) {
@@ -76,14 +77,23 @@ async function cleanupOldJobs() {
     }
 }
 
-function ffmpegArgs(sourceUrl: string, dir: string, manifestPath: string) {
+function ffmpegArgs(sourceUrl: string, dir: string, manifestPath: string, kind: StreamKind) {
+    const isLive = kind === 'live';
     return [
         '-hide_banner',
         '-loglevel',
         'warning',
         '-nostdin',
+        '-fflags',
+        '+genpts+discardcorrupt',
+        '-err_detect',
+        'ignore_err',
         '-user_agent',
         STREAM_USER_AGENT,
+        '-analyzeduration',
+        isLive ? '5000000' : '100000000',
+        '-probesize',
+        isLive ? '5000000' : '100000000',
         '-reconnect',
         '1',
         '-reconnect_streamed',
@@ -101,7 +111,7 @@ function ffmpegArgs(sourceUrl: string, dir: string, manifestPath: string) {
         '-c:v',
         'libx264',
         '-preset',
-        'veryfast',
+        'ultrafast',
         '-crf',
         '23',
         '-pix_fmt',
@@ -115,11 +125,11 @@ function ffmpegArgs(sourceUrl: string, dir: string, manifestPath: string) {
         '-f',
         'hls',
         '-hls_time',
-        '6',
+        isLive ? '4' : '5',
         '-hls_playlist_type',
         'event',
         '-hls_flags',
-        'independent_segments',
+        'independent_segments+temp_file',
         '-hls_segment_filename',
         path.join(dir, 'seg_%05d.ts'),
         manifestPath,
@@ -175,7 +185,7 @@ async function ensureJob(provider: ProviderId, kind: StreamKind, id: string, ext
     };
     JOBS.set(key, job);
 
-    const child = spawn('ffmpeg', ffmpegArgs(sourceUrl, dir, manifestPath), {
+    const child = spawn('ffmpeg', ffmpegArgs(sourceUrl, dir, manifestPath, kind), {
         stdio: ['ignore', 'ignore', 'pipe'],
     });
     job.process = child;
@@ -231,11 +241,12 @@ function rewritePlaylist(body: string, req: NextRequest, provider: ProviderId, k
 }
 
 async function readManifest(req: NextRequest, job: Job, provider: ProviderId, kind: StreamKind, id: string, ext: string) {
+    const manifestTimeout = kind === 'live' ? LIVE_MANIFEST_READY_TIMEOUT_MS : VOD_MANIFEST_READY_TIMEOUT_MS;
     const ready = await waitUntil(async () => {
         if (!(await fileExists(job.manifestPath))) return false;
         const body = await fsp.readFile(job.manifestPath, 'utf8').catch(() => '');
         return /seg_\d{5}\.ts/.test(body);
-    }, MANIFEST_READY_TIMEOUT_MS);
+    }, manifestTimeout);
 
     if (!ready) {
         const detail = job.stderr.trim().split(/\r?\n/).slice(-4).join(' ');

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { useParams } from 'next/navigation';
 import Loader from '@/components/Loader';
@@ -20,16 +20,20 @@ interface Series {
     rating: string;
     rating_5based: string;
     backdrop_path: string[];
+    provider_id?: string;
+    provider_name?: string;
 }
 
 import { useData } from '../../../context/DataContext';
 import SortControls, { SortOption } from '@/components/SortControls';
 import { useSortPreference } from '@/app/hooks/useSortPreference';
-import { safeImagePath } from '@/app/lib/catalogFilters';
+import { isAllowedCatalogItem, safeImagePath } from '@/app/lib/catalogFilters';
+import { categoryProviderContext, cleanDisplayTitle, decodeRouteId, providerLabel, streamIdForStorage } from '@/app/lib/providerMode';
 
 export default function SeriesList() {
     const { credentials } = useAuth();
     const { categoryId } = useParams();
+    const routeCategoryId = useMemo(() => decodeRouteId(categoryId as string), [categoryId]);
     const { getCachedStreams, getCachedCategories } = useData();
 
     const [seriesList, setSeriesList] = useState<Series[]>([]);
@@ -39,19 +43,19 @@ export default function SeriesList() {
     const [sort, setSort] = useSortPreference('series', 'added');
 
     useEffect(() => {
-        if (!credentials || !categoryId) return;
+        if (!credentials || !routeCategoryId) return;
 
         const loadData = async () => {
             try {
                 // Fetch category name
                 const categories = await getCachedCategories('series');
-                const category = categories.find(c => c.category_id === categoryId);
+                const category = categories.find(c => c.category_id === routeCategoryId);
                 if (category) {
                     setCategoryName(category.category_name);
                 }
 
                 // Try cache first
-                const cached = await getCachedStreams(categoryId as string, 'series');
+                const cached = await getCachedStreams(routeCategoryId, 'series');
                 if (cached && cached.length > 0) {
                     setSeriesList(cached.map(s => ({
                         series_id: s.id,
@@ -65,30 +69,41 @@ export default function SeriesList() {
                         releaseDate: s.release_date || '',
                         rating_5based: s.rating_5based || '',
                         backdrop_path: s.backdrop_path || [],
+                        provider_id: s.provider_id,
+                        provider_name: s.provider_name,
                     })));
                     setLoading(false);
                     return;
                 }
 
+                const providerContext = categoryProviderContext(credentials, routeCategoryId);
                 const res = await fetch('/api/proxy', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         ...credentials,
+                        ...(providerContext.providerId ? { providerId: providerContext.providerId } : {}),
                         action: 'get_series',
-                        category_id: categoryId
+                        category_id: providerContext.rawCategoryId
                     })
                 });
 
                 const data = await res.json();
                 if (Array.isArray(data)) {
-                    setSeriesList(data.map((series) => ({
-                        ...series,
-                        cover: safeImagePath(series.cover || series.stream_icon) || '',
-                        backdrop_path: Array.isArray(series.backdrop_path)
-                            ? series.backdrop_path.map((value: string) => safeImagePath(value) || value)
-                            : series.backdrop_path,
-                    })));
+                    setSeriesList(data
+                        .filter((series) => isAllowedCatalogItem(series, 'series'))
+                        .map((series) => ({
+                            ...series,
+                            series_id: streamIdForStorage(series.series_id, 'series', providerContext.providerId || undefined, providerContext.combinedMode),
+                            name: cleanDisplayTitle(series.name || ''),
+                            category_id: routeCategoryId,
+                            provider_id: providerContext.providerId || undefined,
+                            provider_name: providerContext.providerId ? providerLabel(providerContext.providerId) : undefined,
+                            cover: safeImagePath(series.cover || series.stream_icon) || '',
+                            backdrop_path: Array.isArray(series.backdrop_path)
+                                ? series.backdrop_path.map((value: string) => safeImagePath(value) || value)
+                                : series.backdrop_path,
+                        })));
                 } else {
                     setSeriesList([]);
                 }
@@ -100,7 +115,7 @@ export default function SeriesList() {
         };
 
         loadData();
-    }, [credentials, categoryId, getCachedStreams, getCachedCategories]);
+    }, [credentials, routeCategoryId, getCachedStreams, getCachedCategories]);
 
     const sortedSeries = [...seriesList].sort((a, b) => {
         if (sort === 'name-asc') return a.name.localeCompare(b.name);
@@ -186,6 +201,11 @@ export default function SeriesList() {
                                         )}
                                         <span>ID: {item.series_id}</span>
                                     </div>
+                                    {item.provider_name && (
+                                        <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-purple-300/80">
+                                            {item.provider_name}
+                                        </div>
+                                    )}
                                 </div>
                             </Link>
                         ))}
