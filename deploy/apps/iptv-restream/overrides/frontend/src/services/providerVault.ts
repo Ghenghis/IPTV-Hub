@@ -72,7 +72,7 @@ function streamIdFromUrl(value: unknown): string {
 
   try {
     const parsed = new URL(url, 'https://daveai.local');
-    if (!parsed.pathname.endsWith('/api/provider-vault/stream')) return '';
+    if (!parsed.pathname.includes('/api/provider-vault/')) return '';
     return text(parsed.searchParams.get('id'), '');
   } catch {
     return '';
@@ -104,6 +104,7 @@ async function configuredProviders(): Promise<Provider[]> {
 function catalogUrl(provider: Provider): string {
   const params = new URLSearchParams({
     provider: provider.id,
+    profile: 'english',
     liveLimit: String(LIVE_LIMIT),
     movieLimit: '0',
     seriesLimit: '0',
@@ -113,7 +114,7 @@ function catalogUrl(provider: Provider): string {
 
 function streamUrl(provider: Provider, id: string, item: VaultItem): string {
   const suppliedUrl = text(item.url, '');
-  if (suppliedUrl.startsWith('/api/provider-vault/stream') && streamIdFromUrl(suppliedUrl)) {
+  if (suppliedUrl.startsWith('/api/provider-vault/') && streamIdFromUrl(suppliedUrl)) {
     return suppliedUrl;
   }
 
@@ -139,15 +140,17 @@ function toChannel(provider: Provider, item: VaultItem, index: number): Channel 
     item.name ?? item.title ?? item.stream_display_name ?? item.tvg?.name,
     `${provider.name} Channel ${index + 1}`,
   );
+  if (/^#{2,}.*#{2,}$/.test(title)) return null;
   const group = `${provider.name} / ${text(
     item.group?.title ?? item.category_name ?? item.category ?? item.genre,
     'Live TV',
   )}`;
+  const avatar = firstText(item.logo, item.stream_icon, item.tvg?.logo);
   return {
     id: `${provider.id}-${safeId(providerItemId || title, String(index))}`,
     name: title,
     url: streamUrl(provider, providerItemId, item),
-    avatar: '',
+    avatar,
     mode: 'direct',
     headers: [],
     group,
@@ -162,7 +165,7 @@ function toChannel(provider: Provider, item: VaultItem, index: number): Channel 
 export function isProviderVaultChannel(channel: Channel | null | undefined): boolean {
   return Boolean(
     channel?.source === 'daveai-provider-vault' ||
-      channel?.url?.startsWith('/api/provider-vault/stream'),
+      channel?.url?.startsWith('/api/provider-vault/'),
   );
 }
 
@@ -170,16 +173,20 @@ export async function getProviderVaultChannels(): Promise<Channel[]> {
   const providers = await configuredProviders();
   if (!providers.length) return [];
 
-  const catalogs = await Promise.all(
+  const settled = await Promise.allSettled(
     providers.map(async (provider) => ({
       provider,
       catalog: await fetchJson<VaultCatalog>(catalogUrl(provider)),
     })),
   );
 
-  return catalogs.flatMap(({ provider, catalog }) =>
-    (catalog.live || [])
+  return settled.flatMap((result) => {
+    if (result.status !== 'fulfilled') return [];
+    const { provider, catalog } = result.value;
+    return (
+      (catalog.live || [])
       .map((item, index) => toChannel(provider, item, index))
-      .filter((channel): channel is Channel => Boolean(channel)),
-  );
+      .filter((channel): channel is Channel => Boolean(channel))
+    );
+  });
 }

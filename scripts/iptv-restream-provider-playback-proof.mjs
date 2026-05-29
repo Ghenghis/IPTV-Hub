@@ -28,6 +28,11 @@ function sanitizeUrl(rawUrl) {
 
 async function addAuthCookies(context) {
   const auth = JSON.parse(await fs.readFile(COOKIE_FILE, 'utf8'));
+  const storedExpires = Math.floor(new Date(auth.expiresAt).getTime() / 1000);
+  const expires =
+    Number.isFinite(storedExpires) && storedExpires > Math.floor(Date.now() / 1000) + 60
+      ? storedExpires
+      : Math.floor(Date.now() / 1000) + 6 * 60 * 60;
   const cookie = {
     name: auth.cookieName,
     value: auth.cookieValue,
@@ -36,7 +41,7 @@ async function addAuthCookies(context) {
     httpOnly: true,
     secure: true,
     sameSite: 'Lax',
-    expires: Math.floor(new Date(auth.expiresAt).getTime() / 1000),
+    expires,
   };
   await context.addCookies([
     cookie,
@@ -45,31 +50,69 @@ async function addAuthCookies(context) {
 }
 
 async function selectPlaylist(page, name) {
-  const header = page.getByRole('heading', { name: /All Channels|Apollo Group TV|XtremeHD/i }).first();
-  await header.click({ timeout: 5000 });
-  await page.getByRole('button', { name }).click({ timeout: 8000 });
+  await page.waitForFunction(() => document.body.innerText.includes('StreamHub'), { timeout: 30000 });
+  const header = page
+    .getByRole('button')
+    .filter({ hasText: /All Channels|Apollo Group TV|XtremeHD/i })
+    .first();
+  await header.click({ timeout: 12000 });
+  await page.getByRole('button').filter({ hasText: name }).first().click({ timeout: 12000 });
 }
 
-async function clickFirstChannel(page) {
+async function clickChannelAt(page, index) {
   const cards = page.locator('button').filter({ has: page.locator('p') });
-  await cards.first().click({ timeout: 8000 });
+  await cards.nth(index).click({ timeout: 8000 });
 }
 
-async function waitForPlayback(page) {
+async function waitForPlayback(page, previousSrc = '') {
+  await page.waitForFunction((oldSrc) => {
+    const video = document.querySelector('video');
+    return Boolean(
+      video &&
+        video.readyState >= 2 &&
+        video.videoWidth > 0 &&
+        video.currentSrc?.startsWith('blob:') &&
+        (!oldSrc || video.currentSrc !== oldSrc)
+    );
+  }, previousSrc, { timeout: 35000 });
+  const before = await page.evaluate(() => {
+    const video = document.querySelector('video');
+    return Number(video?.currentTime ?? 0);
+  });
+  await page.evaluate((value) => {
+    window.__iptvRestreamBeforeTime = value;
+  }, before);
+  await page.locator('video').click({ timeout: 5000 }).catch(() => {});
   await page.waitForFunction(() => {
     const video = document.querySelector('video');
-    return Boolean(video && video.readyState >= 2 && video.videoWidth > 0);
-  }, { timeout: 35000 });
-  return page.evaluate(() => {
-    const video = document.querySelector('video');
-    return {
-      readyState: video?.readyState ?? 0,
-      currentTime: Number(video?.currentTime ?? 0),
-      videoWidth: video?.videoWidth ?? 0,
-      videoHeight: video?.videoHeight ?? 0,
-      currentSrcIsBlob: Boolean(video?.currentSrc?.startsWith('blob:')),
-    };
-  });
+    if (!video) return false;
+    video.muted = false;
+    video.volume = 1;
+    return !video.muted && video.volume > 0;
+  }, { timeout: 8000 }).catch(() => {});
+  const snapshot = () =>
+    page.evaluate(() => {
+      const video = document.querySelector('video');
+      return {
+        readyState: video?.readyState ?? 0,
+        currentTime: Number(video?.currentTime ?? 0),
+        advanced: Number(video?.currentTime ?? 0) > window.__iptvRestreamBeforeTime + 0.5,
+        videoWidth: video?.videoWidth ?? 0,
+        videoHeight: video?.videoHeight ?? 0,
+        currentSrcIsBlob: Boolean(video?.currentSrc?.startsWith('blob:')),
+        muted: Boolean(video?.muted),
+        volume: Number(video?.volume ?? 0),
+        audioDecodedByteCount: Number(video?.webkitAudioDecodedByteCount ?? 0),
+      };
+    });
+
+  let result = null;
+  for (let sample = 0; sample < 3; sample += 1) {
+    await page.waitForTimeout(sample === 0 ? 6000 : 8000);
+    result = await snapshot();
+    if (result.advanced && result.audioDecodedByteCount > 0) break;
+  }
+  return result;
 }
 
 async function proveProvider(page, providerName, screenshotName, streamEvents, errors) {
@@ -79,8 +122,32 @@ async function proveProvider(page, providerName, screenshotName, streamEvents, e
   });
   await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
   await selectPlaylist(page, `${providerName} - DaveAI Vault`);
-  await clickFirstChannel(page);
-  const playback = await waitForPlayback(page);
+  const attempts = [];
+  let playback = null;
+  const cards = page.locator('button').filter({ has: page.locator('p') });
+  const cardCount = Math.min(await cards.count(), 6);
+  for (let index = 0; index < cardCount; index += 1) {
+    const label = await cards.nth(index).innerText().catch(() => `channel-${index + 1}`);
+    const previousSrc = await page.evaluate(() => document.querySelector('video')?.currentSrc || '');
+    await clickChannelAt(page, index);
+    try {
+      const nextPlayback = await waitForPlayback(page, previousSrc);
+      attempts.push({
+        index,
+        label: label.replace(/\s+/g, ' ').trim(),
+        playback: nextPlayback,
+      });
+      playback = nextPlayback;
+      if (nextPlayback.advanced && nextPlayback.audioDecodedByteCount > 0) break;
+    } catch (error) {
+      attempts.push({
+        index,
+        label: label.replace(/\s+/g, ' ').trim(),
+        error: String(error?.message || error),
+      });
+    }
+  }
+  if (!playback) throw new Error(`No playable ${providerName} channels found`);
   await page.screenshot({ path: path.join(OUT_DIR, screenshotName), fullPage: true });
   const matchingStreams = streamEvents.filter(
     (event) => event.provider === (providerName.startsWith('Apollo') ? 'apollo' : 'xtremehd'),
@@ -89,6 +156,7 @@ async function proveProvider(page, providerName, screenshotName, streamEvents, e
   return {
     provider: providerName,
     playback,
+    attempts,
     streamRequestCount: matchingStreams.length,
     stream200Count: matchingStreams.filter((event) => event.status >= 200 && event.status < 300).length,
     badEmptyId,
@@ -120,7 +188,10 @@ page.on('requestfailed', (request) => {
   if (failure === 'net::ERR_ABORTED' && request.url().includes('/cdn-cgi/rum')) {
     return;
   }
-  if (failure === 'net::ERR_ABORTED' && request.url().includes('/api/provider-vault/segment')) {
+  if (
+    failure === 'net::ERR_ABORTED' &&
+    request.url().includes('/api/provider-vault/')
+  ) {
     return;
   }
   failedRequests.push({
@@ -130,7 +201,7 @@ page.on('requestfailed', (request) => {
 });
 page.on('response', (response) => {
   const url = response.url();
-  if (!url.includes('/api/provider-vault/stream')) return;
+  if (!url.includes('/api/provider-vault/stream') && !url.includes('/api/provider-vault/aac-hls')) return;
   const parsed = new URL(url);
   streamEvents.push({
     url: sanitizeUrl(url),
@@ -176,7 +247,11 @@ const summary = {
     [apollo, xtremehd].every(
       (proof) =>
         proof.playback.readyState >= 2 &&
+        proof.playback.advanced &&
         proof.playback.currentSrcIsBlob &&
+        proof.playback.muted === false &&
+        proof.playback.volume > 0 &&
+        proof.playback.audioDecodedByteCount > 0 &&
         proof.streamRequestCount > 0 &&
         proof.stream200Count > 0 &&
         !proof.badEmptyId,
