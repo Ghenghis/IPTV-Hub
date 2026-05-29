@@ -28,6 +28,22 @@ interface WatchProgressState {
 
 const WatchProgressContext = createContext<WatchProgressState | undefined>(undefined);
 
+const finiteSeconds = (value: unknown) => (
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
+);
+
+const normalizeProgressClock = (progress: WatchProgress, existing?: WatchProgress): WatchProgress => {
+    const progressSeconds = finiteSeconds(progress.progress);
+    const incomingDuration = finiteSeconds(progress.duration);
+    const existingDuration = finiteSeconds(existing?.duration);
+    const duration = Math.max(incomingDuration, existingDuration, progressSeconds);
+    return {
+        ...progress,
+        progress: progressSeconds,
+        duration,
+    };
+};
+
 export const WatchProgressProvider = ({ children }: { children: ReactNode }) => {
     const [progressMap, setProgressMap] = useState<Record<string, WatchProgress>>(() => {
         if (typeof window !== 'undefined') {
@@ -110,19 +126,14 @@ export const WatchProgressProvider = ({ children }: { children: ReactNode }) => 
                 return prev;
             }
 
-            // Guard against invalid duration if we have a better one
-            const finalDuration = (progress.duration && progress.duration > 0)
-                ? progress.duration
-                : (existing?.duration || 0);
-
-            const updatedProgress = { ...progress, duration: finalDuration };
+            const updatedProgress = normalizeProgressClock(progress, existing);
 
             // Only update if progress has changed significantly (more than 5 seconds)
             // or if it's a new entry, or if duration finally arrived, or if episode changed
             const progressDiff = existing ? Math.abs(existing.progress - progress.progress) : 0;
             const isNewEntry = !existing;
             const episodeChanged = existing?.episodeId !== progress.episodeId;
-            const durationArrived = !existing?.duration && finalDuration > 0;
+            const durationArrived = !existing?.duration && updatedProgress.duration > 0;
 
             if (isNewEntry || progressDiff > 5 || episodeChanged || durationArrived) {
                 // Sync to granular API immediately
@@ -155,15 +166,11 @@ export const WatchProgressProvider = ({ children }: { children: ReactNode }) => 
                             return prevDetails;
                         }
 
-                        const detailDuration = (progress.duration && progress.duration > 0)
-                            ? progress.duration
-                            : (existingInDetail?.duration || 0);
-
                         return {
                             ...prevDetails,
                             [key]: {
                                 ...existingDetailSet,
-                                [epsId]: { ...progress, duration: detailDuration }
+                                [epsId]: normalizeProgressClock(progress, existingInDetail)
                             }
                         };
                     });

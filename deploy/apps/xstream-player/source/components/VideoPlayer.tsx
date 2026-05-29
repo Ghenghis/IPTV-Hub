@@ -21,6 +21,7 @@ interface VideoPlayerProps {
     onBack?: () => void;
     subtitleUrl?: string;
     fallbackSrc?: string;
+    knownDuration?: number;
 }
 
 const readPositiveNumber = (value: string | undefined, fallback: number) => {
@@ -102,6 +103,64 @@ const isLiveStreamUrl = (url: string) => {
     }
 };
 
+const isPositiveFinite = (value: unknown): value is number => (
+    typeof value === 'number' && Number.isFinite(value) && value > 0
+);
+
+const readTimeRangeEnd = (ranges: TimeRanges | null | undefined) => {
+    if (!ranges?.length) return 0;
+    let maxEnd = 0;
+    for (let index = 0; index < ranges.length; index += 1) {
+        try {
+            const end = ranges.end(index);
+            if (Number.isFinite(end)) maxEnd = Math.max(maxEnd, end);
+        } catch {
+            // TimeRanges can throw if the media element updates while reading.
+        }
+    }
+    return maxEnd;
+};
+
+const resolvePlaybackClock = (
+    video: HTMLVideoElement,
+    previousDuration: number,
+    knownDuration = 0,
+) => {
+    const current = Number.isFinite(video.currentTime) ? Math.max(0, video.currentTime) : 0;
+    const rawDuration = video.duration;
+
+    if (rawDuration === Infinity) {
+        return { duration: Infinity, reliable: true };
+    }
+
+    if (isPositiveFinite(knownDuration)) {
+        return { duration: Math.max(knownDuration, current), reliable: true };
+    }
+
+    const bufferedEnd = readTimeRangeEnd(video.buffered);
+    const seekableEnd = readTimeRangeEnd(video.seekable);
+    const candidates = [rawDuration, seekableEnd, previousDuration]
+        .filter((value): value is number => isPositiveFinite(value) && value >= current + 0.5);
+
+    if (candidates.length > 0) {
+        return { duration: Math.max(...candidates), reliable: true };
+    }
+
+    // Some provider-vault transcodes expose a tiny rolling manifest duration for
+    // VOD. Treat that as unknown instead of showing impossible "18s / 10s" UI.
+    if (bufferedEnd >= current + 0.5 && previousDuration >= bufferedEnd) {
+        return { duration: previousDuration, reliable: true };
+    }
+
+    return { duration: 0, reliable: false };
+};
+
+const clampToDuration = (time: number, duration: number) => {
+    const normalized = Number.isFinite(time) ? Math.max(0, time) : 0;
+    if (!isPositiveFinite(duration)) return normalized;
+    return Math.min(normalized, duration);
+};
+
 export default function VideoPlayer({
     src,
     poster,
@@ -116,7 +175,8 @@ export default function VideoPlayer({
     enterFullscreen = false,
     onBack,
     subtitleUrl,
-    fallbackSrc
+    fallbackSrc,
+    knownDuration = 0
 }: VideoPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -128,6 +188,7 @@ export default function VideoPlayer({
     const [showControls, setShowControls] = useState(true);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
+    const [durationReliable, setDurationReliable] = useState(false);
     const [isSeeking, setIsSeeking] = useState(false);
     const [isBuffering, setIsBuffering] = useState(false);
     const [bufferedPercent, setBufferedPercent] = useState(0);
@@ -151,11 +212,24 @@ export default function VideoPlayer({
     const skipIndicatorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const centerIconTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const fallbackAttemptedRef = useRef(false);
+    const durationRef = useRef(0);
+    const durationReliableRef = useRef(false);
+    const knownDurationRef = useRef(knownDuration);
 
     useEffect(() => {
         fallbackAttemptedRef.current = false;
         setPlaybackSrc(src);
     }, [src]);
+
+    useEffect(() => {
+        knownDurationRef.current = isPositiveFinite(knownDuration) ? knownDuration : 0;
+        if (isPositiveFinite(knownDuration) && knownDuration > durationRef.current) {
+            durationRef.current = knownDuration;
+            durationReliableRef.current = true;
+            setDuration(knownDuration);
+            setDurationReliable(true);
+        }
+    }, [knownDuration]);
 
     // Load saved font size
     useEffect(() => {
@@ -293,7 +367,7 @@ export default function VideoPlayer({
     }, [enterFullscreen, isMetadataLoaded, isCurrentlyFullscreen, enterFullscreenMode]);
 
     const formatTime = (time: number) => {
-        if (isNaN(time)) return '00:00';
+        if (!Number.isFinite(time)) return '--:--';
         const h = Math.floor(time / 3600);
         const m = Math.floor((time % 3600) / 60);
         const s = Math.floor(time % 60);
@@ -367,7 +441,7 @@ export default function VideoPlayer({
 
 
     const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const time = parseFloat(e.target.value);
+        const time = clampToDuration(parseFloat(e.target.value), durationRef.current);
         setCurrentTime(time);
         if (videoRef.current) {
             videoRef.current.currentTime = time;
@@ -376,7 +450,7 @@ export default function VideoPlayer({
 
     const skip = useCallback((seconds: number) => {
         if (videoRef.current) {
-            videoRef.current.currentTime += seconds;
+            videoRef.current.currentTime = clampToDuration(videoRef.current.currentTime + seconds, durationRef.current);
             showSkipFeedback(seconds);
         }
     }, [showSkipFeedback]);
@@ -398,7 +472,7 @@ export default function VideoPlayer({
 
     const jumpToPercent = useCallback((percent: number) => {
         if (videoRef.current && duration > 0) {
-            const targetTime = (percent / 100) * duration;
+            const targetTime = clampToDuration((percent / 100) * duration, duration);
             videoRef.current.currentTime = targetTime;
         }
     }, [duration]);
@@ -497,6 +571,9 @@ export default function VideoPlayer({
         setError('');
         setCurrentTime(0);
         setDuration(0);
+        setDurationReliable(false);
+        durationRef.current = 0;
+        durationReliableRef.current = false;
         setIsBuffering(true);
         setIsMetadataLoaded(false);
         hasAppliedInitialTime.current = false;
@@ -643,7 +720,7 @@ export default function VideoPlayer({
             if (!video.buffered.length) return;
             const end = video.buffered.end(video.buffered.length - 1);
             const t = video.currentTime;
-            const d = video.duration;
+            const d = durationReliableRef.current ? durationRef.current : 0;
             if (Number.isFinite(d) && d > 0) {
                 setBufferedPercent(Math.min(100, Math.max(0, (end / d) * 100)));
             } else {
@@ -653,27 +730,38 @@ export default function VideoPlayer({
         };
 
         const handleTimeUpdate = () => {
+            const clock = resolvePlaybackClock(video, durationRef.current, knownDurationRef.current);
+            durationRef.current = clock.duration;
+            durationReliableRef.current = clock.reliable;
+            setDuration(clock.duration);
+            setDurationReliable(clock.reliable);
+
+            const nextCurrentTime = clock.reliable
+                ? clampToDuration(video.currentTime, clock.duration)
+                : (Number.isFinite(video.currentTime) ? Math.max(0, video.currentTime) : 0);
             if (!isSeekingRef.current) {
-                setCurrentTime(video.currentTime);
+                setCurrentTime(nextCurrentTime);
             }
 
-            const isAtStart = video.currentTime === 0;
+            const isAtStart = nextCurrentTime === 0;
             const waitingForSeek = seekTarget > 0 && !hasAppliedInitialTime.current;
 
             const onProg = onProgressRef.current;
             if (onProg && (!isAtStart || !waitingForSeek)) {
-                onProg(video.currentTime, video.duration);
+                onProg(nextCurrentTime, clock.reliable ? clock.duration : 0);
             }
 
-            if (!Number.isFinite(video.duration) || video.duration === 0) {
-                updateBufferedFromVideo();
-            }
+            updateBufferedFromVideo();
         };
         const handleLoadedMetadata = () => {
             console.log('[VideoPlayer] Metadata loaded. readyState:', video.readyState);
             preferEnglishNativeTracks(video);
-            setDuration(video.duration);
-            onMetadataRef.current?.(video.duration);
+            const clock = resolvePlaybackClock(video, durationRef.current, knownDurationRef.current);
+            durationRef.current = clock.duration;
+            durationReliableRef.current = clock.reliable;
+            setDuration(clock.duration);
+            setDurationReliable(clock.reliable);
+            onMetadataRef.current?.(clock.reliable ? clock.duration : 0);
             setIsMetadataLoaded(true);
 
             if (useHlsJs) {
@@ -788,7 +876,10 @@ export default function VideoPlayer({
         }
     }, [playbackSrc, isMetadataLoaded]);
 
-    const isLive = duration === Infinity || duration === 0;
+    const isLive = isLiveStreamUrl(playbackSrc) || duration === Infinity;
+    const canSeek = !isLive && durationReliable && Number.isFinite(duration) && duration > 0;
+    const displayCurrentTime = canSeek ? clampToDuration(currentTime, duration) : currentTime;
+    const progressPercent = canSeek ? Math.min(100, Math.max(0, (displayCurrentTime / duration) * 100)) : 0;
     const volumePercent = Math.round(volume * 100);
 
     return (
@@ -906,23 +997,26 @@ export default function VideoPlayer({
                                 aria-hidden
                             />
 
-                            {!isLive && (
+                            {canSeek && (
                                 <>
                                     <div
                                         className="absolute inset-y-0 left-0 bg-red-500 rounded-full pointer-events-none z-[1]"
                                         style={{
-                                            width: `${duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0}%`
+                                            width: `${progressPercent}%`
                                         }}
+                                        data-testid="video-progress-fill"
+                                        data-progress-percent={progressPercent.toFixed(2)}
                                     />
 
                                     <input
                                         type="range"
                                         min={0}
                                         max={duration || 0}
-                                        value={currentTime}
+                                        value={displayCurrentTime}
                                         onChange={handleSeek}
                                         onMouseDown={() => setIsSeeking(true)}
                                         onMouseUp={() => setIsSeeking(false)}
+                                        data-testid="video-progress-range"
                                         className="absolute inset-0 w-full bg-transparent appearance-none cursor-pointer z-10
                                         [&::-webkit-slider-runnable-track]:bg-transparent
                                         [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
@@ -997,10 +1091,16 @@ export default function VideoPlayer({
 
                             {/* Time Display integrated here */}
                             {!isLive && (
-                                <div className="flex items-center gap-1.5 px-2 text-[11px] font-medium text-gray-400 whitespace-nowrap tabular-nums">
-                                    <span className="text-white">{formatTime(currentTime)}</span>
+                                <div
+                                    className="flex items-center gap-1.5 px-2 text-[11px] font-medium text-gray-400 whitespace-nowrap tabular-nums"
+                                    data-testid="video-time-display"
+                                    data-current-time={displayCurrentTime.toFixed(3)}
+                                    data-duration={canSeek ? duration.toFixed(3) : ''}
+                                    data-duration-reliable={canSeek ? 'true' : 'false'}
+                                >
+                                    <span className="text-white">{formatTime(displayCurrentTime)}</span>
                                     <span className="opacity-40">/</span>
-                                    <span>{formatTime(duration)}</span>
+                                    <span>{canSeek ? formatTime(duration) : '--:--'}</span>
                                 </div>
                             )}
 

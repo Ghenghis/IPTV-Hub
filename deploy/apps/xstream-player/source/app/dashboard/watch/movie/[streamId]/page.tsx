@@ -35,6 +35,27 @@ import { useSubtitle } from '@/app/context/SubtitleContext';
 import { safeImagePath } from '@/app/lib/catalogFilters';
 import { itemProviderId, rawItemId } from '@/app/lib/providerMode';
 
+const parseDurationSeconds = (value: unknown) => {
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value;
+    const text = String(value || '').trim().toLowerCase();
+    if (!text) return 0;
+
+    const colonParts = text.match(/\d+/g);
+    if (text.includes(':') && colonParts?.length) {
+        return colonParts
+            .map(Number)
+            .reduce((total, part) => total * 60 + part, 0);
+    }
+
+    const hours = Number(text.match(/(\d+(?:\.\d+)?)\s*h/)?.[1] || 0);
+    const minutes = Number(text.match(/(\d+(?:\.\d+)?)\s*m/)?.[1] || 0);
+    if (hours || minutes) return Math.round(hours * 3600 + minutes * 60);
+
+    const numeric = Number(text.match(/\d+(?:\.\d+)?/)?.[0] || 0);
+    if (!numeric) return 0;
+    return /\bmin|minute/.test(text) ? Math.round(numeric * 60) : numeric;
+};
+
 export default function WatchMoviePage() {
     const { credentials } = useAuth();
     const { isFavorite, addFavorite, removeFavorite } = useFavorites();
@@ -229,6 +250,7 @@ export default function WatchMoviePage() {
                         fallbackSrc={fallbackStreamUrl}
                         poster={movie.info.movie_image}
                         autoPlay={true}
+                        knownDuration={parseDurationSeconds(movie.info.duration)}
                         initialTime={resumeTime}
                         onProgress={handleProgress}
                         enterFullscreen={true}
