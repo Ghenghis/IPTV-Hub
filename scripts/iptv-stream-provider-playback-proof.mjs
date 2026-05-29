@@ -52,7 +52,7 @@ function providerSource(provider) {
   return {
     id: provider.id,
     label: provider.label,
-    url: `/api/provider-vault/catalog?provider=${encodeURIComponent(provider.id)}&liveLimit=1800&movieLimit=0&seriesLimit=0`,
+    url: `/api/provider-vault/catalog?provider=${encodeURIComponent(provider.id)}&profile=english&liveLimit=1800&movieLimit=0&seriesLimit=0`,
     active: true,
     custom: false,
     kind: 'vault',
@@ -127,9 +127,23 @@ async function runProvider(browser, provider) {
     });
 
     await firstCard.click({ timeout: 15000 });
+    await page.evaluate(() => {
+      const video = document.querySelector('video');
+      if (!video) return;
+      video.muted = false;
+      video.volume = 1;
+      video.play().catch(() => {});
+    });
     await page.waitForFunction(() => {
       const video = document.querySelector('video');
-      return Boolean(video && video.readyState >= 2 && video.videoWidth > 0);
+      return Boolean(
+        video &&
+          video.readyState >= 2 &&
+          video.videoWidth > 0 &&
+          video.currentTime > 1 &&
+          video.muted === false &&
+          video.volume > 0,
+      );
     }, { timeout: 70000 });
     await page.waitForTimeout(3000);
 
@@ -150,6 +164,15 @@ async function runProvider(browser, provider) {
           currentTime: Number(video?.currentTime ?? 0),
           width: video?.videoWidth ?? 0,
           height: video?.videoHeight ?? 0,
+          muted: video?.muted ?? null,
+          volume: Number(video?.volume ?? 0),
+          audioDecodedBytes:
+            typeof video?.webkitAudioDecodedByteCount === 'number'
+              ? video.webkitAudioDecodedByteCount
+              : null,
+          error: video?.error
+            ? { code: video.error.code, message: video.error.message }
+            : null,
           currentSrcIsBlob: Boolean(video?.currentSrc?.startsWith('blob:')),
         },
       };
@@ -174,9 +197,22 @@ async function runProvider(browser, provider) {
       checks: {
         english:
           /StreamOS|Live|Movies|Series|Vault Streams|active providers/i.test(state.body) &&
-          !/Bem-vindo|Conectar|Usu.rio|Senha/i.test(state.body),
-        firstChannelCurated: /USA AMC/i.test(firstChannel),
-        videoReady: state.video.readyState >= 2 && state.video.width > 0 && state.video.height > 0,
+          !/Bem-vindo|Conectar|Usu.rio|Senha|Przeladuj|Ustawienia|Wybierz kanal/i.test(state.body),
+        firstChannelCurated:
+          provider.id === 'apollo'
+            ? /\|US\||USA\s/i.test(firstChannel) && !/DAZN|WORLD CUP|\|AR\||\|FR\||\|DE\|/i.test(firstChannel)
+            : /USA AMC/i.test(firstChannel),
+        videoReady:
+          state.video.readyState >= 2 &&
+          state.video.width > 0 &&
+          state.video.height > 0 &&
+          state.video.currentTime > 1 &&
+          state.video.error === null,
+        unmutedAudio:
+          state.video.muted === false &&
+          state.video.volume > 0 &&
+          typeof state.video.audioDecodedBytes === 'number' &&
+          state.video.audioDecodedBytes > 0,
         sameOriginPlayback: stream200.length >= 2,
         noRawCredentials: !/(username=|password=|server url|xtreme codes password)/i.test(state.body),
         noConsoleErrors: seen.consoleErrors.length === 0,
@@ -193,7 +229,10 @@ async function runProvider(browser, provider) {
 
 await fs.mkdir(OUT_DIR, { recursive: true });
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  args: ['--autoplay-policy=no-user-gesture-required'],
+});
 const results = [];
 try {
   for (const provider of providers) {
