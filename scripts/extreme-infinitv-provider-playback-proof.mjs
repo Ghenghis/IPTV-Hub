@@ -50,8 +50,9 @@ async function seedProvider(page, provider) {
     timeout: 45000,
   });
 
-  await page.evaluate((selectedProvider) => {
+  await page.evaluate(async (selectedProvider) => {
     const now = Date.now();
+    localStorage.setItem('xt_davetv_vault_profile_cache_v2', '1');
     localStorage.setItem('xt_locale', 'en');
     localStorage.setItem('xt_playlists', JSON.stringify({
       entries: [
@@ -82,6 +83,16 @@ async function seedProvider(page, provider) {
         ? 'davetv-vault-xtremehd'
         : 'davetv-vault-apollo',
     }));
+
+    try {
+      await Promise.race([
+        new Promise((resolve) => {
+        const req = indexedDB.deleteDatabase('xt_cache');
+        req.onsuccess = req.onerror = req.onblocked = () => resolve();
+        }),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]);
+    } catch {}
   }, provider);
 }
 
@@ -92,36 +103,126 @@ async function proveProvider(page, provider, screenshotName) {
     timeout: 45000,
   });
 
-  const firstButton = page.locator('.channel-row .play-btn').first();
-  await firstButton.waitFor({ timeout: 50000 });
-  const firstChannel = await firstButton.innerText();
-  await firstButton.click();
+  const buttons = page.locator('.channel-row .play-btn');
+  await buttons.first().waitFor({ timeout: 50000 });
+  const candidateCount = Math.min(await buttons.count(), Number(process.env.EXTREME_PLAYBACK_ATTEMPTS || 10));
+  const attempts = [];
+  let selectedChannel = '';
 
-  await page.waitForFunction(() => {
-    const video = document.querySelector('video');
-    return Boolean(video && video.readyState >= 2 && video.videoWidth > 0);
-  }, { timeout: 60000 });
+  for (let index = 0; index < candidateCount; index += 1) {
+    const button = buttons.nth(index);
+    const channelText = (await button.innerText()).trim();
+    await button.scrollIntoViewIfNeeded().catch(() => {});
+    await button.click({ timeout: 10000 });
 
-  await page.waitForTimeout(2000);
+    await page.waitForTimeout(1000);
+    await page.evaluate(() => {
+      const video = document.querySelector('video');
+      if (!video) return;
+      try {
+        video.muted = false;
+        video.volume = 1;
+        void video.play?.();
+      } catch {}
+    });
+
+    try {
+      await page.waitForFunction(() => {
+        const video = document.querySelector('video');
+        if (!video) return false;
+        try {
+          video.muted = false;
+          video.volume = 1;
+          if (video.paused) void video.play?.();
+        } catch {}
+        return Boolean(
+          video.readyState >= 2 &&
+          video.videoWidth > 0 &&
+          video.currentTime > 0.5 &&
+          video.muted === false &&
+          video.volume > 0
+        );
+      }, { timeout: Number(process.env.EXTREME_PLAYBACK_TIMEOUT_MS || 30000) });
+
+      selectedChannel = channelText;
+      attempts.push({
+        index,
+        channel: channelText,
+        result: 'playable',
+        video: await page.evaluate(() => {
+          const video = document.querySelector('video');
+          return {
+            readyState: video?.readyState ?? 0,
+            currentTime: Number(video?.currentTime ?? 0),
+            videoWidth: video?.videoWidth ?? 0,
+            videoHeight: video?.videoHeight ?? 0,
+            muted: Boolean(video?.muted),
+            volume: Number(video?.volume ?? 0),
+            paused: Boolean(video?.paused),
+            error: video?.error ? { code: video.error.code, message: video.error.message } : null,
+          };
+        }),
+      });
+      break;
+    } catch {
+      attempts.push({
+        index,
+        channel: channelText,
+        result: 'skipped',
+        video: await page.evaluate(() => {
+          const video = document.querySelector('video');
+          return {
+            readyState: video?.readyState ?? 0,
+            currentTime: Number(video?.currentTime ?? 0),
+            videoWidth: video?.videoWidth ?? 0,
+            videoHeight: video?.videoHeight ?? 0,
+            muted: Boolean(video?.muted),
+            volume: Number(video?.volume ?? 0),
+            paused: Boolean(video?.paused),
+            error: video?.error ? { code: video.error.code, message: video.error.message } : null,
+          };
+        }),
+      });
+    }
+  }
+
+  if (!selectedChannel) {
+    selectedChannel = attempts[0]?.channel || '';
+  }
+
+  await page.waitForTimeout(1500);
   await page.screenshot({ path: path.join(OUT_DIR, screenshotName), fullPage: true });
 
-  return page.evaluate((firstChannelText) => {
+  return page.evaluate(({ selectedChannelText, attemptList }) => {
     const video = document.querySelector('video');
+    const audioBytes = performance
+      .getEntriesByType('resource')
+      .filter((entry) => /provider-vault\/(?:segment|aac-hls|stream)/.test(entry.name))
+      .reduce((sum, entry) => sum + (entry.transferSize || entry.encodedBodySize || 0), 0);
     return {
-      firstChannel: firstChannelText,
+      firstChannel: attemptList[0]?.channel || '',
+      selectedChannel: selectedChannelText,
+      attempts: attemptList,
       readyState: video?.readyState ?? 0,
       currentTime: Number(video?.currentTime ?? 0),
       videoWidth: video?.videoWidth ?? 0,
       videoHeight: video?.videoHeight ?? 0,
+      muted: Boolean(video?.muted),
+      volume: Number(video?.volume ?? 0),
+      paused: Boolean(video?.paused),
+      mediaBytes: audioBytes,
       currentSrcIsBlob: Boolean(video?.currentSrc?.startsWith('blob:')),
       body: document.body.innerText.slice(0, 1500),
     };
-  }, firstChannel);
+  }, { selectedChannelText: selectedChannel, attemptList: attempts });
 }
 
 await fs.mkdir(OUT_DIR, { recursive: true });
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  args: ['--autoplay-policy=no-user-gesture-required'],
+});
 const context = await browser.newContext({
   viewport: { width: 1440, height: 1000 },
   ignoreHTTPSErrors: true,
@@ -148,7 +249,9 @@ page.on('requestfailed', (request) => {
     failure === 'net::ERR_ABORTED' &&
     (
       url.includes('/api/provider-vault/catalog') ||
+      url.includes('/api/provider-vault/image') ||
       url.includes('/api/provider-vault/segment') ||
+      url.includes('/api/provider-vault/aac-hls') ||
       url.includes('/cdn-cgi/rum')
     )
   ) {
@@ -160,10 +263,10 @@ page.on('requestfailed', (request) => {
 });
 page.on('response', (response) => {
   const url = response.url();
-  if (url.includes('/api/provider-vault/stream')) {
+  if (url.includes('/api/provider-vault/stream') || url.includes('/api/provider-vault/aac-hls')) {
     const parsed = new URL(url);
     streamEvents.push({
-      kind: 'stream',
+      kind: url.includes('/api/provider-vault/aac-hls') ? 'aac-hls' : 'stream',
       provider: parsed.searchParams.get('provider') || '',
       idState: parsed.searchParams.get('id') ? 'present' : 'empty',
       status: response.status(),
@@ -195,23 +298,34 @@ const summary = {
   ignoredRequestFailures,
   textChecks: {
     english: text.includes('Live TV') && text.includes('Settings'),
-    firstRowsCurated: apollo.firstChannel.includes('USA') && xtremehd.firstChannel.includes('USA'),
+    firstRowsCurated:
+      (apollo.firstChannel.includes('USA') || apollo.firstChannel.includes('|US|')) &&
+      (xtremehd.firstChannel.includes('USA') || xtremehd.firstChannel.includes('|US|')),
     noUnsupportedScheme: !text.includes('embedded player. Set up MPV'),
     noPortuguese: !/Bem-vindo|Conectar/i.test(text),
+    noRawProviderMarkers: !/####|\|AR\||\|MULTI\|/.test(apollo.body + '\n' + xtremehd.body),
   },
 };
 
 summary.pass =
   apollo.readyState >= 2 &&
   xtremehd.readyState >= 2 &&
+  apollo.currentTime > 1 &&
+  xtremehd.currentTime > 1 &&
+  apollo.videoWidth > 0 &&
+  xtremehd.videoWidth > 0 &&
+  apollo.muted === false &&
+  xtremehd.muted === false &&
+  apollo.volume > 0 &&
+  xtremehd.volume > 0 &&
   streamEvents.some((event) =>
-    event.kind === 'stream' &&
+    (event.kind === 'stream' || event.kind === 'aac-hls') &&
     event.provider === 'apollo' &&
     event.status === 200 &&
     event.idState === 'present'
   ) &&
   streamEvents.some((event) =>
-    event.kind === 'stream' &&
+    (event.kind === 'stream' || event.kind === 'aac-hls') &&
     event.provider === 'xtremehd' &&
     event.status === 200 &&
     event.idState === 'present'

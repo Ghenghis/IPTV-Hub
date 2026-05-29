@@ -1,6 +1,20 @@
 import { normalize } from "@/scripts/lib/text.js"
 import { daveTvProviderFromCreds, isDaveTvVaultCreds } from "@/scripts/lib/creds.js"
 
+const VAULT_PROFILE = "english"
+const VAULT_CACHE_SENTINEL = "xt_davetv_vault_profile_cache_v2"
+
+function runVaultCacheMigration() {
+  if (typeof window === "undefined" || typeof indexedDB === "undefined") return
+  try {
+    if (localStorage.getItem(VAULT_CACHE_SENTINEL) === "1") return
+    localStorage.setItem(VAULT_CACHE_SENTINEL, "1")
+    indexedDB.deleteDatabase("xt_cache")
+  } catch {}
+}
+
+runVaultCacheMigration()
+
 export function isVaultCreds(creds) {
   return isDaveTvVaultCreds(creds)
 }
@@ -38,6 +52,7 @@ export async function vaultApiFetch(providerId, action = "", params = {}, opts =
 export async function fetchVaultCatalog(providerId, limits = {}) {
   const search = new URLSearchParams({
     provider: providerId,
+    profile: limits.profile || VAULT_PROFILE,
     liveLimit: String(limits.liveLimit ?? 1800),
     movieLimit: String(limits.movieLimit ?? 1200),
     seriesLimit: String(limits.seriesLimit ?? 1200),
@@ -47,6 +62,31 @@ export async function fetchVaultCatalog(providerId, limits = {}) {
   })
   if (!response.ok) throw new Error(`DaveTV vault catalog ${response.status}`)
   return response.json()
+}
+
+function vaultLogo(item) {
+  return String(item?.tvg?.logo || item?.logo || "")
+}
+
+function isMarkerName(name) {
+  return /^#{2,}/.test(String(name || "").trim())
+}
+
+function normalizeLiveUrl(url) {
+  const raw = String(url || "")
+  if (!raw.includes("/api/provider-vault/aac-hls?")) return raw
+  try {
+    const parsed = new URL(raw, "https://davetv.local")
+    const sourceExt = parsed.searchParams.get("sourceExt") || parsed.searchParams.get("ext") || "ts"
+    parsed.searchParams.set("ext", "m3u8")
+    parsed.searchParams.set("sourceExt", sourceExt)
+    parsed.searchParams.set("video", "h264")
+    parsed.searchParams.set("segment", "ts")
+    return `${parsed.pathname}${parsed.search}`
+  } catch {
+    const joiner = raw.includes("?") ? "&" : "?"
+    return `${raw}${joiner}ext=m3u8&sourceExt=ts&video=h264&segment=ts`
+  }
 }
 
 export function vaultLiveItems(catalog) {
@@ -59,13 +99,13 @@ export function vaultLiveItems(catalog) {
         id,
         name,
         category,
-        logo: "",
+        logo: vaultLogo(item),
         tvgId: String(item.tvg?.id || id) || undefined,
         norm: normalize(`${name} ${category}`),
-        url: String(item.url || ""),
+        url: normalizeLiveUrl(item.url),
       }
     })
-    .filter((item) => item.id && item.name && item.url.startsWith("/api/provider-vault/"))
+    .filter((item) => item.id && item.name && !isMarkerName(item.name) && item.url.startsWith("/api/provider-vault/"))
 }
 
 export function vaultMovieItems(catalog) {
@@ -78,7 +118,7 @@ export function vaultMovieItems(catalog) {
       return {
         id,
         name,
-        logo: "",
+        logo: vaultLogo(item),
         year: "",
         rating: "",
         duration: "",
@@ -89,7 +129,7 @@ export function vaultMovieItems(catalog) {
         norm: normalize(`${name} ${category}`),
       }
     })
-    .filter((item) => item.id && item.name)
+    .filter((item) => item.id && item.name && !isMarkerName(item.name))
     .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }))
 }
 
@@ -106,7 +146,7 @@ export function vaultSeriesItems(catalog) {
       return {
         id,
         name,
-        logo: "",
+        logo: vaultLogo(item),
         year: "",
         rating: "",
         category,
@@ -115,6 +155,6 @@ export function vaultSeriesItems(catalog) {
         norm: normalize(`${name} ${category}`),
       }
     })
-    .filter((item) => item.id && item.name)
+    .filter((item) => item.id && item.name && !isMarkerName(item.name))
     .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }))
 }

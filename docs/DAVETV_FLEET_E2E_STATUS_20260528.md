@@ -32,7 +32,7 @@ hosted app:
 | Nuvio | `BLOCKED_APP` | `nuvio-play-debug-20260529Tnow` | English catalog and marker filtering repaired, but Nuvio direct Play creates a video element without requesting the provider-vault stream. See `docs/NUVIO_STRICT_GATE_BLOCKED_20260529.md`. |
 | IPTV Restream | `BLOCKED_APP` | `iptv-restream-strict-final-20260528223954` | Apollo passes strict playback/audio. XtremeHD loads provider rows but did not produce one clean row with advancing video plus decoded audio, and later candidates emitted provider-vault 404 console errors. See `docs/IPTV_RESTREAM_STRICT_GATE_BLOCKED_20260529.md`. |
 | Stalker UI | `BLOCKED_APP` | `stalker-ui-strict-after7-20260528231701` | English catalog/profile and Apollo playback repaired, but XtremeHD strict audio failed and provider switching/autoplay remains brittle. See `docs/STALKER_UI_STRICT_GATE_BLOCKED_20260529.md`. |
-| Extreme InfiniTV | `REVALIDATE` | Pending stricter rerun | User saw empty movie catalog/no playlist selected. |
+| Extreme InfiniTV | `ACCEPTED` | `extreme-infinitv-proof-final-20260529T053621` | English Apollo/XtremeHD catalogs, marker filtering, Apollo HLS-shaped fallback, and live playback proof for both providers with unmuted video. |
 | Wizju IPTV Player | `REVALIDATE` | Pending stricter rerun | Needs full data/artwork/audio proof under stricter standard. |
 | Open TV | `REVALIDATE` | Pending stricter rerun | Needs full data/artwork/audio proof under stricter standard. |
 | IPTV Stream | `REVALIDATE` | Pending stricter rerun | Needs full data/artwork/audio proof under stricter standard. |
