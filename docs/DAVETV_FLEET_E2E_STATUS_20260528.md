@@ -31,7 +31,7 @@ hosted app:
 | Smart IPTV Web | `ACCEPTED` | `smart-iptv-web-strict-20260528T152122` | Apollo/XtremeHD/Combined Tagged modes, English profile, HLS route classification fixed, live playback readyState 4 unmuted. |
 | Nuvio | `BLOCKED_APP` | `nuvio-play-debug-20260529Tnow` | English catalog and marker filtering repaired, but Nuvio direct Play creates a video element without requesting the provider-vault stream. See `docs/NUVIO_STRICT_GATE_BLOCKED_20260529.md`. |
 | IPTV Restream | `BLOCKED_APP` | `iptv-restream-strict-final-20260528223954` | Apollo passes strict playback/audio. XtremeHD loads provider rows but did not produce one clean row with advancing video plus decoded audio, and later candidates emitted provider-vault 404 console errors. See `docs/IPTV_RESTREAM_STRICT_GATE_BLOCKED_20260529.md`. |
-| Stalker UI | `BLOCKED_APP` | `stalker-ui-strict-after7-20260528231701` | English catalog/profile and Apollo playback repaired, but XtremeHD strict audio failed and provider switching/autoplay remains brittle. See `docs/STALKER_UI_STRICT_GATE_BLOCKED_20260529.md`. |
+| Stalker UI | `REVALIDATE_SERIES` | `stalker-artwork-proof-20260529084327`; `stalker-movie-card-artwork-deep2-20260529084930` | Reported card artwork issue repaired: live image proxy hits and Apollo movie cards now populate with zero broken images. Apollo and XtremeHD live playback both passed with decoded audio. Needs a focused series-card/episode proof before full fleet acceptance. See `docs/STALKER_UI_CARD_ARTWORK_REPAIRED_20260529.md`. |
 | Extreme InfiniTV | `ACCEPTED` | `extreme-infinitv-proof-final-20260529T053621` | English Apollo/XtremeHD catalogs, marker filtering, Apollo HLS-shaped fallback, and live playback proof for both providers with unmuted video. |
 | Wizju IPTV Player | `ACCEPTED` | `wizju-strict-20260529T055341` | English Apollo/XtremeHD catalogs, provider-vault URL normalization, marker filtering, 3,800 persisted rows per provider, and live playback proof for both providers with unmuted video. |
 | Open TV | `ACCEPTED` | `open-tv-strict-20260529065531` | Combined tagged Apollo/XtremeHD grid, English provider profile, marker filtering, provider-vault HLS normalization, and unmuted playback proof with decoded audio for both providers. |
@@ -57,7 +57,7 @@ Each player should support as much of this as its architecture allows:
 
 ## Next Order
 
-1. Re-run TVapp/YnoTV under the
+1. Run Stalker UI series-card/episode proof, then re-run TVapp/YnoTV under the
    stricter data/artwork/audio test standard.
 2. Apply one focused repair pass per player. If the player still fails, mark it
    `BLOCKED_APP` or `BLOCKED_UPSTREAM` with artifact paths and move to the next

@@ -56,6 +56,25 @@ function text(value: unknown, fallback = ''): string {
   return out || fallback
 }
 
+function sameOriginPath(path: string): string {
+  if (typeof window === 'undefined') return path
+  return new URL(path, window.location.origin).toString()
+}
+
+function artworkUrl(value: unknown): string {
+  const raw = text(value)
+  if (!raw) return ''
+  if (raw.startsWith('/api/provider-vault/image?')) return sameOriginPath(raw)
+  if (raw.startsWith('/api/provider-vault/')) {
+    return sameOriginPath(`/api/provider-vault/image?src=${encodeURIComponent(raw)}`)
+  }
+  if (/^https?:\/\//i.test(raw)) {
+    return sameOriginPath(`/api/provider-vault/image?src=${encodeURIComponent(raw)}`)
+  }
+  if (raw.startsWith('/')) return sameOriginPath(raw)
+  return raw
+}
+
 function safeId(value: unknown, fallback = 'item'): string {
   const out = text(value, fallback)
     .toLowerCase()
@@ -144,12 +163,13 @@ function normalizeItem(provider: Provider, item: VaultItem, kind: ContentKind, i
   const url = text(item.url, '') || streamUrl(provider.id, kind, item)
   const id = `${provider.id}-${kind}-${safeId(item.id ?? item.stream_id ?? item.series_id ?? index)}`
   const category = groupTitle(provider, kind, item)
+  const art = artworkUrl(item.logo ?? item.stream_icon ?? item.cover ?? item.tvg?.logo)
   const base: MediaItem = {
     id,
     title,
     name: title,
-    screenshot_uri: text(item.logo ?? item.stream_icon ?? item.cover ?? item.tvg?.logo, ''),
-    stream_icon: text(item.logo ?? item.stream_icon ?? item.cover ?? item.tvg?.logo, ''),
+    screenshot_uri: art,
+    stream_icon: art,
     cmd: url,
     tv_genre_id: safeId(category),
     duration: Number(item.duration) || undefined,
