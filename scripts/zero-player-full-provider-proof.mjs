@@ -282,7 +282,20 @@ async function activateProvider(page, provider) {
     localStorage.setItem('ipz_playlist_display_order_ids_premium', JSON.stringify([id]));
   }, playlistId);
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
-  await page.waitForTimeout(2000);
+  await page.waitForFunction(
+    async ({ playlistIdForWait, minChannelsForWait }) => {
+      const text = document.body.innerText || '';
+      if (/Starting IPTV Player Zero|PLEASE WAIT|Loading/i.test(text)) return false;
+      if (!window.Store || typeof window.Store.getChannels !== 'function') return false;
+      if (!window.PlayerShim || typeof window.PlayerShim.play !== 'function') return false;
+      if (localStorage.getItem('ipz_default_playlist_id') !== playlistIdForWait) return false;
+      const rows = await window.Store.getChannels(playlistIdForWait).catch(() => []);
+      return Array.isArray(rows) && rows.length >= minChannelsForWait;
+    },
+    { playlistIdForWait: playlistId, minChannelsForWait: provider.minChannels },
+    { timeout: 90000 }
+  );
+  await page.waitForTimeout(1000);
 }
 
 async function ensureCombinedTaggedMode(page) {
