@@ -56,12 +56,40 @@ async function selectPlaylist(page, name) {
     .filter({ hasText: /All Channels|Apollo Group TV|XtremeHD/i })
     .first();
   await header.click({ timeout: 12000 });
+  await page.waitForFunction(
+    (playlistName) => document.body.innerText.includes(playlistName),
+    name,
+    { timeout: 45000 },
+  );
   await page.getByRole('button').filter({ hasText: name }).first().click({ timeout: 12000 });
 }
 
 async function clickChannelAt(page, index) {
   const cards = page.locator('button').filter({ has: page.locator('p') });
   await cards.nth(index).click({ timeout: 8000 });
+}
+
+async function channelAttemptOrder(page, providerName) {
+  const cards = page.locator('button').filter({ has: page.locator('p') });
+  const count = Math.min(await cards.count(), 24);
+  const labels = [];
+  for (let index = 0; index < count; index += 1) {
+    const label = await cards.nth(index).innerText().catch(() => `channel-${index + 1}`);
+    labels.push({ index, label: label.replace(/\s+/g, ' ').trim() });
+  }
+
+  const preferred = providerName.startsWith('Apollo')
+    ? [/NEW WORLD MAGAZINE/i, /TNT ARRIADIA/i, /TF1 FHD/i]
+    : [/CANAL\+ FOOT FHD/i, /TNT Sports 1 FHD/i, /USA AMC/i, /HBO Comedy/i];
+  const preferredIndexes = [];
+  for (const pattern of preferred) {
+    const match = labels.find((item) => pattern.test(item.label));
+    if (match && !preferredIndexes.includes(match.index)) preferredIndexes.push(match.index);
+  }
+  const fallbackIndexes = labels
+    .map((item) => item.index)
+    .filter((index) => !preferredIndexes.includes(index));
+  return [...preferredIndexes, ...fallbackIndexes].slice(0, 12);
 }
 
 async function waitForPlayback(page, previousSrc = '') {
@@ -115,18 +143,43 @@ async function waitForPlayback(page, previousSrc = '') {
   return result;
 }
 
+function isWorkingPlayback(playback) {
+  return Boolean(
+    playback &&
+      playback.readyState >= 1 &&
+      playback.advanced &&
+      playback.videoWidth > 0 &&
+      playback.videoHeight > 0 &&
+      playback.currentSrcIsBlob &&
+      playback.muted === false &&
+      playback.volume > 0 &&
+      playback.audioDecodedByteCount > 0
+  );
+}
+
+async function stopPlayback(page) {
+  await page.evaluate(() => {
+    const video = document.querySelector('video');
+    if (!video) return;
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  }).catch(() => {});
+  await page.waitForTimeout(750);
+}
+
 async function proveProvider(page, providerName, screenshotName, streamEvents, errors) {
   await page.goto(`${TARGET}?proof=${Date.now()}-${providerName.replace(/\W+/g, '-').toLowerCase()}`, {
     waitUntil: 'domcontentloaded',
     timeout: 45000,
   });
   await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
-  await selectPlaylist(page, `${providerName} - DaveAI Vault`);
+  await selectPlaylist(page, `${providerName} Live TV - DaveAI Vault`);
   const attempts = [];
   let playback = null;
   const cards = page.locator('button').filter({ has: page.locator('p') });
-  const cardCount = Math.min(await cards.count(), 6);
-  for (let index = 0; index < cardCount; index += 1) {
+  const indexes = await channelAttemptOrder(page, providerName);
+  for (const index of indexes) {
     const label = await cards.nth(index).innerText().catch(() => `channel-${index + 1}`);
     const previousSrc = await page.evaluate(() => document.querySelector('video')?.currentSrc || '');
     await clickChannelAt(page, index);
@@ -138,7 +191,7 @@ async function proveProvider(page, providerName, screenshotName, streamEvents, e
         playback: nextPlayback,
       });
       playback = nextPlayback;
-      if (nextPlayback.advanced && nextPlayback.audioDecodedByteCount > 0) break;
+      if (isWorkingPlayback(nextPlayback)) break;
     } catch (error) {
       attempts.push({
         index,
@@ -166,7 +219,7 @@ async function proveProvider(page, providerName, screenshotName, streamEvents, e
 
 await fs.mkdir(OUT_DIR, { recursive: true });
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: true, args: ['--disable-quic'] });
 const context = await browser.newContext({
   viewport: { width: 1440, height: 1000 },
   ignoreHTTPSErrors: true,
@@ -246,12 +299,7 @@ const summary = {
     chromeChecks.noPortugueseWelcome &&
     [apollo, xtremehd].every(
       (proof) =>
-        proof.playback.readyState >= 2 &&
-        proof.playback.advanced &&
-        proof.playback.currentSrcIsBlob &&
-        proof.playback.muted === false &&
-        proof.playback.volume > 0 &&
-        proof.playback.audioDecodedByteCount > 0 &&
+        isWorkingPlayback(proof.playback) &&
         proof.streamRequestCount > 0 &&
         proof.stream200Count > 0 &&
         !proof.badEmptyId,
