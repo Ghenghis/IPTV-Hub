@@ -24,6 +24,9 @@
   var originalXhrOpen = window.XMLHttpRequest && window.XMLHttpRequest.prototype
     ? window.XMLHttpRequest.prototype.open
     : null;
+  var CATALOG_CACHE_MS = 60000;
+  var catalogCache = {};
+  var catalogInflight = {};
 
   function readJson(key, fallback) {
     try {
@@ -182,14 +185,31 @@
 
   function fetchCatalog(providerId) {
     if (!originalFetch) return Promise.reject(new Error('fetch unavailable'));
-    return originalFetch(vaultCatalogUrl(providerId), {
+    var cached = catalogCache[providerId];
+    if (cached && cached.expiresAt > Date.now()) {
+      return Promise.resolve(cached.data);
+    }
+    if (catalogInflight[providerId]) return catalogInflight[providerId];
+
+    catalogInflight[providerId] = originalFetch(vaultCatalogUrl(providerId), {
       cache: 'no-store',
       credentials: 'include',
       headers: { Accept: 'application/json' },
     }).then(function (response) {
       if (!response.ok) throw new Error('Provider vault HTTP ' + response.status);
       return response.json();
+    }).then(function (data) {
+      catalogCache[providerId] = {
+        data: data,
+        expiresAt: Date.now() + CATALOG_CACHE_MS,
+      };
+      delete catalogInflight[providerId];
+      return data;
+    }).catch(function (error) {
+      delete catalogInflight[providerId];
+      throw error;
     });
+    return catalogInflight[providerId];
   }
 
   function manifest() {
@@ -271,6 +291,146 @@
     }).catch(function () {
       return jsonResponse({ streams: [] });
     });
+  }
+
+  function currentDaveAiItemId() {
+    return window.__daveAiNuvioSelectedItemId || '';
+  }
+
+  function rememberDaveAiItem(node) {
+    if (!node || !node.getAttribute) return;
+    var itemId = node.getAttribute('data-item-id') || '';
+    if (itemId.indexOf('daveai:') !== 0) return;
+    window.__daveAiNuvioSelectedItemId = itemId;
+  }
+
+  function activeVideoHasSource() {
+    return Array.prototype.some.call(document.querySelectorAll('video'), function (video) {
+      return Boolean(video.currentSrc || video.src || video.dataset.daveaiProviderVaultSrc);
+    });
+  }
+
+  function removeDaveAiFallbackPlayer() {
+    var existing = document.getElementById('daveai-nuvio-provider-player');
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+  }
+
+  function resolveVaultItem(itemId) {
+    var parsed = parseItemId(decodeURIComponent(itemId || ''));
+    if (!parsed) return Promise.reject(new Error('Missing DaveAI item id'));
+    return fetchCatalog(parsed.provider.id).then(function (data) {
+      var item = bucketItems(data, parsed.bucket)[parsed.index];
+      if (!item) throw new Error('DaveAI item not found');
+      var meta = itemMeta(parsed.provider, parsed.bucket, item, parsed.index);
+      return {
+        provider: parsed.provider,
+        bucket: parsed.bucket,
+        item: item,
+        meta: meta,
+        url: safeText(item && item.url, ''),
+      };
+    });
+  }
+
+  function playWithHls(video, url) {
+    if (!url) throw new Error('Missing stream URL');
+    video.dataset.daveaiProviderVaultSrc = url;
+    video.controls = true;
+    video.autoplay = true;
+    video.muted = false;
+    video.volume = 1;
+    video.playsInline = true;
+
+    if (window.Hls && window.Hls.isSupported && window.Hls.isSupported() && /\.m3u8|aac-hls|\/stream\?/.test(url)) {
+      if (video.__daveAiHls) {
+        try { video.__daveAiHls.destroy(); } catch (error) {}
+      }
+      var hls = new window.Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 30,
+      });
+      video.__daveAiHls = hls;
+      hls.loadSource(url);
+      hls.attachMedia(video);
+      hls.on(window.Hls.Events.MANIFEST_PARSED, function () {
+        video.play().catch(function () {});
+      });
+      return;
+    }
+
+    video.src = url;
+    video.play().catch(function () {});
+  }
+
+  function mountDaveAiFallbackPlayer(details) {
+    removeDaveAiFallbackPlayer();
+    var overlay = document.createElement('div');
+    overlay.id = 'daveai-nuvio-provider-player';
+    overlay.innerHTML = [
+      '<div class="daveai-nuvio-player-bar">',
+      '  <div>',
+      '    <div class="daveai-nuvio-player-provider"></div>',
+      '    <div class="daveai-nuvio-player-title"></div>',
+      '  </div>',
+      '  <button type="button" class="daveai-nuvio-player-close" aria-label="Close player">Close</button>',
+      '</div>',
+      '<video class="daveai-nuvio-player-video" controls autoplay playsinline></video>',
+      '<div class="daveai-nuvio-player-status">Starting provider-vault stream...</div>',
+    ].join('');
+    document.body.appendChild(overlay);
+
+    var title = overlay.querySelector('.daveai-nuvio-player-title');
+    var provider = overlay.querySelector('.daveai-nuvio-player-provider');
+    var status = overlay.querySelector('.daveai-nuvio-player-status');
+    var video = overlay.querySelector('video');
+    var close = overlay.querySelector('.daveai-nuvio-player-close');
+    if (title) title.textContent = details.meta.name;
+    if (provider) provider.textContent = details.provider.name + ' - DaveAI Vault';
+    if (close) close.addEventListener('click', removeDaveAiFallbackPlayer);
+    if (video) {
+      video.addEventListener('playing', function () {
+        if (status) status.textContent = 'Playing';
+      });
+      video.addEventListener('waiting', function () {
+        if (status) status.textContent = 'Buffering...';
+      });
+      video.addEventListener('error', function () {
+        if (status) status.textContent = 'Stream error. Try another channel or reload.';
+      });
+      playWithHls(video, details.url);
+    }
+  }
+
+  function startDaveAiFallbackPlayback(itemId) {
+    if (!itemId) return;
+    resolveVaultItem(itemId).then(function (details) {
+      if (!details.url || details.url.indexOf('/api/provider-vault/') !== 0) return;
+      mountDaveAiFallbackPlayer(details);
+    }).catch(function (error) {
+      console.warn('DaveAI Nuvio fallback playback failed', error);
+    });
+  }
+
+  function installPlaybackFallback() {
+    if (window.__daveAiNuvioPlaybackFallbackInstalled) return;
+    window.__daveAiNuvioPlaybackFallbackInstalled = true;
+    document.addEventListener('click', function (event) {
+      var detailTarget = event.target && event.target.closest
+        ? event.target.closest('[data-action="openDetail"][data-item-id^="daveai:"]')
+        : null;
+      if (detailTarget) rememberDaveAiItem(detailTarget);
+
+      var playTarget = event.target && event.target.closest
+        ? event.target.closest('[data-action="playDefault"]')
+        : null;
+      if (!playTarget) return;
+      var itemId = currentDaveAiItemId();
+      if (!itemId) return;
+      window.setTimeout(function () {
+        if (!activeVideoHasSource()) startDaveAiFallbackPlayback(itemId);
+      }, 500);
+    }, true);
   }
 
   function routeVirtualAddon(input) {
@@ -438,7 +598,14 @@
       '.home-content-card[data-item-type="tv"] .content-poster{height:142px!important;object-fit:contain!important;padding:18px!important;box-sizing:border-box!important;background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02))!important;}',
       '.home-content-card[data-item-type="tv"] .home-poster-expanded-backdrop{object-fit:contain!important;padding:18px!important;box-sizing:border-box!important;background:rgba(255,255,255,.04)!important;}',
       '.home-content-card[data-item-type="tv"] .home-poster-copy{height:auto!important;min-height:62px!important;}',
-      '.home-content-card[data-item-type="tv"] .home-poster-title{white-space:normal!important;line-height:1.18!important;}'
+      '.home-content-card[data-item-type="tv"] .home-poster-title{white-space:normal!important;line-height:1.18!important;}',
+      '#daveai-nuvio-provider-player{position:fixed;inset:0;z-index:2147483000;display:flex;flex-direction:column;background:#05070f;color:#fff;}',
+      '#daveai-nuvio-provider-player .daveai-nuvio-player-bar{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:18px 24px;background:linear-gradient(180deg,rgba(12,17,31,.98),rgba(8,11,22,.9));border-bottom:1px solid rgba(255,255,255,.12);}',
+      '#daveai-nuvio-provider-player .daveai-nuvio-player-provider{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8fb7ff;}',
+      '#daveai-nuvio-provider-player .daveai-nuvio-player-title{margin-top:4px;font-size:20px;font-weight:800;color:#fff;}',
+      '#daveai-nuvio-provider-player .daveai-nuvio-player-close{border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(255,255,255,.08);color:#fff;padding:10px 18px;font:inherit;font-weight:700;cursor:pointer;}',
+      '#daveai-nuvio-provider-player .daveai-nuvio-player-video{flex:1;width:100%;height:100%;background:#000;object-fit:contain;}',
+      '#daveai-nuvio-provider-player .daveai-nuvio-player-status{position:absolute;left:24px;bottom:20px;padding:8px 12px;border-radius:999px;background:rgba(0,0,0,.62);color:#dbe7ff;font-size:13px;}'
     ].join('\n');
     (document.head || document.documentElement).appendChild(style);
   }
@@ -448,6 +615,7 @@
   ensureAddonInstalled();
   installXhrShim();
   installFetchShim();
+  installPlaybackFallback();
   installLiveDurationPolish();
   installLiveLogoPolish();
   window.__DAVEAI_NUVIO_VAULT_ADDON__ = {

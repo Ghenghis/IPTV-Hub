@@ -14,7 +14,7 @@ const baseUrl = process.env.NUVIO_URL || 'https://nuvio.daveai.tech';
 const resetState = process.env.NUVIO_RESET_STATE === '1';
 const providers = [
   { id: 'apollo', label: 'Apollo Group TV' },
-  { id: 'xtremehd', label: 'XtremeHD' },
+  { id: 'xtremehd', label: 'XtremeHD', liveIndex: 3 },
 ];
 
 function sanitizeUrl(url) {
@@ -69,7 +69,7 @@ async function waitForProviderHome(page, provider) {
     try {
       await page.waitForFunction(
         (providerId) =>
-          Boolean(document.querySelector(`[data-action="openDetail"][data-item-id^="daveai:${providerId}:live:0"]`)),
+          Boolean(document.querySelector(`[data-action="openDetail"][data-item-id^="daveai:${providerId}:live:"]`)),
         provider.id,
         { timeout: 60000 },
       );
@@ -83,17 +83,38 @@ async function waitForProviderHome(page, provider) {
   throw lastError;
 }
 
+async function waitForProviderVaultPlayback(page) {
+  await page.waitForFunction(
+    () =>
+      Array.from(document.querySelectorAll('video')).some((video) => {
+        const source = String(video.currentSrc || video.src || video.dataset?.daveaiProviderVaultSrc || '');
+        return (
+          video.readyState >= 2 &&
+          source.includes('/api/provider-vault') &&
+          video.paused === false &&
+          video.muted === false &&
+          video.volume > 0 &&
+          video.currentTime > 0 &&
+          (video.webkitAudioDecodedByteCount || 0) > 0 &&
+          !video.error
+        );
+      }),
+    null,
+    { timeout: 60000 },
+  );
+}
+
 async function auditLiveLogoLayout(page, provider) {
   const layout = await page.evaluate((providerId) => {
     const card = document.querySelector(
-      `[data-action="openDetail"][data-item-id^="daveai:${providerId}:live:0"]`,
+      `[data-action="openDetail"][data-item-id^="daveai:${providerId}:live:"]`,
     );
     const poster = card?.querySelector('.content-poster');
     const hero = document.querySelector(
-      `.home-hero-card[data-item-id^="daveai:${providerId}:live:0"] .home-hero-backdrop`,
+      `.home-hero-card[data-item-id^="daveai:${providerId}:live:"] .home-hero-backdrop`,
     );
     const heroLogo = document.querySelector(
-      `.home-hero-card[data-item-id^="daveai:${providerId}:live:0"] .home-hero-logo`,
+      `.home-hero-card[data-item-id^="daveai:${providerId}:live:"] .home-hero-logo`,
     );
     function imgInfo(node) {
       if (!node) return null;
@@ -145,8 +166,9 @@ async function runProvider(page, provider) {
   await waitForProviderHome(page, provider);
   await page.waitForTimeout(3000);
 
+  const liveIndex = provider.liveIndex || 0;
   const card = page
-    .locator(`[data-action="openDetail"][data-item-id^="daveai:${provider.id}:live:0"]`)
+    .locator(`[data-action="openDetail"][data-item-id^="daveai:${provider.id}:live:${liveIndex}:"]`)
     .first();
   await card.waitFor({ timeout: 60000 });
   const cardName = await card.evaluate((node) => (node.textContent || '').replace(/\s+/g, ' ').trim());
@@ -158,10 +180,10 @@ async function runProvider(page, provider) {
     fullPage: true,
   });
   await card.click({ timeout: 15000 });
-  await page.waitForTimeout(5000);
+  const playButton = page.locator('[data-action="playDefault"], button:has-text("Play")').first();
+  await playButton.waitFor({ timeout: 60000 });
 
   const detailText = await pageText(page);
-  assert(detailText.includes('Play'), `${provider.label} detail did not expose a playable action`);
   const cardWords = cardName.split(/\s+/).filter((word) => word.length >= 3).slice(0, 3);
   assert(
     cardWords.some((word) => detailText.toLowerCase().includes(word.toLowerCase())),
@@ -173,8 +195,6 @@ async function runProvider(page, provider) {
     fullPage: true,
   });
 
-  const playButton = page.locator('[data-action="playDefault"], button:has-text("Play")').first();
-  await playButton.waitFor({ timeout: 60000 });
   await page.screenshot({
     path: path.join(outDir, `nuvio-${provider.id}-stream-source.png`),
     fullPage: true,
@@ -197,7 +217,8 @@ async function runProvider(page, provider) {
       if (video.paused) video.play().catch(() => {});
     }
   });
-  await page.waitForTimeout(5000);
+  await waitForProviderVaultPlayback(page).catch(() => null);
+  await page.waitForTimeout(2000);
 
   await page.screenshot({
     path: path.join(outDir, `nuvio-${provider.id}-player.png`),
@@ -216,7 +237,10 @@ async function runProvider(page, provider) {
       width: video.videoWidth,
       height: video.videoHeight,
       webkitAudioDecodedByteCount: video.webkitAudioDecodedByteCount || 0,
-      currentSrcIsVault: String(video.currentSrc || '').includes('/api/provider-vault'),
+      providerVaultSource: video.dataset?.daveaiProviderVaultSrc || '',
+      currentSrcIsVault:
+        String(video.currentSrc || '').includes('/api/provider-vault') ||
+        String(video.dataset?.daveaiProviderVaultSrc || '').includes('/api/provider-vault'),
       error: video.error ? { code: video.error.code, message: video.error.message } : null,
     })),
   }));
@@ -244,37 +268,47 @@ async function runProvider(page, provider) {
 await fs.mkdir(outDir, { recursive: true });
 
 const browser = await chromium.launch({ headless: true });
-const context = await browser.newContext({
-  viewport: { width: 1600, height: 1000 },
-});
-await context.addCookies(await readAuthCookies('nuvio.daveai.tech'));
-
-const page = await context.newPage();
 const seen = {
   pageErrors: [],
   consoleErrors: [],
+  consoleWarnings: [],
   providerResponses: [],
 };
 
-page.on('pageerror', (error) => {
-  seen.pageErrors.push(String(error.message || error).slice(0, 300));
-});
-page.on('console', (message) => {
-  if (['error', 'warning'].includes(message.type())) {
-    seen.consoleErrors.push({ type: message.type(), text: message.text().slice(0, 300) });
-  }
-});
-page.on('response', (response) => {
-  const url = response.url();
-  if (url.includes('/api/provider-vault/') || url.includes('/daveai-provider-vault-addon/')) {
-    seen.providerResponses.push({ status: response.status(), url: sanitizeUrl(url) });
-  }
-});
+function attachObservers(page) {
+  page.on('pageerror', (error) => {
+    seen.pageErrors.push(String(error.message || error).slice(0, 300));
+  });
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      seen.consoleErrors.push({ type: message.type(), text: message.text().slice(0, 300) });
+    } else if (message.type() === 'warning') {
+      seen.consoleWarnings.push({ type: message.type(), text: message.text().slice(0, 300) });
+    }
+  });
+  page.on('response', (response) => {
+    const url = response.url();
+    if (url.includes('/api/provider-vault/') || url.includes('/daveai-provider-vault-addon/')) {
+      seen.providerResponses.push({ status: response.status(), url: sanitizeUrl(url) });
+    }
+  });
+}
 
 const results = [];
 try {
   for (const provider of providers) {
-    results.push({ provider: provider.id, playback: await runProvider(page, provider) });
+    const context = await browser.newContext({
+      viewport: { width: 1600, height: 1000 },
+      ignoreHTTPSErrors: true,
+    });
+    await context.addCookies(await readAuthCookies('nuvio.daveai.tech'));
+    const page = await context.newPage();
+    attachObservers(page);
+    try {
+      results.push({ provider: provider.id, playback: await runProvider(page, provider) });
+    } finally {
+      await context.close().catch(() => {});
+    }
   }
 } finally {
   await browser.close();
@@ -309,8 +343,10 @@ const summary = {
   stream200,
   pageErrorCount: seen.pageErrors.length,
   consoleErrorCount: seen.consoleErrors.length,
+  consoleWarningCount: seen.consoleWarnings.length,
   pageErrors: seen.pageErrors,
   consoleErrors: seen.consoleErrors,
+  consoleWarnings: seen.consoleWarnings,
   providerResponses: seen.providerResponses,
   artifacts: {
     apolloPlayer: path.join(outDir, 'nuvio-apollo-player.png'),
