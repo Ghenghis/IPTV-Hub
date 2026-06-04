@@ -103,10 +103,10 @@ windows      = { version = "0.58", features = [
     "Win32_System_Threading",
     "Win32_UI_WindowsAndMessaging",
 ] }
-keyring      = "3"
+keyring      = "4"
 
 [target.'cfg(unix)'.dependencies]
-keyring      = "3"
+keyring      = "4"
 
 [dev-dependencies]
 tokio        = { version = "1", features = ["full", "test-util"] }
